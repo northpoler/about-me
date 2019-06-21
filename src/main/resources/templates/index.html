@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>建兵本纪 | 首页</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
+    <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+</head>
+<body style="background-color: lightgoldenrodyellow">
+
+<div class="layui-row" style="text-align: center;font-size: larger">
+    <div class="layui-col-md3">&nbsp;</div>
+    <div class="layui-col-md6">
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header">你好</div>
+            <div class="layui-card-body" style="color: deeppink">
+                若看到这句话，说明你成功访问了<br>
+                李建兵的网站
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" id="countDownTitle">
+                现在距离李建兵端午回家的列车发车还有：
+            </div>
+            <div class="layui-card-body" id="countDown" style="color: deeppink">
+            </div>
+        </div>
+
+        <div style="text-align: center">
+            <br/>
+            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-danger" onclick="down()"><i
+                    class="layui-icon layui-icon-tread"></i>&nbsp;0
+            </button>
+            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()"><i
+                    class="layui-icon layui-icon-praise"></i>&nbsp;<span id="like">0</span></button>
+            <br/><br/><br/>
+            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-warm" id="stop"><i
+                    class="layui-icon layui-icon-pause"></i>&nbsp;结束刷赞
+            </button>
+        </div>
+
+
+       <!-- <div class="layui-form" id="customCountDown">
+            &lt;!&ndash;<span>请输入自定义倒计时相关信息</span><br>&ndash;&gt;
+            <i style="font-size: medium;color: gray">如果你想保存你的设置，请先<a style="text-decoration: underline">登陆</a></i>
+            <br><br>
+            <div class="layui-form-item">
+                <label class="layui-form-label">输入标题</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="title" required lay-verify="required" placeholder="现在距离XXX还有："
+                           autocomplete="off" class="layui-input">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">选择时间</label>
+                <div class="layui-input-inline">
+                    <input type="text" class="layui-input" id="test5" placeholder="yyyy-MM-dd HH:mm:ss">
+                    <i style="font-size: medium;color: gray">日期选择界面左下角选择时间</i>
+                </div>
+            </div>
+            <hr>
+            <br>
+            <i style="font-size: medium;color: gray">如果你想保存你的设置，请登陆（选填）<br>第一次登陆会自动注册</i>
+            <br><br>
+            <div class="layui-form-item">
+                <label class="layui-form-label">输入昵称</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="title" required lay-verify="required" placeholder="请输入..."
+                           autocomplete="off" class="layui-input">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">输入密码</label>
+                <div class="layui-input-inline">
+                    <input type="password" name="title" required lay-verify="required" placeholder="请输入..."
+                           autocomplete="off" class="layui-input">
+                </div>
+            </div>
+
+            <div class="layui-form-item">
+                    <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-danger" onclick="down()"><i
+                            class="layui-icon layui-icon-close"></i>
+                    </button>
+                    <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()"><i
+                            class="layui-icon layui-icon-ok"></i></button>
+                    <br/><br/><br/>
+            </div>
+        </div>-->
+
+    </div>
+    <div class="layui-col-md3">&nbsp;</div>
+</div>
+
+<div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
+    <i>www.jianbing.pro</i>
+</div>
+
+</body>
+<script th:src="@{../static/layui/layui.js}"></script>
+<script type="text/javascript">
+
+    var message = [[${likes}]];
+    $("#like").text(message);
+
+    $("#stop").hide();
+    /*$("#customCountDown").hide();*/
+
+    var userLikes = 0;
+
+
+    layui.use('layer', function () {
+        var layer = layui.layer;
+    });
+
+    function down() {
+        layer.open({
+            title: '提示',
+            anim: 6
+            , content: '抱歉，系统故障！'
+        });
+    }
+
+    layui.use('util', function () {
+        var util = layui.util;
+
+        //执行
+        util.fixbar({
+            bar1: "<i style=\"font-size: larger;color: deeppink;font-weight: bolder\" class=\"layui-icon layui-icon-rmb\"></i>",
+            bgcolor: "lightgoldenrodyellow",
+            css: {right: "10%", bottom: "10%"}
+            , click: function (type) {
+                console.log(type);
+                if (type === 'bar1') {
+                    layer.msg('感谢你的支持', {
+                        time: 2000,
+                        btn: ['赞助一下', '残忍关闭'],
+/*                        btn1: function () {
+                            $.getJSON('/support/alipay', function(json){
+                                layer.photos({
+                                    photos: json
+                                    ,anim: 5 //0-6的选择，指定弹出图片动画类型，默认随机（请注意，3.0之前的版本用shift参数）
+                                });
+                            });
+                        },*/
+                        btn1: function () {
+                            $.getJSON('/support/weChat', function(json){
+                                layer.photos({
+                                    photos: json
+                                    ,anim: 5 //0-6的选择，指定弹出图片动画类型，默认随机（请注意，3.0之前的版本用shift参数）
+                                });
+                                layer.msg('长按识别二维码', {offset: '100px', anim: 0, time: 300});
+                            });
+                        }
+                    });
+                }
+            }
+        });
+    });
+
+    /*layui.use('laydate', function () {
+        var laydate = layui.laydate;
+
+
+        //日期时间选择器
+        laydate.render({
+            elem: '#test5'
+            , type: 'datetime'
+            , calendar: true
+            , theme: 'molv'
+        });
+
+        //开启公历节日
+        laydate.render({
+            elem: '#test17'
+            , calendar: true
+        });
+        //选中后的回调
+        laydate.render({
+            elem: '#test20'
+            , done: function (value, date) {
+                layer.alert('你选择的日期是：' + value + '<br>获得的对象是' + JSON.stringify(date));
+            }
+        });
+    });*/
+
+    function like() {
+        layer.msg('点赞成功！', {offset: '100px', anim: 0, time: 300});
+        var test = $("#like").text();
+        var before = parseInt(test);
+        userLikes++;
+        /*var next = before + 1;
+        $("#up").text(next);*/
+
+        $.ajax({
+            type: 'GET',
+            dataType: 'json',
+            url: '/like/insert',
+            data: {"count": before},
+            cache: false,
+            async: true,
+            success: function (data) {
+                $("#like").text(data);
+            }
+        });
+
+        if (userLikes == 10) {
+            layer.confirm('检测到你已连续点赞10次，是否开启刷赞模式？', {icon: 3, title: '提示'}, function (index) {
+                upup();
+                layer.close(index);
+                $("#stop").show();
+            });
+        }
+
+    }
+
+    function upup() {
+        ref = setInterval(function () {
+            like();
+        }, 10);
+        $("#stop").click(function () {
+            layer.msg('刷赞模式即将停止', {offset: '100px', anim: 0, time: 2500});
+            clearInterval(ref)
+            $("#stop").hide();
+            userLikes = 0;
+        })
+    }
+
+
+    /*var ref;
+
+    function upup(){
+        ref = setInterval(function(){
+            up();
+        },30);
+    }
+
+    function noup(){
+        clearInterval(ref);
+    }*/
+
+    /*{
+        formType: 1, //输入框类型，支持0（文本）默认1（密码）2（多行文本）
+            value: '', //初始时的值，默认空字符
+        maxlength: 140, //可输入文本的最大长度，默认500
+    }*/
+
+    /* //例子1
+     layer.prompt(function(value, index, elem){
+         alert(value); //得到value
+         layer.close(index);
+     });*/
+
+    /*//例子2
+    layer.prompt({
+        formType: 2,
+        value: '初始值',
+        title: '请输入值',
+        area: ['800px', '350px'] //自定义文本域宽高
+    }, function(value, index, elem){
+        alert(value); //得到value
+        layer.close(index);
+    });*/
+
+    window.onload = clock;
+
+    function clock() {
+
+        var now = new Date();
+        var end = new Date("JUN 6 2019 21:44:00");
+        var end2 = new Date("JUN 7 2019 06:43:00");
+        var end3 = new Date("JUN 9 2019 20:33:00");
+        var end4 = new Date("JUN 10 2019 05:09:00");
+        var end5 = new Date("SEP 12 2019 18:00:00");
+        var between = end.getTime() - now.getTime();
+        var between2 = end2.getTime() - now.getTime();
+        var between3 = end3.getTime() - now.getTime();
+        var between4 = end4.getTime() - now.getTime();
+        var between5 = end5.getTime() - now.getTime();
+        if (between>0){
+            var today = now,//当前时间
+                h = today.getHours(),
+                m = today.getMinutes(),
+                s = today.getSeconds();
+            var stopTime = end,//结束时间
+                stopH = stopTime.getHours(),
+                stopM = stopTime.getMinutes(),
+                stopS = stopTime.getSeconds();
+            var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
+                shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
+                D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
+                shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
+                H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
+                shengyuM = parseInt(H / (60 * 1000)),//除去天的毫秒数转换成分钟
+                M = H - shengyuM * 60 * 1000;//除去天、小时、分的毫秒数
+            S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
+            MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+            document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
+        } else if (between2>0){
+            var today = now,//当前时间
+                h = today.getHours(),
+                m = today.getMinutes(),
+                s = today.getSeconds();
+            var stopTime = end2,//结束时间
+                stopH = stopTime.getHours(),
+                stopM = stopTime.getMinutes(),
+                stopS = stopTime.getSeconds();
+            var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
+                shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
+                D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
+                shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
+                H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
+                shengyuM = parseInt(H / (60 * 1000)),//除去天的毫秒数转换成分钟
+                M = H - shengyuM * 60 * 1000;//除去天、小时、分的毫秒数
+            S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
+            MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+            $("#countDownTitle").text("现在距离李建兵端午回家的列车到达还有：");
+            document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
+        } else if (between3>0){
+            var today = now,//当前时间
+                h = today.getHours(),
+                m = today.getMinutes(),
+                s = today.getSeconds();
+            var stopTime = end3,//结束时间
+                stopH = stopTime.getHours(),
+                stopM = stopTime.getMinutes(),
+                stopS = stopTime.getSeconds();
+            var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
+                shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
+                D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
+                shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
+                H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
+                shengyuM = parseInt(H / (60 * 1000)),//除去天的毫秒数转换成分钟
+                M = H - shengyuM * 60 * 1000;//除去天、小时、分的毫秒数
+            S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
+            MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+            $("#countDownTitle").text("现在距离李建兵返杭的列车发车还有：");
+            document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
+        } else if (between4>0){
+            var today = now,//当前时间
+                h = today.getHours(),
+                m = today.getMinutes(),
+                s = today.getSeconds();
+            var stopTime = end4,//结束时间
+                stopH = stopTime.getHours(),
+                stopM = stopTime.getMinutes(),
+                stopS = stopTime.getSeconds();
+            var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
+                shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
+                D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
+                shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
+                H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
+                shengyuM = parseInt(H / (60 * 1000)),//除去天的毫秒数转换成分钟
+                M = H - shengyuM * 60 * 1000;//除去天、小时、分的毫秒数
+            S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
+            MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+            $("#countDownTitle").text("现在距离李建兵返杭的列车到达还有：");
+            document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
+        } else if (between5>0){
+            var today = now,//当前时间
+                h = today.getHours(),
+                m = today.getMinutes(),
+                s = today.getSeconds();
+            var stopTime = end5,//结束时间
+                stopH = stopTime.getHours(),
+                stopM = stopTime.getMinutes(),
+                stopS = stopTime.getSeconds();
+            var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
+                shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
+                D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
+                shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
+                H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
+                shengyuM = parseInt(H / (60 * 1000)),//除去天的毫秒数转换成分钟
+                M = H - shengyuM * 60 * 1000;//除去天、小时、分的毫秒数
+            S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
+            MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+            $("#countDownTitle").text("现在距离李建兵中秋节放假还有：");
+            document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
+        }
+        setTimeout(clock, 33);
+    }
+</script>
+</html>

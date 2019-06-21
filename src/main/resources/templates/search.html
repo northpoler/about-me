@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>建兵本纪 | 搜索</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
+    <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+</head>
+<body style="background-color: lightgoldenrodyellow">
+
+<div class="layui-row" style="text-align: center;font-size: larger">
+    <form action="http://www.baidu.com/baidu" target="_blank">
+    <div class="layui-row">
+        <div class="layui-col-md3">&nbsp;</div>
+        <div class="layui-col-md6">
+            <div class="layui-form-item" style="margin-top: 10%">
+                <img alt="logo" th:src="@{../static/image/logo.png}" style="width: 200px;cursor: pointer" onclick="toIndex()"/>
+                <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;margin-top: 50px">
+                    <input type="text" name="word" style="font-size: medium;height: 44px" lay-verify="required" placeholder="请输入你要搜索的内容..." autocomplete="off" class="layui-input">
+                    <button style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
+                        <i class="layui-icon layui-icon-search"></i>
+                        <!--<i class="layui-icon layui-icon-face-surprised" style="font-size: 33px"></i>-->
+                    </button>
+                </div>
+            </div>
+            <a href="/index" target="_blank" class="layui-btn" title="首页"><i class="layui-icon layui-icon-home"></i></a>
+            <a href="https://translate.google.cn/" target="_blank" class="layui-btn" title="翻译"><i class="layui-icon layui-icon-fonts-strong"></i></a>
+            <a href="https://newkeyan.sysu.edu.cn/srm" target="_blank" class="layui-btn" title="中大科研"><i class="layui-icon layui-icon-password"></i></a>
+            <a href="http://localhost:8080" target="_blank" class="layui-btn" title="本地科研"><i class="layui-icon layui-icon-auz"></i></a>
+            <a href="https://usm.sysu.edu.cn/index.php" target="_blank" class="layui-btn" title="堡垒机"><i class="layui-icon layui-icon-flag"></i></a>
+            <a href="http://localhost:8088" target="_blank" class="layui-btn" title="测试"><i class="layui-icon layui-icon-set"></i></a>
+            <a href="https://leetcode-cn.com/problemset/all/" target="_blank" class="layui-btn" title="学习"><i class="layui-icon layui-icon-read"></i></a>
+            <a href="/info" target="_blank" class="layui-btn" title="常用数据"><i class="layui-icon layui-icon-form"></i></a>
+            <a href="https://www.layui.com/" target="_blank" class="layui-btn" title="Layui"><i class="layui-icon layui-icon-theme"></i></a>
+        </div>
+        <div class="layui-col-md3">&nbsp;</div>
+    </div>
+    </form>
+</div>
+<div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
+    <i>www.jianbing.pro</i>
+</div>
+
+</body>
+<script th:src="@{../static/layui/layui.js}"></script>
+<script type="text/javascript">
+
+    function toIndex() {
+        window.open("/index");
+    }
+
+    /*var form = layui.form;
+
+    //监听提交
+    form.on('submit(formDemo)', function (data) {
+        layer.msg(JSON.stringify(data.field));
+        return false;
+    });*/
+
+
+</script>
+</html>
