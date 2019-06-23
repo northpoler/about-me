@@ -17,7 +17,7 @@ public class SearchController {
         this.likeService = likeService;
     }
 
-    @GetMapping("")
+    @GetMapping("search")
     public String search(Model model){
         return "search";
     }

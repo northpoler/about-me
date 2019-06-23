@@ -17,7 +17,7 @@ public class IndexController {
         this.likeService = likeService;
     }
 
-    @GetMapping("/index")
+    @GetMapping("")
     public String index(Model model){
         int sumLikes = likeService.getSumLikes();
         model.addAttribute("likes",sumLikes);
