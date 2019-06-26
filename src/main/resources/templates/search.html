@@ -18,7 +18,7 @@
             <div class="layui-form-item" style="margin-top: 10%">
                 <img alt="logo" th:src="@{../static/image/logo.png}" style="width: 200px;cursor: pointer" onclick="toIndex()"/>
                 <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;margin-top: 50px">
-                    <input type="text" name="word" style="font-size: medium;height: 44px" lay-verify="required" placeholder="请输入你要搜索的内容..." autocomplete="off" class="layui-input">
+                    <input type="text" name="word" style="font-size: medium;height: 44px" id="searchBody" placeholder="百度能搜到的这里都能搜..." autocomplete="off" class="layui-input">
                     <button style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
                         <i class="layui-icon layui-icon-search"></i>
                         <!--<i class="layui-icon layui-icon-face-surprised" style="font-size: 33px"></i>-->
@@ -58,6 +58,9 @@
         layer.msg(JSON.stringify(data.field));
         return false;
     });*/
+
+    $("#searchBody").focus();
+
 
 
 </script>
