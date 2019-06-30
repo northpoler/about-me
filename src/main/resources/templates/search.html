@@ -11,7 +11,7 @@
 <body style="background-color: lightgoldenrodyellow">
 
 <div class="layui-row" style="text-align: center;font-size: larger">
-    <form action="http://www.baidu.com/baidu" target="_blank">
+    <form action="http://www.baidu.com/baidu" target="_blank" onsubmit="return check()">
     <div class="layui-row">
         <div class="layui-col-md3">&nbsp;</div>
         <div class="layui-col-md6">
@@ -19,9 +19,8 @@
                 <img alt="logo" th:src="@{../static/image/logo.png}" style="width: 200px;cursor: pointer" onclick="toIndex()"/>
                 <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;margin-top: 50px">
                     <input type="text" name="word" style="font-size: medium;height: 44px" id="searchBody" placeholder="百度能搜到的这里都能搜..." autocomplete="off" class="layui-input">
-                    <button style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
+                    <button onmousedown="check()" style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
                         <i class="layui-icon layui-icon-search"></i>
-                        <!--<i class="layui-icon layui-icon-face-surprised" style="font-size: 33px"></i>-->
                     </button>
                 </div>
             </div>
@@ -49,6 +48,22 @@
 
     function toIndex() {
         window.open("/index");
+    }
+
+    function check(){
+        var keyword = $("#searchBody").val();
+        $.ajax({
+            type: 'POST',
+            dataType: 'json',
+            url: '/keyword/insert',
+            data: {"keyword": keyword},
+            cache: false,
+            async: true,
+            success: function () {
+                $("#searchBody").val();
+            }
+        });
+        return true;
     }
 
     /*var form = layui.form;
