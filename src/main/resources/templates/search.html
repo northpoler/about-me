@@ -15,6 +15,7 @@
     <div class="layui-row">
         <div class="layui-col-md3">&nbsp;</div>
         <div class="layui-col-md6">
+            <!--搜索框-->
             <div class="layui-form-item" style="margin-top: 10%">
                 <img alt="logo" th:src="@{../static/image/logo.png}" style="width: 200px;cursor: pointer" onclick="toIndex()"/>
                 <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;margin-top: 50px">
@@ -24,22 +25,19 @@
                     </button>
                 </div>
             </div>
-            <a href="/" target="_blank" class="layui-btn" title="首页"><i class="layui-icon layui-icon-home"></i></a>
-            <a href="https://translate.google.cn/" target="_blank" class="layui-btn" title="翻译"><i class="layui-icon layui-icon-fonts-strong"></i></a>
-            <a href="https://newkeyan.sysu.edu.cn/srm" target="_blank" class="layui-btn" title="中大科研"><i class="layui-icon layui-icon-password"></i></a>
-            <a href="http://localhost:8080" target="_blank" class="layui-btn" title="本地科研"><i class="layui-icon layui-icon-auz"></i></a>
-            <a href="https://usm.sysu.edu.cn/index.php" target="_blank" class="layui-btn" title="堡垒机"><i class="layui-icon layui-icon-flag"></i></a>
-            <a href="http://localhost:8088" target="_blank" class="layui-btn" title="测试"><i class="layui-icon layui-icon-set"></i></a>
-            <a href="https://leetcode-cn.com/problemset/all/" target="_blank" class="layui-btn" title="学习"><i class="layui-icon layui-icon-read"></i></a>
-            <a href="/info" target="_blank" class="layui-btn" title="常用数据"><i class="layui-icon layui-icon-form"></i></a>
-            <a href="https://www.layui.com/" target="_blank" class="layui-btn" title="Layui"><i class="layui-icon layui-icon-theme"></i></a>
+            <!--常用链接-->
+            <ul th:each="link : ${links}" class="layui-inline">
+                <a th:href="@{${link.link}}" target="_blank" class="layui-btn" style="margin: 0 5px" th:title="${link.title}">
+                    <i th:class="${link.icon}"></i>
+                </a>
+            </ul>
         </div>
         <div class="layui-col-md3">&nbsp;</div>
     </div>
     </form>
 </div>
 <div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
-    <i>www.jianbing.pro</i>
+    <a th:href="@{/}"><i>www.jianbing.pro</i></a>
 </div>
 
 </body>
@@ -49,7 +47,6 @@
     function toIndex() {
         window.open("/index");
     }
-
     function check(){
         var keyword = $("#searchBody").val();
         $.ajax({
