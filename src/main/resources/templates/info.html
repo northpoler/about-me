@@ -26,20 +26,16 @@
                 <th>链接</th>
                 <th>用户名</th>
                 <th>密码</th>
+                <th>备注</th>
             </tr>
             </thead>
             <tbody>
-            <tr>
-                <td>堡垒机</td>
-                <td>https://usm.sysu.edu.cn/index.php</td>
-                <td>wenlinji</td>
-                <td>ZFsoft_1234</td>
-            </tr>
-            <tr>
-                <td>正式库数据库</td>
-                <td>10.16.0.191:1521/ums</td>
-                <td>ky_dbadmin</td>
-                <td>YYkda9y3QpmF</td>
+            <tr th:each="memo : ${memos}">
+                <td th:text="${memo.title}"></td>
+                <td th:text="${memo.address}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
+                <td th:text="${memo.username}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
+                <td th:text="${memo.password}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
+                <td th:text="${memo.remark}"></td>
             </tr>
             </tbody>
         </table>
@@ -54,7 +50,22 @@
 </body>
 <script th:src="@{../static/layui/layui.js}"></script>
 <script type="text/javascript">
-
+    layui.use('layer', function () {
+        var layer = layui.layer;
+    });
+    function copyText(e)
+    {
+        var target = e.currentTarget;
+        var innerText = target.innerText;
+        var oInput = document.createElement('input');
+        oInput.value = innerText;
+        document.body.appendChild(oInput);
+        oInput.select(); // 选择对象
+        document.execCommand("Copy"); // 执行浏览器复制命令
+        oInput.className = 'oInput';
+        oInput.style.display='none';
+        layer.msg('复制成功！', {offset: '100px', anim: 0, time: 999});
+    }
 
 </script>
 </html>

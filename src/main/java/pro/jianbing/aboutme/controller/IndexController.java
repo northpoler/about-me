@@ -5,8 +5,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import pro.jianbing.aboutme.entity.Link;
+import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.LinkService;
+import pro.jianbing.aboutme.service.MemoService;
 
 import java.util.List;
 
@@ -17,11 +19,12 @@ import java.util.List;
 public class IndexController {
 
     private final LikeService likeService;
-
+    private final MemoService memoService;
 
     @Autowired
-    public IndexController(LikeService likeService) {
+    public IndexController(LikeService likeService, MemoService memoService) {
         this.likeService = likeService;
+        this.memoService = memoService;
     }
 
     @GetMapping("")
@@ -33,6 +36,8 @@ public class IndexController {
 
     @GetMapping("/info")
     public String info(Model model){
+        List<Memo> memoList = memoService.getMemoList();
+        model.addAttribute("memos",memoList);
         return "info";
     }
 }
