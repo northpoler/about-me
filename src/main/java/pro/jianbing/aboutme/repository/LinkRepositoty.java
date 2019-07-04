@@ -15,6 +15,7 @@ import java.util.List;
 @Repository("linkRepository")
 public interface LinkRepositoty extends JpaRepository<Link,Long> {
     /**
+     * 获取所有的常用链接（升序，状态正常的）
      * @param mark
      * @return
      */

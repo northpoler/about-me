@@ -44,7 +44,7 @@
 </div>
 
 <div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
-    <i>www.jianbing.pro</i>
+    <a th:href="@{/search}"><i>www.jianbing.pro</i></a>
 </div>
 
 </body>
@@ -53,8 +53,8 @@
     layui.use('layer', function () {
         var layer = layui.layer;
     });
-    function copyText(e)
-    {
+
+    function copyText(e) {
         var target = e.currentTarget;
         var innerText = target.innerText;
         var oInput = document.createElement('input');
@@ -63,7 +63,7 @@
         oInput.select(); // 选择对象
         document.execCommand("Copy"); // 执行浏览器复制命令
         oInput.className = 'oInput';
-        oInput.style.display='none';
+        oInput.style.display = 'none';
         layer.msg('复制成功！', {offset: '100px', anim: 0, time: 999});
     }
 
