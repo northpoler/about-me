@@ -16,6 +16,7 @@ import java.util.List;
 @Service
 public class LinkService {
 
+    private static final String DOMAIN_COMPANY = "company";
     private final
     LinkRepositoty linkRepositoty;
 
@@ -24,8 +25,12 @@ public class LinkService {
         this.linkRepositoty = linkRepositoty;
     }
 
-    public List<Link> getLinkList(){
-        List<Link> allByMark = linkRepositoty.findAllByMarkOrderBySequenceAsc("0");
+    public List<Link> getLinkList(String domain){
+        String mark = "0";
+        if (DOMAIN_COMPANY.equals(domain)){
+            mark = "1";
+        }
+        List<Link> allByMark = linkRepositoty.findAllByMarkLessThanEqualOrderBySequenceAsc(mark);
         return allByMark;
     }
 }

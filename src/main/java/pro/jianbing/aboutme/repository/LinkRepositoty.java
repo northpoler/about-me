@@ -20,5 +20,5 @@ public interface LinkRepositoty extends JpaRepository<Link,Long> {
      * @return
      */
     @Query
-    List<Link> findAllByMarkOrderBySequenceAsc(String mark);
+    List<Link> findAllByMarkLessThanEqualOrderBySequenceAsc(String mark);
 }

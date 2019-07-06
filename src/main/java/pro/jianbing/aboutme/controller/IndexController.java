@@ -4,17 +4,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import pro.jianbing.aboutme.entity.Link;
 import pro.jianbing.aboutme.entity.Memo;
-import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.LikeService;
-import pro.jianbing.aboutme.service.LinkService;
 import pro.jianbing.aboutme.service.MemoService;
-import pro.jianbing.aboutme.service.VisitService;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -23,6 +17,7 @@ import java.util.List;
 @Controller
 public class IndexController {
 
+    private static final String DOMAIN_COMPANY = "company";
     private final LikeService likeService;
     private final MemoService memoService;
 
@@ -40,9 +35,13 @@ public class IndexController {
     }
 
     @GetMapping("/info")
-    public String info(Model model){
-        List<Memo> memoList = memoService.getMemoList();
-        model.addAttribute("memos",memoList);
-        return "info";
+    public String info(HttpServletRequest request,Model model){
+        String domain = String.valueOf(request.getSession().getAttribute("domain"));
+        if (null!=domain&&DOMAIN_COMPANY.equals(domain)){
+            List<Memo> memoList = memoService.getMemoList();
+            model.addAttribute("memos",memoList);
+            return "info";
+        }
+        return "index";
     }
 }

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import pro.jianbing.aboutme.entity.Link;
+import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.LinkService;
@@ -29,9 +30,14 @@ public class SearchController {
     }
 
     @GetMapping("search")
-    public String search(Model model){
-        List<Link> linkList = linkService.getLinkList();
-        model.addAttribute("links",linkList);
-        return "search";
+    public String search(HttpServletRequest request,Model model){
+        String domain = String.valueOf(request.getSession().getAttribute("domain"));
+        if (null!=domain){
+            List<Link> linkList = linkService.getLinkList(domain);
+            model.addAttribute("links",linkList);
+            return "search";
+        }
+        return "/";
+
     }
 }

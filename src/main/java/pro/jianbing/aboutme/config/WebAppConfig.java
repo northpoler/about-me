@@ -16,7 +16,7 @@ public class WebAppConfig extends WebMvcConfigurationSupport {
     private VisitInterceptor visitInterceptor;
     @Override
     public void addInterceptors(InterceptorRegistry registry){
-        registry.addInterceptor(visitInterceptor).addPathPatterns("/").addPathPatterns("/search")
+        registry.addInterceptor(visitInterceptor).addPathPatterns("/**")
                 .excludePathPatterns("/static/*");
     }
 
