@@ -32,7 +32,7 @@
             <tbody>
             <tr th:each="memo : ${memos}">
                 <td th:text="${memo.title}"></td>
-                <td th:text="${memo.address}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
+                <td th:text="${memo.address}"></td>
                 <td th:text="${memo.username}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
                 <td th:text="${memo.password}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
                 <td th:text="${memo.remark}"></td>
