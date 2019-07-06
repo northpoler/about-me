@@ -5,9 +5,13 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import pro.jianbing.aboutme.entity.Link;
+import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.LinkService;
+import pro.jianbing.aboutme.util.NetworkUtil;
 
+import javax.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**

@@ -149,42 +149,6 @@
         })
     }
 
-
-    /*var ref;
-
-    function upup(){
-        ref = setInterval(function(){
-            up();
-        },30);
-    }
-
-    function noup(){
-        clearInterval(ref);
-    }*/
-
-    /*{
-        formType: 1, //输入框类型，支持0（文本）默认1（密码）2（多行文本）
-            value: '', //初始时的值，默认空字符
-        maxlength: 140, //可输入文本的最大长度，默认500
-    }*/
-
-    /* //例子1
-     layer.prompt(function(value, index, elem){
-         alert(value); //得到value
-         layer.close(index);
-     });*/
-
-    /*//例子2
-    layer.prompt({
-        formType: 2,
-        value: '初始值',
-        title: '请输入值',
-        area: ['800px', '350px'] //自定义文本域宽高
-    }, function(value, index, elem){
-        alert(value); //得到value
-        layer.close(index);
-    });*/
-
     window.onload = function (ev) {
         getCountdown();
     };
@@ -203,7 +167,15 @@
                 daysA = data[0].days;
                 titleB = data[1].title;
                 endTimeB = data[1].endTime;
+                if (endTimeA.length<6){
+                    endTimeA[5] = 0;
+                }
+                if (endTimeB.length<6){
+                    endTimeB[5] = 0;
+                }
                 daysB = data[1].days;
+                endA = new Date(endTimeA[0],endTimeA[1]-1,endTimeA[2],endTimeA[3],endTimeA[4],endTimeA[5]);
+                endB = new Date(endTimeB[0],endTimeB[1]-1,endTimeB[2],endTimeB[3],endTimeB[4],endTimeB[5]);
                 countdown();
             }
         });
@@ -211,29 +183,21 @@
 
     function countdown() {
         var now = new Date();
-        var end = new Date(endTimeA);
         var title = titleA;
-        if (now > end){
-            end = new Date(endTimeB);
+        if (now > endA){
+            endA = endB;
             title = titleB;
         }
-        var today = now,//当前时间
-            h = today.getHours(),
-            m = today.getMinutes(),
-            s = today.getSeconds();
-        var stopTime = end,//结束时间
-            stopH = stopTime.getHours(),
-            stopM = stopTime.getMinutes(),
-            stopS = stopTime.getSeconds();
+        var today = now;
+        var stopTime = endA;
         var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
             shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
             D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
             shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
             H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
-            shengyuM = parseInt(H / (60 * 1000)),//除去天的毫秒数转换成分钟
-            M = H - shengyuM * 60 * 1000;//除去天、小时、分的毫秒数
-        S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
-        MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+            shengyuM = parseInt(H / (60 * 1000));//除去天的毫秒数转换成分钟
+        var S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
+        var MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
         document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
         $("#countDownTitle").html("现在距离李建兵"+title+"还有：");
         setTimeout(countdown, 33);

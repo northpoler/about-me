@@ -6,10 +6,15 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import pro.jianbing.aboutme.entity.Link;
 import pro.jianbing.aboutme.entity.Memo;
+import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.LinkService;
 import pro.jianbing.aboutme.service.MemoService;
+import pro.jianbing.aboutme.service.VisitService;
+import pro.jianbing.aboutme.util.NetworkUtil;
 
+import javax.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -28,7 +33,7 @@ public class IndexController {
     }
 
     @GetMapping("")
-    public String index(Model model){
+    public String index( Model model){
         int sumLikes = likeService.getSumLikes();
         model.addAttribute("likes",sumLikes);
         return "index";
