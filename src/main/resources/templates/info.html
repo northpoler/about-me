@@ -29,7 +29,7 @@
             </thead>
             <tbody>
             <tr th:each="memo : ${memos}">
-                <td th:text="${memo.title}"></td>
+                <td th:text="${memo.title}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
                 <td onclick="copyText(event)" style="cursor: pointer" title="单击空白处可复制链接">
                     <a th:href="@{${memo.address}}" target="_blank"><span th:text="${memo.address}"></span></a>
                 </td>
