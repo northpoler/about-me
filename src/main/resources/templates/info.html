@@ -24,18 +24,16 @@
             <tr>
                 <th>名称</th>
                 <th>链接</th>
-                <th>用户名</th>
-                <th>密码</th>
                 <th>备注</th>
             </tr>
             </thead>
             <tbody>
             <tr th:each="memo : ${memos}">
                 <td th:text="${memo.title}"></td>
-                <td th:text="${memo.address}"></td>
-                <td th:text="${memo.username}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
-                <td th:text="${memo.password}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
-                <td th:text="${memo.remark}"></td>
+                <td onclick="copyText(event)" style="cursor: pointer" title="单击空白处可复制链接">
+                    <a th:href="@{${memo.address}}" target="_blank"><span th:text="${memo.address}"></span></a>
+                </td>
+                <td th:text="${memo.remark}" onclick="copyText(event)" style="cursor: pointer" title="单击可复制文本"></td>
             </tr>
             </tbody>
         </table>

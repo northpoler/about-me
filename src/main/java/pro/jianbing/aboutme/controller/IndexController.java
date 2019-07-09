@@ -35,13 +35,9 @@ public class IndexController {
     }
 
     @GetMapping("/info")
-    public String info(HttpServletRequest request,Model model){
-        String domain = String.valueOf(request.getSession().getAttribute("domain"));
-        if (null!=domain&&DOMAIN_COMPANY.equals(domain)){
-            List<Memo> memoList = memoService.getMemoList();
-            model.addAttribute("memos",memoList);
-            return "info";
-        }
-        return "index";
+    public String info(Model model){
+        List<Memo> memoList = memoService.getMemoList();
+        model.addAttribute("memos",memoList);
+        return "info";
     }
 }
