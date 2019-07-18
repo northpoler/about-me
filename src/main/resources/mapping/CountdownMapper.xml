@@ -15,7 +15,7 @@
           end_time endTime,
           days
         from countdown
-        where end_time > (select CURRENT_TIMESTAMP from DUAL)
+        where end_time > (select CURRENT_TIMESTAMP from DUAL) and mark = '0'
         order by end_time
         limit 0,2
     </select>
