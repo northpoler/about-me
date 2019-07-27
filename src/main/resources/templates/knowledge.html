@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>知识库</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
+    <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+</head>
+<body style="background-color: lightgoldenrodyellow;padding-top: 20px;">
+
+<div class="layui-row">
+    <div class="layui-col-md3">&nbsp;</div>
+    <div class="layui-col-md6">
+        <div style="text-align: center;margin: 20px 0px">
+            <button type="button" id="edit" class="layui-btn layui-btn-lg layui-btn-normal">编辑内容</button>
+            <button type="button" id="show" class="layui-btn layui-btn-lg layui-btn-warm layui-hide">退出编辑</button>
+        </div>
+        <div id="editor">
+            <p>这里面是 <b>需要认真学习</b> 的知识点</p>
+        </div>
+        <div style="text-align: center;margin: 20px 0px">
+            <button type="button" id="save" class="layui-btn layui-btn-lg layui-btn-normal layui-hide">保存</button>
+        </div>
+    </div>
+    <div class="layui-col-md3">&nbsp;</div>
+</div>
+
+<div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
+    <a th:href="@{/search}"><i>www.jianbing.pro</i></a>
+</div>
+
+</body>
+<script th:src="@{../static/js/editor/wangEditor.min.js}"></script>
+<script th:src="@{../static/layui/layui.js}"></script>
+<script type="text/javascript">
+    layui.use('layer', function () {
+        var layer = layui.layer;
+    });
+    var E = window.wangEditor;
+    var editor = new E('#editor');
+    // 自定义配置颜色（字体颜色、背景色）
+    editor.customConfig.colors = [
+        '#000000',
+        '#eeece0',
+        '#1c487f',
+        '#4d80bf',
+        '#c24f4a',
+        '#8baa4a',
+        '#7b5ba1',
+        '#46acc8',
+        '#f9963b',
+        '#ffffff'
+    ];
+
+    $(function () {
+        $.ajax({
+            type: 'GET',
+            dataType: 'json',
+            url: '/knowledge/get',
+            data: {},
+            cache: false,
+            async: true,
+            success: function (data) {
+                $("#editor").html(data.data);
+            }
+        });
+    });
+
+    $("#edit").click(function () {
+        editor.create();
+        $("#show").removeClass("layui-hide");
+        $("#save").removeClass("layui-hide");
+        $("#edit").addClass("layui-hide");
+    });
+
+    $("#show").click(function () {
+        window.location.reload();
+    });
+
+    $("#save").click(function () {
+        $.ajax({
+            type: 'POST',
+            dataType: 'json',
+            url: '/knowledge/save',
+            data: {
+                content:editor.txt.html()
+            },
+            cache: false,
+            async: true,
+            success: function (data) {
+                if (data.code==0){
+                    layer.msg("保存成功！", {offset: '200px', anim: 0, time: 300});
+                }
+            }
+        });
+    });
+
+
+
+    /*// 禁用编辑功能
+    editor.$textElem.attr('contenteditable', false)
+
+    // 开启编辑功能
+    editor.$textElem.attr('contenteditable', true)*/
+
+</script>
+</html>

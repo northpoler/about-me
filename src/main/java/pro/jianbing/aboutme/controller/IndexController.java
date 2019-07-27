@@ -8,7 +8,6 @@ import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.MemoService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
@@ -17,7 +16,6 @@ import java.util.List;
 @Controller
 public class IndexController {
 
-    private static final String DOMAIN_COMPANY = "company";
     private final LikeService likeService;
     private final MemoService memoService;
 
