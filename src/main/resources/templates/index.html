@@ -197,6 +197,7 @@
             shengyuM = parseInt(H / (60 * 1000));//除去天的毫秒数转换成分钟
         var S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
         var MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
+        MS = (Array(3).join('0') + MS).slice(-3);
         document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
         $("#countDownTitle").html("现在距离李建兵"+title+"还有：");
         setTimeout(countdown, 33);
