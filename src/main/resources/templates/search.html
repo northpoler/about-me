@@ -7,6 +7,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
     <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+    <style>
+        ul {
+            width: 100%;
+            list-style: none;
+            overflow-x: auto;
+            white-space:nowrap;
+        }
+        li {
+            display:inline;
+        }
+        /*ul::-webkit-scrollbar {
+            !*width: 2px;
+            height: 6px;*!
+            display: none;
+        }*/
+
+        /*定义滚动条高宽及背景 高宽分别对应横竖滚动条的尺寸*/
+        ::-webkit-scrollbar
+        {
+            width: 12px;
+            height: 12px;
+            background-color: lightgoldenrodyellow;
+        }
+
+        /*定义滚动条轨道 内阴影+圆角*/
+        ::-webkit-scrollbar-track
+        {
+            -webkit-box-shadow: inset 0 0 6px lightgoldenrodyellow;
+            border-radius: 10px;
+            background-color: lightgoldenrodyellow;
+        }
+
+        /*定义滑块 内阴影+圆角*/
+        ::-webkit-scrollbar-thumb
+        {
+            border-radius: 10px;
+            -webkit-box-shadow: inset 0 0 6px lightgoldenrodyellow;
+            background-color: lightgoldenrodyellow;
+        }
+        ::-webkit-scrollbar-button{
+            background-color: deeppink;
+        }
+    </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
 
@@ -26,10 +69,12 @@
                 </div>
             </div>
             <!--常用链接-->
-            <ul th:each="link : ${links}" class="layui-inline">
-                <a th:href="@{${link.link}}" target="_blank" class="layui-btn" style="margin: 0 5px" th:title="${link.title}">
-                    <i th:class="${link.icon}"></i>
-                </a>
+            <ul class="layui-inline scroll">
+                <li th:each="link : ${links}" class="scroll-son">
+                    <a th:href="@{${link.link}}" target="_blank" class="layui-btn" style="margin: 0 5px" th:title="${link.title}">
+                        <i th:class="${link.icon}"></i>
+                    </a>
+                </li>
             </ul>
             <!--倒计时-->
             <div style="margin-top: 20px">
