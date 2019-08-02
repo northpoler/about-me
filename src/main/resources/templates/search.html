@@ -78,11 +78,14 @@
             </ul>
             <!--倒计时-->
             <div style="margin-top: 20px">
-                <span id="countDownTitle" style="color: #333333">
-                    <i class="layui-icon layui-icon-notice"></i>倒计时标题
+                <span>
+                    <i style='font-size: large;color: deeppink' class="layui-icon layui-icon-notice"></i>
                 </span>
                 <span id="countDown" style="color: #333333">
                     <i class="layui-icon layui-icon-log"></i>倒计时
+                </span>
+                <span id="countDownTitle" style="color: deeppink">
+                    【倒计时标题】
                 </span>
             </div>
         </div>
@@ -177,8 +180,8 @@
         var S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
         var MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
         MS = (Array(3).join('0') + MS).slice(-3);
-        document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS + "毫秒" + "<br>");
-        $("#countDownTitle").html("<i style='font-size: large;color: deeppink' class=\"layui-icon layui-icon-notice\"></i>&nbsp;&nbsp;现在距离"+title+"还有：");
+        document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS/* + "毫秒"*/);
+        $("#countDownTitle").html('【'+title+'】');
         setTimeout(countdown, 33);
     }
 
