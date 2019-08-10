@@ -8,14 +8,15 @@
     <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
     <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
     <style>
-        ul {
+        #search ul {
             width: 100%;
             list-style: none;
             overflow-x: auto;
-            white-space:nowrap;
+            white-space: nowrap;
         }
-        li {
-            display:inline;
+
+        #search li {
+            display: inline;
         }
         /*ul::-webkit-scrollbar {
             !*width: 2px;
@@ -49,15 +50,36 @@
         ::-webkit-scrollbar-button{
             background-color: deeppink;
         }
+        #top {
+            padding: 5px 20px;
+            background-color: rgba(0,0,0,0.3);
+            text-align: right;
+            color: white;
+        }
+        #top a{
+            color: white;
+            cursor: pointer;
+            border-bottom: 1px solid white;
+            padding-bottom: 1px;
+            margin-right: 15px;
+        }
     </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
-
+<div class="layui-row" id="top">
+    <div th:if="${session.user}==null">
+        <a type="button" id="loginBtn">登录</a>
+    </div>
+    <div th:if="${session.user}!=null">
+        <a type="button" id="username" th:text="${session.user.username}"></a>
+        <a type="button" id="personalCenter">个人中心</a>
+        <a type="button" id="logout">注销</a>
+    </div>
+</div>
 <div class="layui-row" style="text-align: center;font-size: larger">
     <form action="http://www.baidu.com/baidu" target="_blank" onsubmit="return check()">
     <div class="layui-row">
-        <div class="layui-col-md3">&nbsp;</div>
-        <div class="layui-col-md6">
+        <div class="layui-col-md6 layui-col-md-offset3" id="search">
             <!--搜索框-->
             <div class="layui-form-item" style="margin-top: 10%">
                 <img alt="logo" th:src="@{../static/image/logo.png}" style="width: 200px;cursor: pointer" onclick="toIndex()"/>
@@ -89,7 +111,6 @@
                 </span>
             </div>
         </div>
-        <div class="layui-col-md3">&nbsp;</div>
     </div>
     </form>
 </div>
@@ -100,6 +121,129 @@
 </body>
 <script th:src="@{../static/layui/layui.js}"></script>
 <script type="text/javascript">
+    layui.use('element', function () {
+        var element = layui.element;
+
+    });
+
+    layui.use('layer', function () {
+        var layer = layui.layer;
+    });
+
+    $("#logout").click(function () {
+        layer.open({
+            type: 1
+            ,title: false //不显示标题栏
+            ,closeBtn: false
+            ,area: '300px;'
+            ,offset: '200px'
+            ,shade: 0.8
+            ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+            ,btn: ['去意已决', '我再考虑一下']
+            ,yes:function(){
+                $.ajax({
+                    url:"/logout",
+                    type:'get',
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                icon:1,
+                                time:1500
+                            },function(){
+                                parent.layer.close(index)
+                            });
+                            location.reload();
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            }
+            ,btnAlign: 'c'
+            ,moveType: 1 //拖拽模式，0或者1
+            ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; ' +
+                'font-weight: 300;text-align:center;font-size:20px;">确定注销吗~!</div>'
+
+        });
+    });
+
+    $("#loginBtn").click(function () {
+        layer.open({
+            type : 2,
+            title : "登录",
+            area : [ '400px', '400px' ],
+            shade : 0,
+            offset : "100px",
+            shadeClose : false,
+            content : "/login",
+            btn:['登录'],
+            yes:function(index,layero){
+                var body = top.layer.getChildFrame('body',index);
+                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+                console.log(body.find('#classId').val());
+                $.ajax({
+                    url:"/login/check",
+                    type:'post',
+                    data:{
+                        'username':body.find('#username').val(),
+                        'password':body.find('#password').val(),
+                        'rememberMe':body.find('#rememberMe').val()
+                    },
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                icon:1,
+                                time:1500
+                            },function(){
+                                parent.layer.close(index)
+                            });
+                            location.reload();
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            },
+            closeBtn : 1,
+            btnAlign:'c',
+            success : function(layero, index) {
+
+            },
+            cancel : function() {
+                /*layer.open({
+                    type: 1
+                    ,title: false //不显示标题栏
+                    ,closeBtn: false
+                    ,area: '300px;'
+                    ,offset: '200px'
+                    ,shade: 0.8
+                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+                    ,btn: ['是的关闭它', '我再考虑一下']
+                    ,yes:function(){
+                        layer.closeAll();
+                    }
+                    ,btnAlign: 'c'
+                    ,moveType: 1 //拖拽模式，0或者1
+                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+
+                });
+
+                return false;*/
+            },
+            end : function() {
+                layer.closeAll();
+                /*location.reload();*/
+            }
+        });
+    })
 
     function toIndex() {
         window.open("/");
