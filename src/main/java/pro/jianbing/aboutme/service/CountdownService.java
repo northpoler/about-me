@@ -23,9 +23,11 @@ public class CountdownService {
     }
 
     public List<Countdown> getTwoCountdown(Countdown countdown) {
-        List<Countdown> twoCountdown = new ArrayList<>(2);
+        List<Countdown> twoCountdown;
         if (null == countdown || null == countdown.getUserId()){
-            twoCountdown = countdownRepositoty.getTwoWithoutUser();
+            twoCountdown = countdownRepositoty.getTwoWithoutUser(countdown.getEndTime());
+        } else {
+            twoCountdown = countdownRepositoty.getTwoByUserId(countdown.getUserId(),countdown.getEndTime());
         }
         return twoCountdown;
     }

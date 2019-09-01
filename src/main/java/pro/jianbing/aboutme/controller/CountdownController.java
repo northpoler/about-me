@@ -9,6 +9,7 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.CountdownService;
 
 import javax.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -32,6 +33,7 @@ public class CountdownController {
         if (null != user){
             countdown.setUserId(user.getId());
         }
+        countdown.setEndTime(LocalDateTime.now());
         List<Countdown> twoCountdown = countdownService.getTwoCountdown(countdown);
         return twoCountdown;
     }

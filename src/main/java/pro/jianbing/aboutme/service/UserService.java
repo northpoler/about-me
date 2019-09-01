@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.repository.UserRepositoty;
 
+import java.time.LocalDateTime;
+
 /**
  * @author 李建兵
  */
@@ -26,6 +28,9 @@ public class UserService {
     public User FindUserByUsername(String username){
         User user = userRepositoty.findByUsername(username);
         return user;
+    }
+    public Integer updateLoginInfo(String lastIP, String id){
+        return userRepositoty.updateLoginInfo(lastIP,LocalDateTime.now(),id);
     }
 
 }

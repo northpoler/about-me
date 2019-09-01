@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
+import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -56,19 +57,12 @@ public class LoginController {
         User result = userService.FindUserByUsername(user.getUsername());
         Map<String,Object> data = new HashMap<>(2);
         if (null != result && user.getPassword().equals(result.getPassword())){
+            // 保存登录信息
+            String ipAddress = NetworkUtil.getIpAddress(request);
+            userService.updateLoginInfo(ipAddress,result.getId());
             data.put("code",0);
             data.put("msg","登陆成功");
             request.getSession().setAttribute("user",result);
-            /*Cookie cookie;
-            if (null==rememberMe){
-                cookie = new Cookie("remember_ticket","");
-                cookie.setMaxAge(0);
-            } else {
-                cookie = new Cookie("remember_ticket", UUID.randomUUID().toString());
-                cookie.setMaxAge(7*24*3600);
-            }
-            cookie.setPath(request.getContextPath());
-            response.addCookie(cookie);*/
         } else {
             data.put("code",500);
             data.put("msg","用户名或密码错误");

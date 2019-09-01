@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>李贺臣 | 简介</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
+    <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+</head>
+<body style="background-color: lightgoldenrodyellow">
+
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                《继古开今》全图
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                <img alt="《继古开今图》" th:src="@{../static/image/grandpa.jpg}" style="width: 100%"/>
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                做图意义
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;此图定稿的年份是2019，时值中华人民共和国建国70周年。</p>
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;李贺臣同志是一名优秀的党员，为祖国做过巨大贡献，特制图以纪念。</p>
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                标题释义
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;“继古开今”，指继承和弘扬先人的精神，开拓当今的事业和未来的道路。</p>
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;图中，万里长城是“古”，国旗党徽是“今”;毛泽东和李贺臣同志是“古”，我们是“今”。</p>
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                内容详解
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                <ol>
+                    <li>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1、图的左上角是“庆祝中华人民共和国成立70周年活动标识”；
+                    </li>
+                    <li>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2、李贺臣同志胸前有两个徽章，左边的是“抗美援越纪念章”，右边是“党员徽章”；
+                    </li>
+                    <li>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3、右下角的字写的是本图的制作意义；
+                    </li>
+                </ol>
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                家族谱系
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                <img alt="《世系图》" th:src="@{../static/image/shixi.png}" style="width: 100%"/>
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                照片拾忆
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                单人照：<br/><br/>
+                <img alt="《单人照》" th:src="@{../static/image/lifephoto01.jpg}" style="width: 100%"/>
+                <br/><br/>合照：<br/><br/>
+                <img alt="《合照》" th:src="@{../static/image/lifephoto02.jpg}" style="width: 100%"/>
+            </div>
+        </div>
+        <div style="text-align: center">
+            <br/>
+            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()"><i
+                    class="layui-icon layui-icon-praise"></i>&nbsp;<span id="like">0</span></button>
+            <br/><br/><br/><br/><br/><br/>
+        </div>
+    </div>
+</div>
+
+</body>
+<script th:src="@{../static/layui/layui.js}"></script>
+<script type="text/javascript">
+
+    var message = [[${likes}]];
+    $("#like").text(message);
+    var userLikes = 0;
+    layui.use('layer', function () {
+        var layer = layui.layer;
+    });
+    function like() {
+        layer.msg('点赞成功！', {offset: '100px', anim: 0, time: 300});
+        var test = $("#like").text();
+        var before = parseInt(test);
+        userLikes++;
+        $.ajax({
+            type: 'GET',
+            dataType: 'json',
+            url: '/like/insert',
+            data: {"count": before},
+            cache: false,
+            async: true,
+            success: function (data) {
+                $("#like").text(data);
+            }
+        });
+    }
+</script>
+</html>
