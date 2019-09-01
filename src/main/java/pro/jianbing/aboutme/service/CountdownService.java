@@ -1,31 +1,32 @@
 package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import pro.jianbing.aboutme.entity.Like;
-import pro.jianbing.aboutme.mapper.CountdownMapper;
-import pro.jianbing.aboutme.mapper.LikeMapper;
-import pro.jianbing.aboutme.pojo.po.Countdown;
-import pro.jianbing.aboutme.util.NetworkUtil;
+import pro.jianbing.aboutme.entity.Countdown;
+import pro.jianbing.aboutme.repository.CountdownRepositoty;
 
-import javax.servlet.http.HttpServletRequest;
-import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class CountdownService {
 
     private final
-    CountdownMapper countdownMapper;
+    CountdownRepositoty countdownRepositoty;
 
     @Autowired
-    public CountdownService(CountdownMapper countdownMapper) {
-        this.countdownMapper = countdownMapper;
+    public CountdownService(CountdownRepositoty countdownRepositoty) {
+        this.countdownRepositoty = countdownRepositoty;
     }
 
-    public List<Countdown> getTwoCountdown() {
-        List<Countdown> twoCountdown = countdownMapper.getTwoCountdown();
+    public List<Countdown> getTwoCountdown(Countdown countdown) {
+        List<Countdown> twoCountdown = new ArrayList<>(2);
+        if (null == countdown || null == countdown.getUserId()){
+            twoCountdown = countdownRepositoty.getTwoWithoutUser();
+        }
         return twoCountdown;
     }
 }

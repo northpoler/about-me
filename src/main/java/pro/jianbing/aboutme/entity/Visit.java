@@ -17,6 +17,8 @@ public class Visit implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
+    @Column(name = "user_id")
+    private String userId;
     private String ip;
     private String address;
     @Column(name = "visit_time")

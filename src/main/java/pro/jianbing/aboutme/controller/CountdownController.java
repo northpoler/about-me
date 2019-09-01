@@ -1,17 +1,14 @@
 package pro.jianbing.aboutme.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import pro.jianbing.aboutme.pojo.po.Countdown;
+import pro.jianbing.aboutme.entity.Countdown;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.CountdownService;
-import pro.jianbing.aboutme.service.LikeService;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
@@ -29,8 +26,13 @@ public class CountdownController {
     }
 
     @GetMapping("get")
-    public List<Countdown> getTwoCountdown(){
-        List<Countdown> twoCountdown = countdownService.getTwoCountdown();
+    public List<Countdown> getTwoCountdown(HttpServletRequest request){
+        User user = (User) request.getSession().getAttribute("user");
+        Countdown countdown = new Countdown();
+        if (null != user){
+            countdown.setUserId(user.getId());
+        }
+        List<Countdown> twoCountdown = countdownService.getTwoCountdown(countdown);
         return twoCountdown;
     }
 }

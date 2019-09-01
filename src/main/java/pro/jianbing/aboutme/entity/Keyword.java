@@ -17,6 +17,8 @@ public class Keyword implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
+    @Column(name = "user_id")
+    private String userId;
     private String keyword;
     @Column(name = "search_time")
     private LocalDateTime searchTime;

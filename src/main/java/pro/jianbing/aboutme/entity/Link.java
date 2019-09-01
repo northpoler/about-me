@@ -17,24 +17,16 @@ public class Link implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
-    /**
-     * 链接标题
-     */
+    @Column(name = "user_id")
+    private String userId;
+    /**链接标题*/
     private String title;
-    /**
-     * 链接
-     */
+    /**链接*/
     private String link;
-    /**
-     * 图标 layui
-     */
+    /**图标 layui*/
     private String icon;
-    /**
-     * 显示顺序
-     */
+    /**显示顺序*/
     private Integer sequence;
-    /**
-     * 标记 0正常 1删除 2隐藏
-     */
+    /**标记 0正常 1删除 2隐藏*/
     private String mark;
 }
