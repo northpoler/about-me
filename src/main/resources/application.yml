@@ -20,7 +20,7 @@ spring:
     time-zone: GMT+8
 
 server:
-  port: 8088
+  port: 80
 mybatis:
   mapper-locations: classpath:mapping/*Mapper.xml
   type-aliases-package: pro.jianbing.aboutme.entity

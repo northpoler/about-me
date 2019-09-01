@@ -7,6 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
     <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+    <style>
+    </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
 
@@ -25,7 +27,7 @@
                 做图意义
             </div>
             <div class="layui-card-body" style="font-size: large">
-                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;此图定稿的年份是2019，时值中华人民共和国建国70周年。</p>
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;此图定稿的年份是2019，时值中华人民共和国成立70周年。</p>
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;李贺臣同志是一名优秀的党员，为祖国做过巨大贡献，特制图以纪念。</p>
             </div>
         </div>
@@ -73,6 +75,20 @@
                 <img alt="《单人照》" th:src="@{../static/image/lifephoto01.jpg}" style="width: 100%"/>
                 <br/><br/>合照：<br/><br/>
                 <img alt="《合照》" th:src="@{../static/image/lifephoto02.jpg}" style="width: 100%"/>
+            </div>
+        </div>
+        <div class="layui-card" style="background-color: lightcyan">
+            <div class="layui-card-header" style="font-weight: bold;font-size: large">
+                原图下载
+            </div>
+            <div class="layui-card-body" style="font-size: large">
+                <a th:href="@{../static/image/Li_HeChen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="text-decoration: underline;color: deeppink">点击下载《继古开今》原图</span>
+
+                </a>
+                <br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size: medium"><i class="layui-icon layui-icon-tips"></i>
+                    若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可。</span>
             </div>
         </div>
         <div style="text-align: center">
