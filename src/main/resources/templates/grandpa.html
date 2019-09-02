@@ -111,7 +111,15 @@
         var layer = layui.layer;
     });
     function like() {
-        layer.msg('点赞成功！', {offset: '100px', anim: 0, time: 300});
+        layer.msg(
+            '点赞成功~',
+            {
+                offset: '100px',
+                anim: 0,
+                time: 1000,
+                icon:1
+            }
+        );
         var test = $("#like").text();
         var before = parseInt(test);
         userLikes++;
