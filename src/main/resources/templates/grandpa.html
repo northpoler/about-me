@@ -15,16 +15,24 @@
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                全图概览
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-read"></i>  全图概览
             </div>
             <div class="layui-card-body" style="font-size: large">
                 <img alt="《继古开今图》" th:src="@{../static/image/grandpa.jpg}" style="width: 100%"/>
+                <br/><br/>
+                <a th:href="@{../static/image/Li_HeChen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="text-decoration: underline;color: deeppink">点击下载《继古开今》原图</span>
+
+                </a>
+                <br/>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size: medium"><i class="layui-icon layui-icon-tips"></i>
+                    若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可。</span>
             </div>
         </div>
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                制图意义
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-flag"></i>  制图意义
             </div>
             <div class="layui-card-body" style="font-size: large">
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;此图定稿的年份是2019，时值中华人民共和国成立70周年。</p>
@@ -32,8 +40,8 @@
             </div>
         </div>
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                标题释义
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-about"></i>  标题释义
             </div>
             <div class="layui-card-body" style="font-size: large">
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;“继古开今”，指继承和弘扬先人的精神和事业，开拓当今的事业和未来的道路。</p>
@@ -41,8 +49,8 @@
             </div>
         </div>
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                细节详解
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-search"></i>  细节说明
             </div>
             <div class="layui-card-body" style="font-size: large">
                 <ol>
@@ -56,8 +64,8 @@
             </div>
         </div>
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                家族谱系
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-tree"></i>  家族谱系
             </div>
             <div class="layui-card-body" style="font-size: large">
                 <img alt="《世系图》" th:src="@{../static/image/shixi.png}" style="width: 100%"/>
@@ -67,8 +75,8 @@
             </div>
         </div>
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                照片拾忆
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-picture"></i>  照片拾忆
             </div>
             <div class="layui-card-body" style="font-size: large">
                 单人照：<br/><br/>
@@ -78,19 +86,56 @@
             </div>
         </div>
         <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large">
-                原图下载
+            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+                <i class="layui-icon layui-icon-location"></i>  人生轨迹
             </div>
             <div class="layui-card-body" style="font-size: large">
-                <a th:href="@{../static/image/Li_HeChen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="text-decoration: underline;color: deeppink">点击下载《继古开今》原图</span>
-
-                </a>
-                <br/>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size: medium"><i class="layui-icon layui-icon-tips"></i>
-                    若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可。</span>
+                <ul class="layui-timeline">
+                    <li class="layui-timeline-item">
+                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
+                        <div class="layui-timeline-content layui-text">
+                            <h3 class="layui-timeline-title">1940年某月某日</h3>
+                            <p>
+                                李贺臣同志第一次睁开双眼，来到还处于动荡不安的世界。
+                                <br>那年的属相是龙。
+                                <br>龙象征出人头地，不同凡响。
+                            </p>
+                        </div>
+                    </li>
+                    <li class="layui-timeline-item">
+                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
+                        <div class="layui-timeline-content layui-text">
+                            <h3 class="layui-timeline-title">1949年10月1日</h3>
+                            <p>李贺臣虚岁10岁了</p>
+                            在这一天，迎来了新中国的成立。
+                            <br>从旧社会跨到了新社会，却没有从20世纪跨到21世纪。
+                        </div>
+                    </li>
+                    <li class="layui-timeline-item">
+                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
+                        <div class="layui-timeline-content layui-text">
+                            <h3 class="layui-timeline-title">1998年某月某日</h3>
+                            <p>
+                                这是一个不幸的日子
+                                <br>年仅58周岁，却，
+                                <br>与世长辞！
+                                <br>希望您在另一个世界，
+                                <br>一切安好！
+                            </p>
+                        </div>
+                    </li>
+                    <li class="layui-timeline-item">
+                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
+                        <div class="layui-timeline-content layui-text">
+                            <div class="layui-timeline-title">血脉延续......</div>
+                        </div>
+                    </li>
+                </ul>
+                <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">添加更多</button>
             </div>
         </div>
+
+
         <div style="text-align: center">
             <br/>
             <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()"><i
@@ -110,6 +155,81 @@
     layui.use('layer', function () {
         var layer = layui.layer;
     });
+
+    $("#add").click(function () {
+        layer.open({
+            type : 2,
+            title : "添加时间线",
+            area : [ '400px', '500px' ],
+            shade : 0,
+            offset : "100px",
+            shadeClose : false,
+            content : "/timeline/add",
+            btn:['确定'],
+            yes:function(index,layero){
+                var body = top.layer.getChildFrame('body',index);
+                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+                console.log(body.find('#classId').val());
+                $.ajax({
+                    url:"/timeline/save",
+                    type:'post',
+                    data:{
+                        'username':body.find('#username').val(),
+                        'password':body.find('#password').val(),
+                        'rememberMe':body.find('#rememberMe').val()
+                    },
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                icon:1,
+                                time:1500
+                            },function(){
+                                parent.layer.close(index)
+                            });
+                            location.reload();
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            },
+            closeBtn : 1,
+            btnAlign:'c',
+            success : function(layero, index) {
+
+            },
+            cancel : function() {
+                /*layer.open({
+                    type: 1
+                    ,title: false //不显示标题栏
+                    ,closeBtn: false
+                    ,area: '300px;'
+                    ,offset: '200px'
+                    ,shade: 0.8
+                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+                    ,btn: ['是的关闭它', '我再考虑一下']
+                    ,yes:function(){
+                        layer.closeAll();
+                    }
+                    ,btnAlign: 'c'
+                    ,moveType: 1 //拖拽模式，0或者1
+                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+
+                });
+
+                return false;*/
+            },
+            end : function() {
+                layer.closeAll();
+                /*location.reload();*/
+            }
+        });
+    })
+
     function like() {
         layer.msg(
             '点赞成功~',
