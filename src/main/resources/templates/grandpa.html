@@ -87,55 +87,22 @@
         </div>
         <div class="layui-card" style="background-color: lightcyan">
             <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
-                <i class="layui-icon layui-icon-location"></i>  人生轨迹
+                <!--<i class="layui-icon layui-icon-location"></i>  人生轨迹-->
             </div>
             <div class="layui-card-body" style="font-size: large">
+
                 <ul class="layui-timeline">
-                    <li class="layui-timeline-item">
+                    <li th:each="line : ${lines}" class="layui-timeline-item">
                         <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
                         <div class="layui-timeline-content layui-text">
-                            <h3 class="layui-timeline-title">1940年某月某日</h3>
-                            <p>
-                                李贺臣同志第一次睁开双眼，来到还处于动荡不安的世界。
-                                <br>那年的属相是龙。
-                                <br>龙象征出人头地，不同凡响。
-                            </p>
-                        </div>
-                    </li>
-                    <li class="layui-timeline-item">
-                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
-                        <div class="layui-timeline-content layui-text">
-                            <h3 class="layui-timeline-title">1949年10月1日</h3>
-                            <p>李贺臣虚岁10岁了</p>
-                            在这一天，迎来了新中国的成立。
-                            <br>从旧社会跨到了新社会，却没有从20世纪跨到21世纪。
-                        </div>
-                    </li>
-                    <li class="layui-timeline-item">
-                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
-                        <div class="layui-timeline-content layui-text">
-                            <h3 class="layui-timeline-title">1998年某月某日</h3>
-                            <p>
-                                这是一个不幸的日子
-                                <br>年仅58周岁，却，
-                                <br>与世长辞！
-                                <br>希望您在另一个世界，
-                                <br>一切安好！
-                            </p>
-                        </div>
-                    </li>
-                    <li class="layui-timeline-item">
-                        <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
-                        <div class="layui-timeline-content layui-text">
-                            <div class="layui-timeline-title">血脉延续......</div>
+                            <h3 class="layui-timeline-title" th:utext ="${line.occurTime}"></h3>
+                            <p th:utext="${line.content}"></p>
                         </div>
                     </li>
                 </ul>
                 <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">添加更多</button>
             </div>
         </div>
-
-
         <div style="text-align: center">
             <br/>
             <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()">

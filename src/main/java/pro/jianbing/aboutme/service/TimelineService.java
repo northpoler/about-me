@@ -35,6 +35,10 @@ public class TimelineService {
         return timelineRepositoty.findAll();
     }
 
+    public List<Timeline> getAllNormalTimelines() {
+        return timelineRepositoty.findAllByMark("0");
+    }
+
     public Integer update(Timeline timeline,String field,String value) {
         Timeline line = timelineRepositoty.findById(timeline.getId()).get();
         if ("occurTime".equals(field)){
