@@ -36,7 +36,7 @@ public class TimelineService {
     }
 
     public List<Timeline> getAllNormalTimelines() {
-        return timelineRepositoty.findAllByMark("0");
+        return timelineRepositoty.findAllByMarkOrderBySequenceAsc("0");
     }
 
     public Integer update(Timeline timeline,String field,String value) {

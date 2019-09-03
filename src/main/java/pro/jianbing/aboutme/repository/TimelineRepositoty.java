@@ -11,5 +11,5 @@ import java.util.List;
  */
 @Repository("timelineRepository")
 public interface TimelineRepositoty extends JpaRepository<Timeline,Long> {
-    List<Timeline> findAllByMark(String s);
+    List<Timeline> findAllByMarkOrderBySequenceAsc(String s);
 }
