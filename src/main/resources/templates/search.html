@@ -75,6 +75,9 @@
         <a type="button" id="personalCenter">个人中心</a>
         <a type="button" id="logout">注销</a>
     </div>
+    <div th:if="${session.isAdmin}!=null">
+        <a type="button" id="grandpa">继古开今</a>
+    </div>
 </div>
 <div class="layui-row" style="text-align: center;font-size: larger">
     <form action="http://www.baidu.com/baidu" target="_blank" onsubmit="return check()">
@@ -183,6 +186,10 @@
 
     $("#personalCenter").click(function () {
         window.open("/personal/index","_blank");
+    });
+
+    $("#grandpa").click(function () {
+        window.open("/grandpa","_blank");
     });
 
     $("#loginBtn").click(function () {

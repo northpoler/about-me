@@ -53,12 +53,15 @@ public class LoginController {
 
     @PostMapping("login/check")
     @ResponseBody
-    public Map<String,Object> checkLogin(User user, String rememberMe, HttpServletRequest request, HttpServletResponse response) {
+    public Map<String,Object> checkLogin(User user, HttpServletRequest request) {
         User result = userService.FindUserByUsername(user.getUsername());
         Map<String,Object> data = new HashMap<>(2);
         if (null != result && user.getPassword().equals(result.getPassword())){
             // 保存登录信息
             String ipAddress = NetworkUtil.getIpAddress(request);
+            if ("0".equals(user.getRole())){
+                request.getSession().setAttribute("isAdmin","1");
+            }
             userService.updateLoginInfo(ipAddress,result.getId());
             data.put("code",0);
             data.put("msg","登陆成功");
