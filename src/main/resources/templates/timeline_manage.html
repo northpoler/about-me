@@ -86,25 +86,50 @@
 
         //监听单元格编辑
         table.on('edit(test)', function(obj){
-            var value = obj.value //得到修改后的值
-                ,data = obj.data //得到所在行所有键值
-                ,field = obj.field; //得到字段
-            $.ajax({
-                type: 'POST',
-                dataType: 'json',
-                url: '/timeline/update',
-                data: {
-                    "id":data.id,
-                    "field":field,
-                    "value":value
-                },
-                cache: false,
-                async: true,
-                success: function (data) {
-                    if (data.code==0){
-                        layer.msg("更改成功！");
-                    }
+            layer.open({
+                type: 1
+                ,title: false //不显示标题栏
+                ,closeBtn: false
+                ,area: '300px;'
+                ,offset: '100px'
+                ,shade: 0.8
+                ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+                ,btn: ['保存', '不了']
+                ,yes:function(index){
+                    var value = obj.value //得到修改后的值
+                        ,data = obj.data //得到所在行所有键值
+                        ,field = obj.field; //得到字段
+                    $.ajax({
+                        type: 'POST',
+                        dataType: 'json',
+                        url: '/timeline/update',
+                        data: {
+                            "id":data.id,
+                            "field":field,
+                            "value":value
+                        },
+                        cache: false,
+                        async: true,
+                        success: function (data) {
+                            if (data.code==0){
+                                layer.msg('保存成功',{
+                                    offset: '10px',
+                                    icon:1,
+                                    time:1000
+                                },function(){
+                                    parent.layer.close(index)
+                                });
+                            }
+                        }
+                    });
                 }
+                ,btn2:function () {
+                    location.reload();
+                }
+                ,btnAlign: 'c'
+                ,moveType: 1 //拖拽模式，0或者1
+                ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定更改吗~!</div>'
+
             });
         });
 

@@ -32,7 +32,7 @@ public class TimelineService {
     }
 
     public List<Timeline> getAllTimelines() {
-        return timelineRepositoty.findAll();
+        return timelineRepositoty.findAllByMarkIsNotContaining("1");
     }
 
     public List<Timeline> getAllNormalTimelines() {

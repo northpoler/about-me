@@ -87,7 +87,7 @@
         </div>
         <div class="layui-card" style="background-color: lightcyan">
             <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
-                <!--<i class="layui-icon layui-icon-location"></i>  人生轨迹-->
+                <i class="layui-icon layui-icon-location"></i>  人生轨迹
             </div>
             <div class="layui-card-body" style="font-size: large">
 
@@ -105,10 +105,10 @@
         </div>
         <div style="text-align: center">
             <br/>
+            <span id="like" class="layui-badge"></span><br>
             <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()">
                 <!--<i class="layui-icon layui-icon-praise"></i>-->
-                <img alt="献花" src="http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/d4/2018new_xianhua_org.png">
-                &nbsp;<span id="like">0</span></button>
+                献<img alt="献花" src="http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/d4/2018new_xianhua_org.png">花</button>
             <br/><br/><br/><br/><br/><br/>
         </div>
     </div>
@@ -129,7 +129,7 @@
         layer.open({
             type : 2,
             title : "添加轨迹",
-            area : [ '400px', '500px' ],
+            area : [ '400px', '400px' ],
             shade : 0,
             offset : "5px",
             shadeClose : false,
@@ -151,12 +151,12 @@
                     success:function(data){
                         if (data.code == 0) {
                             layer.msg(data.msg,{
+                                offset: '10px',
                                 icon:1,
-                                time:1500
+                                time:1000
                             },function(){
                                 parent.layer.close(index)
                             });
-                            location.reload();
                         } else if (data.code == 500) {
                             layer.msg(data.msg,{
                                 icon:2,
@@ -165,6 +165,27 @@
                         }
                     }
                 });
+            },
+            btn2 : function() {
+                layer.open({
+                    type: 1
+                    ,title: false //不显示标题栏
+                    ,closeBtn: false
+                    ,area: '300px;'
+                    ,offset: '100px'
+                    ,shade: 0.8
+                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+                    ,btn: ['是的关闭它', '我再考虑一下']
+                    ,yes:function(){
+                        layer.closeAll();
+                    }
+                    ,btnAlign: 'c'
+                    ,moveType: 1 //拖拽模式，0或者1
+                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+
+                });
+
+                return false;
             },
             closeBtn : 1,
             btnAlign:'c',
@@ -197,11 +218,12 @@
                 /*location.reload();*/
             }
         });
-    })
+    });
 
     function like() {
+        userLikes++;
         layer.msg(
-            '献花成功~',
+            '向李贺臣同志献了'+userLikes+'朵鲜花！',
             {
                 offset: '100px',
                 anim: 0,
@@ -211,7 +233,6 @@
         );
         var test = $("#like").text();
         var before = parseInt(test);
-        userLikes++;
         $.ajax({
             type: 'GET',
             dataType: 'json',
