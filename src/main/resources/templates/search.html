@@ -74,9 +74,10 @@
         <a type="button" id="username" th:text="${session.user.username}"></a>
         <a type="button" id="personalCenter">个人中心</a>
         <a type="button" id="logout">注销</a>
-    </div>
-    <div th:if="${session.isAdmin}!=null">
-        <a type="button" id="grandpa">继古开今</a>
+        <span th:if="${session.isAdmin}!=null">
+            <a type="button" id="grandpa">继古开今</a>
+            <a type="button" id="timeline">人生足迹</a>
+        </span>
     </div>
 </div>
 <div class="layui-row" style="text-align: center;font-size: larger">
@@ -190,6 +191,10 @@
 
     $("#grandpa").click(function () {
         window.open("/grandpa","_blank");
+    });
+
+    $("#timeline").click(function () {
+        window.open("/timeline/manage","_blank");
     });
 
     $("#loginBtn").click(function () {
