@@ -103,12 +103,11 @@
                 <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">添加更多</button>
             </div>
         </div>
-        <div style="text-align: center">
+        <div style="text-align: center" id="like_div">
             <br/>
             <span id="like" class="layui-badge"></span><br>
             <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()">
-                <!--<i class="layui-icon layui-icon-praise"></i>-->
-                献<img alt="献花" src="http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/d4/2018new_xianhua_org.png">花</button>
+                💐 献花</button>
             <br/><br/><br/><br/><br/><br/>
         </div>
     </div>
@@ -245,5 +244,26 @@
             }
         });
     }
+
+    $("#like_div").click(function(e){
+        var tem="<p>💐</p>";
+        var x=e.pageX;
+        var y=e.pageY;
+        $(this).append(tem);
+        $("p").css({
+            "z-index": 9999,
+            'position':'absolute',
+            'top':y-20,
+            'left':x,
+            'color':'yellow'
+        })
+        $("p").animate({
+            'top':y-300,
+            'opacity':0,
+            'fontSize':'50px',
+        },1000,function(){
+            $(this).empty()
+        })
+    })
 </script>
 </html>
