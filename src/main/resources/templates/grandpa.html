@@ -106,7 +106,7 @@
         <div style="text-align: center" id="like_div">
             <br/>
             <span id="like" class="layui-badge"></span><br>
-            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" onclick="like()">
+            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" id="like_btn" onclick="like()">
                 💐 献花</button>
             <br/><br/><br/><br/><br/><br/>
         </div>
@@ -221,7 +221,6 @@
 
     function like() {
         userLikes++;
-        flower()
         layer.msg(
             '向李贺臣同志献了'+userLikes+'朵鲜花！',
             {
@@ -245,48 +244,28 @@
             }
         });
     }
-    function flower(){
-        var tem="<p id='flower'>💐</p>";
-        var place = $("#like");
-        var x=place.pageX;
-        var y=place.pageY;
-        $(place).append(tem);
-        $("#flower").css({
-            "z-index": 9999,
-            'position':'absolute',
-            'top':y-20,
-            'left':x,
-            'color':'yellow'
-        })
-        $("#flower").animate({
-            'top':y-300,
-            'opacity':0,
-            'fontSize':'50px',
-        },1000,function(){
-            $(place).empty()
-        })
-    }
-/*
-    $("#like_div").click(function(e){
-        var tem="<p id='flower'>💐</p>";
-        var place = $("#like");
-        var x=place.pageX;
-        var y=place.pageY;
+
+    $("#like_btn").click(function(e){
+        var tem="<p class='show'>💐</p>";
+        var x=e.pageX;
+        var y=e.pageY;
+        console.log(x);
+        console.log(y);
         $(this).append(tem);
-        $("#flower").css({
+        $(".show").css({
             "z-index": 9999,
             'position':'absolute',
             'top':y-20,
             'left':x,
             'color':'yellow'
         })
-        $("#flower").animate({
+        $(".show").animate({
             'top':y-300,
             'opacity':0,
             'fontSize':'50px',
         },1000,function(){
-            $(this).empty()
+            $(".show").remove();
         })
-    })*/
+    })
 </script>
 </html>
