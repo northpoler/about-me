@@ -66,16 +66,9 @@
             , cols: [
                 [
                     {type: 'checkbox', fixed: 'left'}
-                    , {
-                    field: 'id',
-                    title: 'ID',
-                    width: 80,
-                    fixed: 'left',
-                    unresize: true,
-                    sort: true
-                }
-                    , {field: 'occurTime', title: '时间', edit: 'text'}
-                    , {field: 'content', title: '内容', edit: 'text', sort: true}
+                    , {field: 'id', title: 'ID', width: 80, fixed: 'left', unresize: true, sort: true}
+                    , {field: 'occurTime', title: '时间', edit: 'text',template:'{{occurTime}}'}
+                    , {field: 'content', title: '内容', edit: 'text', sort: true,template:'{{content}}'}
                     , {field: 'contributor', title: '提供者', edit: 'text', sort: true}
                     , {field: 'sequence', title: '显示顺序', edit: 'text', sort: true}
                     , {field: 'mark', title: '标记', edit: 'text', sort: true}
