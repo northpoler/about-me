@@ -32,11 +32,13 @@ public class TimelineService {
     }
 
     public List<Timeline> getAllTimelines() {
-        return timelineRepositoty.findAllByMarkIsNotContaining("1");
+        return timelineRepositoty.findAllByMarkIsNotContainingOrderByMarkAscSequenceAsc("1");
     }
 
     public List<Timeline> getAllNormalTimelines() {
-        return timelineRepositoty.findAllByMarkOrderBySequenceAsc("0");
+        List<Timeline> timelineList = timelineRepositoty.findAllByMarkOrderBySequenceAsc("0");
+        timelineList.forEach(e -> e.setContent(e.getContent().replaceAll("--","<br>")));
+        return timelineList;
     }
 
     public Integer update(Timeline timeline,String field,String value) {

@@ -8,17 +8,28 @@
     <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
     <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
     <style>
+        .layui-card-header{
+            font-weight: bold;
+            font-size: large;
+            text-align: center;
+            color: deeppink;
+            background-color: lightcyan;
+        }
+        .layui-card-body{
+            font-size: large;
+            background-color: lightcyan;
+        }
     </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
 
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-read"></i>  全图概览
             </div>
-            <div class="layui-card-body" style="font-size: large">
+            <div class="layui-card-body">
                 <img alt="《继古开今图》" th:src="@{../static/image/grandpa.jpg}" style="width: 100%"/>
                 <br/><br/>
                 <a th:href="@{../static/image/Li_HeChen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
@@ -30,29 +41,29 @@
                     若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可。</span>
             </div>
         </div>
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-flag"></i>  制图意义
             </div>
-            <div class="layui-card-body" style="font-size: large">
+            <div class="layui-card-body">
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;此图定稿的年份是2019，时值中华人民共和国成立70周年。</p>
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;李贺臣同志是一名优秀的党员，为祖国做过巨大贡献，特制图以纪念。</p>
             </div>
         </div>
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
-                <i class="layui-icon layui-icon-about"></i>  标题释义
+        <div class="layui-card">
+            <div class="layui-card-header">
+                <i class="layui-icon layui-icon-survey"></i>  标题释义
             </div>
             <div class="layui-card-body" style="font-size: large">
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;“继古开今”，指继承和弘扬先人的精神和事业，开拓当今的事业和未来的道路。</p>
                 <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;图中，万里长城是“古”，国旗党徽是“今”;毛泽东和李贺臣同志是“古”，我们是“今”。</p>
             </div>
         </div>
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-search"></i>  细节说明
             </div>
-            <div class="layui-card-body" style="font-size: large">
+            <div class="layui-card-body">
                 <ol>
                     <li>
                         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1、图的左上角是“庆祝中华人民共和国成立70周年活动标识”；
@@ -63,33 +74,33 @@
                 </ol>
             </div>
         </div>
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-tree"></i>  家族谱系
             </div>
-            <div class="layui-card-body" style="font-size: large">
+            <div class="layui-card-body">
                 <img alt="《世系图》" th:src="@{../static/image/shixi.png}" style="width: 100%"/>
                 <br/>
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size: medium"><i class="layui-icon layui-icon-tips"></i>
                     本世系图自作者祖父【李贺臣】起始，所生子女均录入本谱。始祖位于世系顶部正中，正下方为嫡长子，嫡长子右侧为余子，按诞辰次序降序排列。嫡长子左侧为其姐妹，从右向左按诞辰次序降序排列。子女配偶均录入本谱，位于其左侧，女之子女暂未录入。</span>
             </div>
         </div>
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-picture"></i>  照片拾忆
             </div>
-            <div class="layui-card-body" style="font-size: large">
+            <div class="layui-card-body">
                 单人照：<br/><br/>
                 <img alt="《单人照》" th:src="@{../static/image/lifephoto01.jpg}" style="width: 100%"/>
                 <br/><br/>合照：<br/><br/>
                 <img alt="《合照》" th:src="@{../static/image/lifephoto02.jpg}" style="width: 100%"/>
             </div>
         </div>
-        <div class="layui-card" style="background-color: lightcyan">
-            <div class="layui-card-header" style="font-weight: bold;font-size: large;text-align: center;color: deeppink">
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-location"></i>  人生轨迹
             </div>
-            <div class="layui-card-body" style="font-size: large">
+            <div class="layui-card-body">
 
                 <ul class="layui-timeline">
                     <li th:each="line : ${lines}" class="layui-timeline-item">
@@ -103,11 +114,21 @@
                 <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">添加更多</button>
             </div>
         </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                <i class="layui-icon layui-icon-edit"></i>  写在最后
+            </div>
+            <div class="layui-card-body" style="text-align: center;letter-spacing: 5px">
+                <p>人虽已逝</p>
+                <p>血脉永存</p>
+                <p>贺臣子孙</p>
+                <p>生生不息</p>
+            </div>
+        </div>
         <div style="text-align: center" id="like_div">
             <br/>
-            <span id="like" class="layui-badge"></span><br>
             <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" id="like_btn" onclick="like()">
-                💐 献花</button>
+               献 💐 <span id="like" style="color: yellow"></span> 💐 花</button>
             <br/><br/><br/><br/><br/><br/>
         </div>
     </div>
@@ -219,53 +240,62 @@
         });
     });
 
+    var clickTime = new Date().getTime();
+
     function like() {
-        userLikes++;
-        layer.msg(
-            '向李贺臣同志献了'+userLikes+'朵鲜花！',
-            {
-                offset: '100px',
-                anim: 0,
-                time: 1000,
-                icon:1
-            }
-        );
-        var test = $("#like").text();
-        var before = parseInt(test);
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/like/insert',
-            data: {"count": before},
-            cache: false,
-            async: true,
-            success: function (data) {
-                $("#like").text(data);
-            }
-        });
+        var now = new Date().getTime();
+        if (now-clickTime>1000){
+            userLikes++;
+            layer.msg(
+                '向李贺臣同志献了'+userLikes+'朵鲜花！',
+                {
+                    offset: '100px',
+                    anim: 0,
+                    time: 1000,
+                    icon:1
+                }
+            );
+            var test = $("#like").text();
+            var before = parseInt(test);
+            $.ajax({
+                type: 'GET',
+                dataType: 'json',
+                url: '/like/insert',
+                data: {"count": before},
+                cache: false,
+                async: true,
+                success: function (data) {
+                    $("#like").text(data);
+                }
+            });
+        }
     }
 
     $("#like_btn").click(function(e){
-        var tem="<p class='show'>💐</p>";
-        var x=e.pageX;
-        var y=e.pageY;
-        console.log(x);
-        console.log(y);
-        $(this).append(tem);
-        $(".show").css({
-            "z-index": 9999,
-            'position':'absolute',
-            'top':y-20,
-            'left':x,
-            'color':'yellow'
-        })
-        $(".show").animate({
-            'top':y-300,
-            'opacity':0,
-            'fontSize':'50px',
-        },888,function(){
-            $(".show").remove();
-        })
+        var now = new Date().getTime();
+        if (now-clickTime>1000){
+            var tem="<p class='show'>💐</p>";
+            var x=e.pageX;
+            var y=e.pageY;
+            console.log(x);
+            console.log(y);
+            $(this).append(tem);
+            $(".show").css({
+                "z-index": 9999,
+                'position':'absolute',
+                'top':y-20,
+                'left':x,
+                'color':'yellow'
+            });
+            $(".show").animate({
+                'top':y-300,
+                'opacity':0,
+                'fontSize':'50px',
+            },999,function(){
+                $(".show").remove();
+            });
+            clickTime = now;
+        }
     })
 </script>
 </html>

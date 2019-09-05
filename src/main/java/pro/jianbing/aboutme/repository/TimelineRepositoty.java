@@ -13,6 +13,6 @@ import java.util.List;
 public interface TimelineRepositoty extends JpaRepository<Timeline,Long> {
     List<Timeline> findAllByMarkOrderBySequenceAsc(String s);
 
-    List<Timeline> findAllByMarkIsNotContaining(String s);
+    List<Timeline> findAllByMarkIsNotContainingOrderByMarkAscSequenceAsc(String s);
 
 }
