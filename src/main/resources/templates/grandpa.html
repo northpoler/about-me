@@ -111,6 +111,7 @@
                         </div>
                     </li>
                 </ul>
+                <button type="button" class="layui-btn layui-btn-radius layui-btn-danger" id="correct">指出错误</button>
                 <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">添加更多</button>
             </div>
         </div>
@@ -165,7 +166,102 @@
                     data:{
                         'occurTime':body.find('#occurTime').val(),
                         'content':body.find('#content').val(),
-                        'contributor':body.find('#contributor').val()
+                        'contributor':body.find('#contributor').val(),
+                        'mark':'2'
+                    },
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                offset: '10px',
+                                icon:1,
+                                time:1000
+                            },function(){
+                                parent.layer.close(index)
+                            });
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            },
+            btn2 : function() {
+                layer.open({
+                    type: 1
+                    ,title: false //不显示标题栏
+                    ,closeBtn: false
+                    ,area: '300px;'
+                    ,offset: '100px'
+                    ,shade: 0.8
+                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+                    ,btn: ['是的关闭它', '我再考虑一下']
+                    ,yes:function(){
+                        layer.closeAll();
+                    }
+                    ,btnAlign: 'c'
+                    ,moveType: 1 //拖拽模式，0或者1
+                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+
+                });
+                return false;
+            },
+            closeBtn : 1,
+            btnAlign:'c',
+            success : function(layero, index) {
+
+            },
+            cancel : function() {
+                layer.open({
+                    type: 1
+                    ,title: false //不显示标题栏
+                    ,closeBtn: false
+                    ,area: '300px;'
+                    ,offset: '100px'
+                    ,shade: 0.8
+                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+                    ,btn: ['是的关闭它', '我再考虑一下']
+                    ,yes:function(){
+                        layer.closeAll();
+                    }
+                    ,btnAlign: 'c'
+                    ,moveType: 1 //拖拽模式，0或者1
+                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+
+                });
+
+                return false;
+            },
+            end : function() {
+                layer.closeAll();
+                /*location.reload();*/
+            }
+        });
+    });
+
+    $("#correct").click(function () {
+        layer.open({
+            type : 2,
+            title : "指出错误",
+            area : [ '400px', '400px' ],
+            shade : 0,
+            offset : "5px",
+            shadeClose : false,
+            content : "/timeline/correct",
+            btn:['确定','取消'],
+            yes:function(index,layero){
+                var body = top.layer.getChildFrame('body',index);
+                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+                console.log(body.find('#classId').val());
+                $.ajax({
+                    url:"/timeline/insert",
+                    type:'post',
+                    data:{
+                        'content':body.find('#content').val(),
+                        'contributor':body.find('#contributor').val(),
+                        'mark':'3'
                     },
                     dataType:'json',
                     success:function(data){

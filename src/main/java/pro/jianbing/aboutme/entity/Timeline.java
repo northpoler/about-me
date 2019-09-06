@@ -25,5 +25,8 @@ public class Timeline implements Serializable {
     private LocalDateTime insertTime;
     private String ip;
     private Integer sequence;
+    /**
+     * 0 正常 1删除 2新增尚未启用 3错误指出
+     */
     private String mark;
 }

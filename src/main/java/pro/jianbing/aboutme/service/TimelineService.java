@@ -22,6 +22,12 @@ public class TimelineService {
         this.timelineRepositoty = timelineRepositoty;
     }
 
+    private static void changeStyle(Timeline e) {
+        e.setContent(e.getContent().replaceAll("--", "<br>"));
+        e.setContent(e.getContent().replaceAll("//", "<span style='font-weight: bold'>"));
+        e.setContent(e.getContent().replaceAll("///", "</span>"));
+    }
+
     @Transactional
     public Integer save(Timeline timeline){
         Timeline save = timelineRepositoty.save(timeline);
@@ -37,7 +43,7 @@ public class TimelineService {
 
     public List<Timeline> getAllNormalTimelines() {
         List<Timeline> timelineList = timelineRepositoty.findAllByMarkOrderBySequenceAsc("0");
-        timelineList.forEach(e -> e.setContent(e.getContent().replaceAll("--","<br>")));
+        timelineList.forEach(TimelineService::changeStyle);
         return timelineList;
     }
 

@@ -62,16 +62,14 @@
             , url: '/timeline/table'
             , toolbar: '#toolbarDemo'
             , title: '时间线'
-            , totalRow: true
             , cols: [
-                [
-                    {type: 'checkbox', fixed: 'left'}
-                    , {field: 'id', title: 'ID', width: 80, fixed: 'left', unresize: true, sort: true}
-                    , {field: 'occurTime', title: '时间', edit: 'text',template:'{{occurTime}}'}
-                    , {field: 'content', title: '内容', edit: 'text', sort: true,template:'{{content}}'}
-                    , {field: 'contributor', title: '提供者', edit: 'text', sort: true}
-                    , {field: 'sequence', title: '显示顺序', edit: 'text', sort: true}
-                    , {field: 'mark', title: '标记', edit: 'text', sort: true}
+                [{type:'numbers'}
+                    , {field: 'id', title: 'ID', width: 80, fixed: 'left', unresize: true, sort: true,hide:true}
+                    , {field: 'occurTime', title: '时间', width:80, edit: 'text',template:'{{occurTime}}'}
+                    , {field: 'content', title: '内容', minWidth: 150, edit: 'text', sort: true,template:'{{content}}'}
+                    , {field: 'contributor', title: '提供者', width:80, edit: 'text', sort: true}
+                    , {field: 'sequence', title: '显示顺序', width:40, edit: 'text', sort: true}
+                    , {field: 'mark', title: '标记', width:20, edit: 'text', sort: true}
                 ]
             ]
             , page: true

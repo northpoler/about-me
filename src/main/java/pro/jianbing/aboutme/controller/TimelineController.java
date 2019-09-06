@@ -35,13 +35,17 @@ public class TimelineController {
         return "timeline_add";
     }
 
+    @GetMapping("correct")
+    public String correct(){
+        return "timeline_correct";
+    }
+
     @ResponseBody
     @PostMapping("insert")
     public Map<String,Object> insert(Timeline timeline, HttpServletRequest request){
         Map<String,Object> data = new HashMap<>(2);
         try {
             timeline.setInsertTime(LocalDateTime.now());
-            timeline.setMark("2");
             timeline.setIp(NetworkUtil.getIpAddress(request));
             Integer save = service.save(timeline);
             if (null != save && save>0){
@@ -63,24 +67,6 @@ public class TimelineController {
     public String manage(){
         return "timeline_manage";
     }
-
-    /*@GetMapping("add")
-    public String addCountdownPage(){
-        return "add_countdown";
-    }
-
-    @PostMapping("add")
-    @ResponseBody
-    public Map<String,Object> addCountdown(CountdownDto countdownDto){
-        Integer result = countdownService.addCountdownInfo(countdownDto);
-        Map<String,Object> data = new HashMap<>(4);
-        if (result>0){
-            data.put("code",0);
-        } else {
-            data.put("code",1);
-        }
-        return data;
-    }*/
 
     @GetMapping("table")
     @ResponseBody
@@ -107,16 +93,5 @@ public class TimelineController {
         return data;
     }
 
-    /*@PostMapping("delete")
-    @ResponseBody
-    public Map<String,Object> deleteInfo(CountdownDto countdownDto){
-        Integer result = countdownService.deleteCountdownInfo(countdownDto);
-        Map<String,Object> data = new HashMap<>(4);
-        if (result>0){
-            data.put("code",0);
-        } else {
-            data.put("code",1);
-        }
-        return data;
-    }*/
+
 }
