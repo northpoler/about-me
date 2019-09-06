@@ -18,7 +18,7 @@
         <table class="layui-hide" id="test" lay-filter="test"></table>
         <script type="text/html" id="toolbarDemo">
             <div class="layui-btn-container">
-                <button class="layui-btn layui-btn-sm" onclick="add()">新增</button>
+                <button class="layui-btn layui-btn-sm" onclick="tips()">提示</button>
             </div>
         </script>
     </div>
@@ -40,18 +40,25 @@
         s.parentNode.insertBefore(hm, s);
     })();
 
-    function add() {
+    function tips() {
         layer.open({
-            type: 2,
-            title: '添加倒计时任务',
-            shade: false,
-            area: ['450px', '450px'],
-            maxmin: true,
-            content: '/countdown/add',
-            zIndex: layer.zIndex, //重点1
-            success: function(layero){
-                layer.setTop(layero); //重点2
+            type: 1
+            ,title: false //不显示标题栏
+            ,closeBtn: false
+            ,area: '300px;'
+            ,offset: '100px'
+            ,shade: 0.8
+            ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
+            ,btn: ['关闭']
+            ,yes:function(){
+                layer.closeAll();
             }
+            ,btnAlign: 'c'
+            ,moveType: 1 //拖拽模式，0或者1
+            ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">' +
+                '换行：--     <br>加粗：// + ~~<br>粉色：## + ~~<br>粗粉：/# + ~~<br>' +
+                '</div>'
+
         });
     }
     layui.use('table', function () {

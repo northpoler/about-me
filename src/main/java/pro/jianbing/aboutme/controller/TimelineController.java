@@ -76,7 +76,7 @@ public class TimelineController {
         data.put("code",0);
         data.put("msg","success");
         data.put("data",timelines);
-        data.put("count",data.size());
+        data.put("count",timelines.size());
         return data;
     }
 

@@ -25,7 +25,9 @@ public class TimelineService {
     private static void changeStyle(Timeline e) {
         e.setContent(e.getContent().replaceAll("--", "<br>"));
         e.setContent(e.getContent().replaceAll("//", "<span style='font-weight: bold'>"));
-        e.setContent(e.getContent().replaceAll("///", "</span>"));
+        e.setContent(e.getContent().replaceAll("##", "<span style='color: deeppink'>"));
+        e.setContent(e.getContent().replaceAll("/#", "<span style='font-weight: bold;color: deeppink'>"));
+        e.setContent(e.getContent().replaceAll("~~", "</span>"));
     }
 
     @Transactional
