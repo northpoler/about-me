@@ -5,7 +5,10 @@
     <title>李贺臣 | 简介</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
+    <!--Layui css start-->
+    <!--<link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>-->
+    <link rel="stylesheet" type="text/css" href="https://www.layuicdn.com/layui/css/layui.css" />
+    <!--Layui css end-->
     <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
     <style>
         .layui-card-header{
@@ -136,7 +139,10 @@
 </div>
 
 </body>
-<script th:src="@{../static/layui/layui.js}"></script>
+<!--Layui js start-->
+<!--<script th:src="@{../static/layui/layui.js}"></script>-->
+<script src="https://www.layuicdn.com/layui/layui.js"></script>
+<!--Layui js end-->
 <script type="text/javascript">
 
     var message = [[${likes}]];
