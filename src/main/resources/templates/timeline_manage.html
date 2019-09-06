@@ -73,10 +73,10 @@
                 [{type:'numbers'}
                     , {field: 'id', title: 'ID', width: 80, fixed: 'left', unresize: true, sort: true,hide:true}
                     , {field: 'occurTime', title: '时间', width:80, edit: 'text',template:'{{occurTime}}'}
-                    , {field: 'content', title: '内容', minWidth: 150, edit: 'text', sort: true,template:'{{content}}'}
+                    , {field: 'content', title: '内容', minWidth: 100, edit: 'text', sort: true,template:'{{content}}'}
                     , {field: 'contributor', title: '提供者', width:80, edit: 'text', sort: true}
-                    , {field: 'sequence', title: '显示顺序', width:40, edit: 'text', sort: true}
-                    , {field: 'mark', title: '标记', width:20, edit: 'text', sort: true}
+                    , {field: 'sequence', title: '显示顺序', width:80, edit: 'text', sort: true}
+                    , {field: 'mark', title: '标记', width:60, edit: 'text', sort: true}
                 ]
             ]
             , page: true
@@ -84,6 +84,7 @@
 
         //监听单元格编辑
         table.on('edit(test)', function(obj){
+            alert(obj.field);
             layer.open({
                 type: 1
                 ,title: false //不显示标题栏
