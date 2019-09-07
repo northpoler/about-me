@@ -79,12 +79,10 @@
                     , {field: 'mark', title: '标记', width:60, edit: 'text', sort: true}
                 ]
             ]
-            , page: true
         });
 
         //监听单元格编辑
         table.on('edit(test)', function(obj){
-            alert(obj.field);
             layer.open({
                 type: 1
                 ,title: false //不显示标题栏

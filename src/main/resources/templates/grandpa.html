@@ -39,9 +39,10 @@
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="text-decoration: underline;color: deeppink">点击下载《继古开今》原图</span>
 
                 </a>
-                <br/>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size: medium"><i class="layui-icon layui-icon-tips"></i>
-                    若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可。</span>
+                <br>
+                <p style="color: grey;font-size: small">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i class="layui-icon layui-icon-tips" style="font-size: small"></i>
+                    若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可</p>
             </div>
         </div>
         <div class="layui-card">
@@ -67,14 +68,16 @@
                 <i class="layui-icon layui-icon-search"></i>  细节说明
             </div>
             <div class="layui-card-body">
-                <ol>
-                    <li>
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1、图的左上角是“庆祝中华人民共和国成立70周年活动标识”；
-                    </li>
-                    <li>
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2、李贺臣同志胸前有两个徽章，左边的是“抗美援越纪念章”，右边是“党员徽章”。
-                    </li>
-                </ol>
+
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;《继古开今》图的左上角是“庆祝中华人民共和国成立70周年活动标识”</p>
+                <img alt="70周年活动标识" th:src="@{../static/image/symbol.jpg}" style="width: 100%"/>
+
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;李贺臣同志胸前有两个徽章，左边是“抗美援越纪念章”，右边是“党员徽章”
+                    <br>
+                    <i style="color: grey;font-size: small">注：为后期添加，用以纪念李贺臣同志的事迹</i>
+                </p>
+                <img alt="徽章" th:src="@{../static/image/dedal.jpg}" style="width: 100%"/>
             </div>
         </div>
         <div class="layui-card">
@@ -93,9 +96,9 @@
                 <i class="layui-icon layui-icon-picture"></i>  照片拾忆
             </div>
             <div class="layui-card-body">
-                单人照：<br/><br/>
+                单人照 <i class="layui-icon layui-icon-username"></i><br/>
                 <img alt="《单人照》" th:src="@{../static/image/lifephoto01.jpg}" style="width: 100%"/>
-                <br/><br/>合照：<br/><br/>
+                <br/><br/>合照 <i class="layui-icon layui-icon-user"></i><br/>
                 <img alt="《合照》" th:src="@{../static/image/lifephoto02.jpg}" style="width: 100%"/>
             </div>
         </div>
@@ -128,10 +131,6 @@
             </div>
             <div class="layui-card-body" style="text-align: center;letter-spacing: 5px">
                 <img alt="肖像" th:src="@{../static/image/portrait.jpg}" style="width: 100%"/>
-                <!--<p>人虽已逝</p>
-                <p>血脉永存</p>
-                <p>贺臣子孙</p>
-                <p>生生不息</p>-->
             </div>
         </div>
         <div style="text-align: center" id="like_div">
@@ -169,6 +168,19 @@
             btn:['确定','取消'],
             yes:function(index,layero){
                 var body = top.layer.getChildFrame('body',index);
+                var content = body.find('#content').val();
+                if (content==''){
+                    layer.msg(
+                        '内容还未填写',
+                        {
+                            offset: '100px',
+                            anim: 0,
+                            time: 1000,
+                            icon:2
+                        }
+                    );
+                    return false;
+                }
                 var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
                 console.log(body.find('#classId').val());
                 $.ajax({
@@ -264,6 +276,19 @@
             btn:['确定','取消'],
             yes:function(index,layero){
                 var body = top.layer.getChildFrame('body',index);
+                var content = body.find('#content').val();
+                if (content==''){
+                    layer.msg(
+                        '内容还未填写',
+                        {
+                            offset: '100px',
+                            anim: 0,
+                            time: 1000,
+                            icon:2
+                        }
+                    );
+                    return false;
+                }
                 var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
                 console.log(body.find('#classId').val());
                 $.ajax({
