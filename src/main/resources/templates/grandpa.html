@@ -30,18 +30,19 @@
     <div class="layui-col-md6 layui-col-md-offset3">
         <div class="layui-card">
             <div class="layui-card-header">
-                <i class="layui-icon layui-icon-read"></i>  全图概览
+                <i class="layui-icon layui-icon-picture"></i>  全图概览
             </div>
             <div class="layui-card-body">
                 <img alt="《继古开今图》" th:src="@{../static/image/grandpa.jpg}" style="width: 100%"/>
                 <br/><br/>
-                <a th:href="@{../static/image/Li_HeChen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
+                <a th:href="@{../static/image/li_hechen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="text-decoration: underline;color: deeppink">点击下载《继古开今》原图</span>
 
                 </a>
                 <br>
                 <p style="color: grey;font-size: small">
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i class="layui-icon layui-icon-tips" style="font-size: small"></i>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                    <i class="layui-icon layui-icon-tips" style="font-size: small"></i>
                     若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可</p>
             </div>
         </div>
@@ -65,17 +66,56 @@
         </div>
         <div class="layui-card">
             <div class="layui-card-header">
+                <i class="layui-icon layui-icon-layouts"></i>  构图说明
+            </div>
+            <div class="layui-card-body">
+                <img alt="70周年活动标识" th:src="@{../static/image/ruler.jpg}" style="width: 100%"/>
+                <br><br>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1、整图中心有个字：李；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2、整图中心垂直线，从上到下依次经过标题中心、长城烽火台中心、党徽中心；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3、整图中心水平线，从左到右依次经过李贺臣肖像中心、毛泽东肖像底部、毛泽东名讳底部；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4、主标题上沿、建国70周年活动标识上沿、毛泽东肖像顶部在同一水平线；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;5、主标题下沿、建国70周年活动标识下沿、毛泽东肖像眉顶在同一水平线；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;6、李贺臣肖像中心和五星红旗最大星中心在同一垂直线；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7、五星红旗最大星和党徽下沿在同一水平线；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8、李贺臣肖像中心和毛泽东名讳下沿在同一水平线；
+                </p>
+                <p>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;9、毛泽东肖像中心和右下角主题里李贺臣的“李”在同一垂直线。
+                </p>
+                <i style="color: grey;font-size: small">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;其他细节不一一指出。</i>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
                 <i class="layui-icon layui-icon-search"></i>  细节说明
             </div>
             <div class="layui-card-body">
 
-                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;《继古开今》图的左上角是“庆祝中华人民共和国成立70周年活动标识”</p>
+                <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;《继古开今》图的左上角是“庆祝中华人民共和国成立70周年活动标识”。</p>
                 <img alt="70周年活动标识" th:src="@{../static/image/symbol.jpg}" style="width: 100%"/>
 
                 <p>
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;李贺臣同志胸前有两个徽章，左边是“抗美援越纪念章”，右边是“党员徽章”
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;李贺臣同志胸前有两个徽章，左边是“抗美援越纪念章”，右边是“党员徽章”。
                     <br>
-                    <i style="color: grey;font-size: small">注：为后期添加，用以纪念李贺臣同志的事迹</i>
+                    <i style="color: grey;font-size: small">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;为后期添加，用以纪念李贺臣同志的事迹。</i>
                 </p>
                 <img alt="徽章" th:src="@{../static/image/dedal.jpg}" style="width: 100%"/>
             </div>
@@ -88,12 +128,12 @@
                 <img alt="《世系图》" th:src="@{../static/image/shixi.png}" style="width: 100%"/>
                 <br/>
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-size: medium"><i class="layui-icon layui-icon-tips"></i>
-                    本世系图自作者祖父【李贺臣】起始，所生子女均录入本谱。始祖位于世系顶部正中，正下方为嫡长子，嫡长子右侧为余子，按诞辰次序降序排列。嫡长子左侧为其姐妹，从右向左按诞辰次序降序排列。子女配偶均录入本谱，位于其左侧，女之子女暂未录入。</span>
+                    本世系图自【李贺臣】起始，位于世系顶部正中。正下方为嫡长子，嫡长子右侧为余子，左侧为其女，按诞辰次序向两边降序排列。伴侣均录入本谱，位于左侧。</span>
             </div>
         </div>
         <div class="layui-card">
             <div class="layui-card-header">
-                <i class="layui-icon layui-icon-picture"></i>  照片拾忆
+                <i class="layui-icon layui-icon-carousel"></i>  照片拾忆
             </div>
             <div class="layui-card-body">
                 单人照 <i class="layui-icon layui-icon-username"></i><br/>
@@ -159,7 +199,7 @@
     $("#add").click(function () {
         layer.open({
             type : 2,
-            title : "添加轨迹",
+            title : "添加",
             area : [ '400px', '330px' ],
             shade : 0,
             offset : "5px",
@@ -267,7 +307,7 @@
     $("#correct").click(function () {
         layer.open({
             type : 2,
-            title : "指出错误",
+            title : "纠错",
             area : [ '400px', '300px' ],
             shade : 0,
             offset : "5px",
