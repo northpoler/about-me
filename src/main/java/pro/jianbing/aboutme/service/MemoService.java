@@ -2,9 +2,7 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import pro.jianbing.aboutme.entity.Link;
 import pro.jianbing.aboutme.entity.Memo;
-import pro.jianbing.aboutme.repository.LinkRepositoty;
 import pro.jianbing.aboutme.repository.MemoRepositoty;
 
 import java.util.List;
@@ -24,7 +22,6 @@ public class MemoService {
     }
 
     public List<Memo> getMemoList(){
-        List<Memo> allByMark = memoRepositoty.findAllByMarkOrderBySequenceAsc("0");
-        return allByMark;
+        return memoRepositoty.findAllByMarkOrderBySequenceAsc("0");
     }
 }

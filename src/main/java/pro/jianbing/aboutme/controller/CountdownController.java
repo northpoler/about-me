@@ -34,7 +34,6 @@ public class CountdownController {
             countdown.setUserId(user.getId());
         }
         countdown.setEndTime(LocalDateTime.now());
-        List<Countdown> twoCountdown = countdownService.getTwoCountdown(countdown);
-        return twoCountdown;
+        return countdownService.getTwoCountdown(countdown);
     }
 }

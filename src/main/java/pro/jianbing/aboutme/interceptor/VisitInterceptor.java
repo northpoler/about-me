@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.VisitService;
 import pro.jianbing.aboutme.util.NetworkUtil;
@@ -20,8 +21,7 @@ import java.time.LocalDateTime;
 @Component
 public class VisitInterceptor extends HandlerInterceptorAdapter {
     private static final Logger log = LoggerFactory.getLogger(VisitInterceptor.class);
-    private static final String INDEX_URL = "/";
-    private static final String SEARCH_URL = "/search";
+    private static final String GRANDPA_URL = "/grandpa";
     private static final String COMPANY_IP = "122.224.218.34";
     private static final String COMPANY_ADDRESS = "本地局域网";
     @Autowired
@@ -45,13 +45,18 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                 session.setAttribute("domain","society");
             }
         }
-        //如果访问首页或是搜索页，记录访问信息
-        if (INDEX_URL.equals(urlSubString)||SEARCH_URL.equals(urlSubString)){
+        //如果访问祖父页面，记录访问信息
+        if (GRANDPA_URL.equals(urlSubString)){
             Visit visit = new Visit();
             String ipAddress = NetworkUtil.getIpAddress(request);
             String addressByIp = NetworkUtil.getAddressByIp(ipAddress);
             visit.setIp(ipAddress);
             visit.setAddress(addressByIp);
+            visit.setTarget(GRANDPA_URL);
+            User user = (User) request.getSession().getAttribute("user");
+            if (null!=user){
+                visit.setUserId(user.getId());
+            }
             visit.setVisitTime(LocalDateTime.now());
             visitService.saveVisit(visit);
         }

@@ -14,22 +14,12 @@ import java.util.List;
  * @author DefaultAccount
  */
 @Controller
-public class IndexController {
-
-    private final LikeService likeService;
+public class MemoController {
     private final MemoService memoService;
 
     @Autowired
-    public IndexController(LikeService likeService, MemoService memoService) {
-        this.likeService = likeService;
+    public MemoController(MemoService memoService) {
         this.memoService = memoService;
-    }
-
-    @GetMapping("")
-    public String index( Model model){
-        int sumLikes = likeService.getSumLikes();
-        model.addAttribute("likes",sumLikes);
-        return "index";
     }
 
     @GetMapping("/info")

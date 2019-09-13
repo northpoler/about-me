@@ -43,8 +43,7 @@ public class KnowledgeService {
 
     public String get(){
         try {
-            String knowledge = knowledgeRepositoty.getOne();
-            return knowledge;
+            return knowledgeRepositoty.getOne();
         } catch (Exception e) {
             e.printStackTrace();
             return "内容出错";

@@ -23,7 +23,6 @@ public class LikeController {
     @GetMapping("insert")
     public Integer insertLike(HttpServletRequest request){
         likeService.insertLike(request);
-        int sumLikes = likeService.getSumLikes();
-        return sumLikes;
+        return likeService.getSumLikes();
     }
 }

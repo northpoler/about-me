@@ -21,6 +21,10 @@ public class Visit implements Serializable {
     private String userId;
     private String ip;
     private String address;
+    /**
+     * 请求目标
+     */
+    private String target;
     @Column(name = "visit_time")
     private LocalDateTime visitTime;
     private String mark;

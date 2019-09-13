@@ -1,6 +1,5 @@
 package pro.jianbing.aboutme.entity;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import javax.persistence.*;

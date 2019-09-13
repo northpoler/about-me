@@ -29,15 +29,13 @@ public class SearchController {
         this.linkService = linkService;
     }
 
-    @GetMapping("search")
+    @GetMapping("")
     public String search(HttpServletRequest request,Model model){
         String domain = String.valueOf(request.getSession().getAttribute("domain"));
         if (null!=domain){
             List<Link> linkList = linkService.getLinkList(domain);
             model.addAttribute("links",linkList);
-            return "search";
         }
-        return "/";
-
+        return "search";
     }
 }

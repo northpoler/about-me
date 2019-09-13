@@ -2,8 +2,8 @@ spring:
   datasource:
     url: jdbc:mysql://www.jianbing.pro:3306/jianbing?useUnicode=true&characterEncoding=utf8
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: username
-    password: ENC(akdyVo0cXjjFekVSZAc5hkqG3NsO0YIm)
+    username: ENC(z3/ztbTWXcVIUxvUtaQgYA==)
+    password: ENC(hoKpkB3iDtywLFU0olGhWNF0E54MRzp5)
 
   thymeleaf:
     mode: HTML

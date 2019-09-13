@@ -34,7 +34,6 @@ public class KeywordController {
         keyword.setIp(NetworkUtil.getIpAddress(request));
         keyword.setSearchTime(LocalDateTime.now());
         keyword.setMark("0");
-        Integer result = keywordService.saveKeyword(keyword);
-        return result;
+        return keywordService.saveKeyword(keyword);
     }
 }

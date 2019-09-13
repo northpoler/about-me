@@ -29,18 +29,16 @@ public class KnowledgeController {
 
     @GetMapping("")
     public String knowledge(){
-
         return "knowledge";
     }
 
     @GetMapping("get")
     @ResponseBody
     public Map<String,Object> get(Model model){
-        Map<String,Object> data = null;
+        Map<String,Object> data = new HashMap<>(4);
         try {
             String knowledge = knowledgeService.get();
             model.addAttribute("knowledge",knowledge);
-            data = new HashMap<>(4);
             data.put("data",knowledge);
         } catch (Exception e) {
             e.printStackTrace();
@@ -52,11 +50,12 @@ public class KnowledgeController {
     @PostMapping("save")
     @ResponseBody
     public Map<String,Object> save(Knowledge knowledge,HttpServletRequest request){
-        Integer result = knowledgeService.save(knowledge, request);
         Map<String,Object> data = new HashMap<>(4);
-        if (result>0){
-            data.put("code",0);
-        } else {
+        try {
+            Integer result = knowledgeService.save(knowledge, request);
+            data.put("code",result>0?0:1);
+        } catch (Exception e) {
+            e.printStackTrace();
             data.put("code",1);
         }
         return data;

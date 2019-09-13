@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import pro.jianbing.aboutme.entity.Like;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.mapper.LikeMapper;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
@@ -24,16 +25,18 @@ public class LikeService{
     }
 
     public int getSumLikes() {
-        int sumLikes = likeMapper.getSumLikes();
-        return sumLikes;
+        return likeMapper.getSumLikes();
     }
 
     public void insertLike(HttpServletRequest request) {
-
         Like like = new Like();
         like.setId(UUID.randomUUID().toString().replaceAll("-",""));
         like.setIp(NetworkUtil.getIpAddress(request));
         like.setLikeTime(new Timestamp(System.currentTimeMillis()));
+        User user = (User) request.getSession().getAttribute("user");
+        if (null!=user){
+            like.setPerson(user.getId());
+        }
         likeMapper.insertLike(like);
     }
 }

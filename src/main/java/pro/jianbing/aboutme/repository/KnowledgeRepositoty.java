@@ -5,8 +5,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 import pro.jianbing.aboutme.entity.Knowledge;
 
-import java.util.List;
-
 
 /**
  * @author DefaultAccount

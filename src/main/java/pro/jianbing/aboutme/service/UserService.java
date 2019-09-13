@@ -21,13 +21,8 @@ public class UserService {
         this.userRepositoty = userRepositoty;
     }
 
-    public User getUserById(String id){
-        return userRepositoty.getOne(id);
-    }
-
     public User FindUserByUsername(String username){
-        User user = userRepositoty.findByUsername(username);
-        return user;
+        return userRepositoty.findByUsername(username);
     }
     public Integer updateLoginInfo(String lastIP, String id){
         return userRepositoty.updateLoginInfo(lastIP,LocalDateTime.now(),id);
