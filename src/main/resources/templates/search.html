@@ -2,10 +2,14 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>搜索</title>
+    <title>建兵 | 首页</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="keywords" content="李建兵,建兵,搜索,个人网站,李建兵个人网站">
+    <meta name="description" content="李建兵的个人网站">
+    <meta name="author" content="787331940@qq.com(李建兵)">
     <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
+    <link rel="shortcut icon" th:href="@{../static/image/favicon.ico}"/>
     <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
     <style>
         #search ul {
@@ -244,29 +248,9 @@
 
             },
             cancel : function() {
-                /*layer.open({
-                    type: 1
-                    ,title: false //不显示标题栏
-                    ,closeBtn: false
-                    ,area: '300px;'
-                    ,offset: '200px'
-                    ,shade: 0.8
-                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
-                    ,btn: ['是的关闭它', '我再考虑一下']
-                    ,yes:function(){
-                        layer.closeAll();
-                    }
-                    ,btnAlign: 'c'
-                    ,moveType: 1 //拖拽模式，0或者1
-                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
-
-                });
-
-                return false;*/
             },
             end : function() {
                 layer.closeAll();
-                /*location.reload();*/
             }
         });
     })
