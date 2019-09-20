@@ -59,9 +59,6 @@ public class LoginController {
         if (null != result && user.getPassword().equals(result.getPassword())){
             // 保存登录信息
             String ipAddress = NetworkUtil.getIpAddress(request);
-            if ("0".equals(result.getRole())){
-                request.getSession().setAttribute("isAdmin","1");
-            }
             userService.updateLoginInfo(ipAddress,result.getId());
             data.put("code",0);
             data.put("msg","登陆成功");

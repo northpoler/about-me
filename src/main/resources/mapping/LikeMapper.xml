@@ -17,13 +17,13 @@
         insert into likes (
         id,
         like_time,
-        person,
+        user_id,
         ip
         )
         values (
         #{id},
         #{likeTime},
-        #{person},
+        #{userId},
         #{ip}
         )
     </select>

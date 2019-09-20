@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
  * @author 李建兵
  */
 @Repository("userRepository")
-public interface UserRepositoty extends JpaRepository<User,String> {
+public interface UserRepositoty extends JpaRepository<User,Long> {
     /**
      * 用户每次登陆后，更新IP和时间
      * @param lastIP
@@ -24,7 +24,7 @@ public interface UserRepositoty extends JpaRepository<User,String> {
     @Transactional
     @Modifying
     @Query("update User set last_IP = ?1 ,lastTime = ?2 where id = ?3")
-    Integer updateLoginInfo(String lastIP, LocalDateTime lastTime, String id);
+    Integer updateLoginInfo(String lastIP, LocalDateTime lastTime, Long id);
 
     /**
      * 通过用户名获取用户--登录用

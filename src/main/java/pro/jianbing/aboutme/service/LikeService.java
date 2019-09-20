@@ -35,7 +35,7 @@ public class LikeService{
         like.setLikeTime(new Timestamp(System.currentTimeMillis()));
         User user = (User) request.getSession().getAttribute("user");
         if (null!=user){
-            like.setPerson(user.getId());
+            like.setUserId(user.getId());
         }
         likeMapper.insertLike(like);
     }

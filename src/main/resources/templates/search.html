@@ -69,12 +69,13 @@
 <div class="layui-row" id="top">
     <div th:if="${session.user}==null">
         <a type="button" id="loginBtn">登录</a>
+        <a type="button" id="registerBtn">注册</a>
     </div>
     <div th:if="${session.user}!=null">
         <a type="button" id="username" th:text="${session.user.username}"></a>
         <a type="button" id="personalCenter">个人中心</a>
         <a type="button" id="logout">注销</a>
-        <span th:if="${session.isAdmin}!=null">
+        <span th:if="${session.user.role}=='0'">
             <a type="button" id="grandpa">继古开今</a>
             <a type="button" id="timeline">人生足迹</a>
         </span>
@@ -118,10 +119,6 @@
     </div>
     </form>
 </div>
-<div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
-    <a th:href="@{/}"><i>www.jianbing.pro</i></a>
-</div>
-
 </body>
 <script th:src="@{../static/layui/layui.js}"></script>
 <script type="text/javascript">
@@ -244,32 +241,102 @@
 
             },
             cancel : function() {
-                /*layer.open({
-                    type: 1
-                    ,title: false //不显示标题栏
-                    ,closeBtn: false
-                    ,area: '300px;'
-                    ,offset: '200px'
-                    ,shade: 0.8
-                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
-                    ,btn: ['是的关闭它', '我再考虑一下']
-                    ,yes:function(){
-                        layer.closeAll();
-                    }
-                    ,btnAlign: 'c'
-                    ,moveType: 1 //拖拽模式，0或者1
-                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
-
-                });
-
-                return false;*/
             },
             end : function() {
                 layer.closeAll();
                 /*location.reload();*/
             }
         });
-    })
+    });
+
+    $("#registerBtn").click(function () {
+        layer.open({
+            type : 2,
+            title : "注册",
+            area : [ '400px', '400px' ],
+            shade : 0,
+            offset : "100px",
+            shadeClose : false,
+            content : "/register",
+            btn:['注册'],
+            yes:function(index,layero){
+                var body = top.layer.getChildFrame('body',index);
+                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+                console.log(body.find('#classId').val());
+
+                var isChecked = true;
+                var message = '';
+                var username = body.find('#username').val();
+                var password = body.find('#password').val();
+                var repassword = body.find('#repassword').val();
+                var phone = body.find('#phone').val();
+
+                if (username == ''){
+                    isChecked = false;
+                    message = '请填写用户名'
+                }
+                if (password == ''){
+                    isChecked = false;
+                    message = '请填写密码'
+                }
+                if (password != repassword){
+                    isChecked = false;
+                    message = '密码须输入一致'
+                }
+
+                if (!isChecked){
+                    layer.msg(
+                        message,
+                        {
+                            offset: '100px',
+                            anim: 0,
+                            time: 1000,
+                            icon:2
+                        }
+                    );
+                    return false;
+                }
+
+                $.ajax({
+                    url:"/register/save",
+                    type:'post',
+                    data:{
+                        'username':username,
+                        'password':password,
+                        'phone':phone
+                    },
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                icon:1,
+                                time:1500
+                            },function(){
+                                parent.layer.close(index)
+                            });
+                            location.reload();
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            },
+            closeBtn : 1,
+            btnAlign:'c',
+            success : function(layero, index) {
+
+            },
+            cancel : function() {
+            },
+            end : function() {
+                layer.closeAll();
+                /*location.reload();*/
+            }
+        });
+    });
 
     function toIndex() {
         window.open("/");
