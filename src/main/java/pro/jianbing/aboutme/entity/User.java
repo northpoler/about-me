@@ -16,7 +16,7 @@ public class User implements Serializable {
     private static final long serialVersionUID = -6683776601547996277L;
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
-    private String id;
+    private Long id;
     private String username;
     private String password;
     /**角色类型：0 我自己 1 普通用户*/

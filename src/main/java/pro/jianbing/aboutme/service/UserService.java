@@ -24,8 +24,16 @@ public class UserService {
     public User FindUserByUsername(String username){
         return userRepositoty.findByUsername(username);
     }
-    public Integer updateLoginInfo(String lastIP, String id){
+    public Integer updateLoginInfo(String lastIP, Long id){
         return userRepositoty.updateLoginInfo(lastIP,LocalDateTime.now(),id);
     }
 
+    public int saveUser(User user) {
+        User save = userRepositoty.save(user);
+        if (null != save){
+            return 1;
+        } else {
+            return 0;
+        }
+    }
 }
