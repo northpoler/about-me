@@ -1,16 +1,10 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="zh">
 <head>
-    <meta charset="UTF-8">
     <title>建兵 | 首页</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <meta name="keywords" content="李建兵,建兵,搜索,个人网站,李建兵个人网站">
     <meta name="description" content="李建兵的个人网站">
-    <meta name="author" content="787331940@qq.com(李建兵)">
-    <link rel="stylesheet" th:href="@{../static/layui/css/layui.css}"/>
-    <link rel="shortcut icon" th:href="@{../static/image/favicon.ico}"/>
-    <script type="text/javascript" src="http://hovertree.com/ziyuan/jquery/jquery-1.11.3.min.js"></script>
+    <meta th:include="top :: top"/>
     <style>
         #search ul {
             width: 100%;
@@ -124,7 +118,6 @@
     </form>
 </div>
 </body>
-<script th:src="@{../static/layui/layui.js}"></script>
 <script type="text/javascript">
     layui.use('element', function () {
         var element = layui.element;
