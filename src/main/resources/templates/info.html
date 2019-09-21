@@ -7,8 +7,7 @@
 <body style="background-color: lightgoldenrodyellow">
 
 <div class="layui-row">
-    <div class="layui-col-md3">&nbsp;</div>
-    <div class="layui-col-md6">
+    <div class="layui-col-md6 layui-col-md-offset3">
         <table class="layui-table">
             <colgroup>
                 <col>
@@ -34,15 +33,8 @@
             </tbody>
         </table>
     </div>
-    <div class="layui-col-md3">&nbsp;</div>
 </div>
-
-<div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
-    <a th:href="@{/search}"><i>www.jianbing.pro</i></a>
-</div>
-
 </body>
-<script th:src="@{../static/layui/layui.js}"></script>
 <script type="text/javascript">
     layui.use('layer', function () {
         var layer = layui.layer;
