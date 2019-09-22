@@ -184,6 +184,7 @@
 </div>
 
 </body>
+<script th:src="@{../static/js/me/common.js}"></script>
 <script type="text/javascript">
 
     var message = [[${likes}]];
@@ -249,21 +250,7 @@
                 });
             },
             btn2 : function() {
-                layer.open({
-                    type: 1
-                    ,title: false //不显示标题栏
-                    ,closeBtn: false
-                    ,area: '300px;'
-                    ,offset: '100px'
-                    ,shade: 0.8
-                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
-                    ,btn: ['是的关闭它', '我再考虑一下']
-                    ,yes:function(){
-                        layer.closeAll();
-                    }
-                    ,btnAlign: 'c'
-                    ,moveType: 1 //拖拽模式，0或者1
-                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
 
                 });
                 return false;
@@ -274,24 +261,9 @@
 
             },
             cancel : function() {
-                layer.open({
-                    type: 1
-                    ,title: false //不显示标题栏
-                    ,closeBtn: false
-                    ,area: '300px;'
-                    ,offset: '100px'
-                    ,shade: 0.8
-                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
-                    ,btn: ['是的关闭它', '我再考虑一下']
-                    ,yes:function(){
-                        layer.closeAll();
-                    }
-                    ,btnAlign: 'c'
-                    ,moveType: 1 //拖拽模式，0或者1
-                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
 
                 });
-
                 return false;
             },
             end : function() {
@@ -356,24 +328,9 @@
                 });
             },
             btn2 : function() {
-                layer.open({
-                    type: 1
-                    ,title: false //不显示标题栏
-                    ,closeBtn: false
-                    ,area: '300px;'
-                    ,offset: '100px'
-                    ,shade: 0.8
-                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
-                    ,btn: ['是的关闭它', '我再考虑一下']
-                    ,yes:function(){
-                        layer.closeAll();
-                    }
-                    ,btnAlign: 'c'
-                    ,moveType: 1 //拖拽模式，0或者1
-                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
 
                 });
-
                 return false;
             },
             closeBtn : 1,
@@ -382,24 +339,9 @@
 
             },
             cancel : function() {
-                layer.open({
-                    type: 1
-                    ,title: false //不显示标题栏
-                    ,closeBtn: false
-                    ,area: '300px;'
-                    ,offset: '100px'
-                    ,shade: 0.8
-                    ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
-                    ,btn: ['是的关闭它', '我再考虑一下']
-                    ,yes:function(){
-                        layer.closeAll();
-                    }
-                    ,btnAlign: 'c'
-                    ,moveType: 1 //拖拽模式，0或者1
-                    ,content: '<div style="padding: 50px; line-height: 22px; background-color: #393D49; color: #fff; font-weight: 300;text-align:center;font-size:20px;">确定关闭吗~!</div>'
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
 
                 });
-
                 return false;
             },
             end : function() {
