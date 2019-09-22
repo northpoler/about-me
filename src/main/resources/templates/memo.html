@@ -31,7 +31,7 @@
             </button>
             <br><br><br>
         </div>
-        <div class="layui-col-md2 layui-col-sm2 layui-col-xs3" th:each="memo : ${memos}">
+        <div class="layui-col-md2 layui-col-sm2 layui-col-xs3" th:each="memo : ${memos}" th:id="${memo.id}">
             <a th:href="@{${memo.address}}" target="_blank">
             <div class="link">
                 <h3 class="layui-timeline-title" th:utext ="${memo.title}"></h3>
@@ -47,6 +47,7 @@
                     <i class="layui-icon layui-icon-edit"></i>
                 </button>
             </div>
+            <br>
         </div>
     </div>
 </div>
@@ -70,7 +71,16 @@
 
     function del(id){
         dangerInquiry("确定删除吗",'是的删除掉','我再考虑一下',false,function () {
-            alert(id)
+            $.ajax({
+                type: 'delete',
+                dataType: 'json',
+                url: '/memo/'+id,
+                cache: false,
+                async: true,
+                success: function () {
+                    $("#"+id).addClass("layui-hide");
+                }
+            });
         })
     }
 

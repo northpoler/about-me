@@ -24,4 +24,8 @@ public class MemoService {
     public List<Memo> getMemoList(){
         return memoRepositoty.findAllByMarkOrderBySequenceAsc("0");
     }
+
+    public void delete(Long id){
+        memoRepositoty.deleteById(id);
+    }
 }
