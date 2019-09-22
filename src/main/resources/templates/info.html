@@ -25,19 +25,23 @@
                 <h3 class="layui-timeline-title" th:utext ="${memo.title}"></h3>
             </div>
             </a>
-            <div style="text-align: center">
-                <button type="button" class="layui-btn layui-btn-sm layui-btn-radius layui-btn-danger" id="correct">
+            <div style="text-align: center" class="layui-hide link-btn">
+                <button type="button" class="layui-btn layui-btn-sm layui-btn-radius layui-btn-danger" id="del" title="删除">
                     <i class="layui-icon layui-icon-close"></i>
                 </button>
-                <button type="button" class="layui-btn layui-btn-sm layui-btn-radius layui-btn-normal" id="add">
+                <button type="button" class="layui-btn layui-btn-sm layui-btn-radius layui-btn-normal" id="edit" title="编辑">
                     <i class="layui-icon layui-icon-edit"></i>
                 </button>
             </div>
         </div>
-        <div class="layui-col-md2 layui-col-sm2 layui-col-xs3">
-            <div class="link" style="background-color: greenyellow">
-                <i class="layui-icon layui-icon-add-1" style="font-size: 50px"></i>
-            </div>
+        <div class="layui-row layui-col-lg12" style="text-align: center">
+            <br><br><br>
+            <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="operate">
+                编辑
+            </button>
+            <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">
+                添加
+            </button>
         </div>
     </div>
 </div>
@@ -45,6 +49,14 @@
 <script type="text/javascript">
     layui.use('layer', function () {
         var layer = layui.layer;
+    });
+
+    $("#operate").click(function () {
+        $("#operate").html("退出编辑");
+        $(".link-btn").removeClass("layui-hide");
+        $("#operate").click(function () {
+            window.location.reload();
+        })
     });
     
     $(function () {
