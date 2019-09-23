@@ -28,7 +28,7 @@ public class MemoService {
 
     public void delete(Long id){
         // 更新其他链接的排序
-        Memo memo = memoRepositoty.getOne(id);
+        Memo memo = memoRepositoty.findById(id).get();
         memoRepositoty.decreaseSequence(memo.getSequence());
         memoRepositoty.deleteById(id);
     }
