@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.repository.MemoRepositoty;
 
+import javax.transaction.Transactional;
 import java.util.List;
 
 /**
@@ -26,6 +27,25 @@ public class MemoService {
     }
 
     public void delete(Long id){
+        // 更新其他链接的排序
+        Memo memo = memoRepositoty.getOne(id);
+        memoRepositoty.decreaseSequence(memo.getSequence());
         memoRepositoty.deleteById(id);
+    }
+
+    public long count(){
+        return memoRepositoty.count();
+    }
+
+    @Transactional
+    public Integer save(Memo memo){
+        // 更新其他链接的排序
+        memoRepositoty.increaseSequence(memo.getSequence());
+        // 保存
+        Memo save = memoRepositoty.save(memo);
+        if (save!=null){
+            return 1;
+        }
+        return 0;
     }
 }

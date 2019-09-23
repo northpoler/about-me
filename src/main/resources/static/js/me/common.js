@@ -22,3 +22,16 @@ function dangerInquiry(msg,yes,no,isCloseAll,callback){
         ,content: '<div style="padding: 50px; line-height: 22px; background-color: red; color: white; font-weight: 300;text-align:center;font-size:20px;">'+msg+'</div>'
     });
 }
+
+// 错误提示框
+function alertMsg(msg) {
+    layer.msg(
+        msg,
+        {
+            offset: '100px',
+            anim: 0,
+            time: 1000,
+            icon:2
+        }
+    );
+}
