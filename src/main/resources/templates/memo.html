@@ -85,7 +85,82 @@
     }
 
     function edit(id){
-        alert(id)
+        layer.open({
+            type : 2,
+            title : "添加",
+            area : [ '400px', '300px' ],
+            shade : 0,
+            offset : "5px",
+            shadeClose : false,
+            content : "/memo/edit?id="+id,
+            btn:['确定','取消'],
+            yes:function(index,layero){
+                var body = top.layer.getChildFrame('body',index);
+                var title = body.find('#title').val();
+                var address = body.find('#address').val();
+                var sequence = body.find('#sequence').val();
+                var maxSequence = body.find('#maxSequence').val();
+                if (title==''||address==''||sequence==''){
+                    alertMsg('内容填写不完整');
+                    return false;
+                }
+                if (parseInt(sequence)>parseInt(maxSequence)){
+                    alertMsg('排序数值最大为'+maxSequence);
+                    return false;
+                }
+                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+                console.log(body.find('#classId').val());
+                $.ajax({
+                    url:"/memo/"+id,
+                    type:'put',
+                    data:{
+                        'title':title,
+                        'address':address,
+                        'sequence':sequence,
+                        'mark':'0'
+                    },
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                offset: '10px',
+                                icon:1,
+                                time:1000
+                            },function(){
+                                parent.layer.close(index)
+                                window.location.reload();
+                            });
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            },
+            btn2 : function() {
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
+
+                });
+                return false;
+            },
+            closeBtn : 1,
+            btnAlign:'c',
+            success : function(layero, index) {
+
+            },
+            cancel : function() {
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
+
+                });
+                return false;
+            },
+            end : function() {
+                layer.closeAll();
+                /*location.reload();*/
+            }
+        });
     }
 
     $("#add").click(function () {

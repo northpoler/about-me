@@ -39,6 +39,13 @@ public class MemoController {
         return "memo_add";
     }
 
+    @GetMapping("edit")
+    public String edit(@PathVariable Long id,Model model){
+        model.addAttribute("maxSequence",memoService.count()+1);
+        model.addAttribute("memo",memoService.getOld(id));
+        return "memo_edit";
+    }
+
     @RequestMapping(value = "/{id}",method = RequestMethod.DELETE)
     @ResponseBody
     public Map<String,Object> delete(@PathVariable Long id){
@@ -67,10 +74,36 @@ public class MemoController {
             Integer save = memoService.save(memo);
             if (null != save && save>0){
                 data.put("code",0);
-                data.put("msg","提交成功");
+                data.put("msg","添加成功");
             } else {
                 data.put("code",500);
-                data.put("msg","提交失败");
+                data.put("msg","添加失败");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            data.put("code",500);
+            data.put("msg","系统出错");
+        }
+        return data;
+    }
+
+    @ResponseBody
+    @RequestMapping(value="/{id}", method=RequestMethod.PUT)
+    public Map<String,Object> update(@PathVariable Long id, @ModelAttribute Memo memo, HttpServletRequest request) {
+        Map<String,Object> data = new HashMap<>(2);
+        try {
+            User user = (User)request.getSession().getAttribute("user");
+            if (null!=user){
+                memo.setUserId(user.getId());
+            }
+            memo.setId(id);
+            Integer save = memoService.update(memo);
+            if (null != save && save>0){
+                data.put("code",0);
+                data.put("msg","更新成功");
+            } else {
+                data.put("code",500);
+                data.put("msg","更新失败");
             }
         } catch (Exception e) {
             e.printStackTrace();

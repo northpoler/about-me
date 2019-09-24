@@ -22,6 +22,10 @@ public interface MemoRepositoty extends JpaRepository<Memo,Long> {
     @Query
     List<Memo> findAllByMarkOrderBySequenceAsc(String mark);
 
+    /**
+     * @param sequence
+     * @return
+     */
     @Transactional
     @Modifying
     @Query("update Memo set sequence = sequence+1 where sequence >= ?1")
@@ -29,6 +33,16 @@ public interface MemoRepositoty extends JpaRepository<Memo,Long> {
 
     @Transactional
     @Modifying
+    @Query("update Memo set sequence = sequence+1 where sequence >= ?1 and sequence < ?2")
+    Integer increaseSequence(Long start, Long end);
+
+    @Transactional
+    @Modifying
     @Query("update Memo set sequence = sequence-1 where sequence >= ?1")
     Integer decreaseSequence(Long sequence);
+
+    @Transactional
+    @Modifying
+    @Query("update Memo set sequence = sequence-1 where sequence > ?1 and sequence <= ?2")
+    Integer decreaseSequence(Long start, Long end);
 }

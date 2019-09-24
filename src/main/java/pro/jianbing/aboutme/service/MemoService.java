@@ -28,7 +28,7 @@ public class MemoService {
 
     public void delete(Long id){
         // 更新其他链接的排序
-        Memo memo = memoRepositoty.findById(id).get();
+        Memo memo = getById(id);
         memoRepositoty.decreaseSequence(memo.getSequence());
         memoRepositoty.deleteById(id);
     }
@@ -47,5 +47,30 @@ public class MemoService {
             return 1;
         }
         return 0;
+    }
+
+    @Transactional
+    public Integer update(Memo memo){
+        // 更新其他链接的排序
+        Memo old = getById(memo.getId());
+        if (old.getSequence()>memo.getSequence()){
+            memoRepositoty.increaseSequence(memo.getSequence(),old.getSequence());
+        } else if (old.getSequence()<memo.getSequence()){
+            memoRepositoty.decreaseSequence(old.getSequence(),memo.getSequence());
+        }
+        // 保存
+        Memo save = memoRepositoty.save(memo);
+        if (save!=null){
+            return 1;
+        }
+        return 0;
+    }
+
+    public Memo getOld(Long id){
+        return getById(id);
+    }
+
+    private Memo getById(Long id){
+        return memoRepositoty.findById(id).get();
     }
 }
