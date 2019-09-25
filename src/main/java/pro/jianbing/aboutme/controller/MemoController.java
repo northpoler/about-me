@@ -34,6 +34,14 @@ public class MemoController {
         if (null!=user){
             memoList = memoService.getMemoList(user.getId());
         }
+        if (memoList.size()==0){
+            Memo memo = new Memo("百度","https://www.baidu.com",1L,"0");
+            memoList.add(memo);
+            if (null!=user){
+                memo.setUserId(user.getId());
+                memoService.save(memo);
+            }
+        }
         model.addAttribute("memos",memoList);
         return "memo";
     }

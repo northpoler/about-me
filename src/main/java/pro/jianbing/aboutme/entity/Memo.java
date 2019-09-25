@@ -25,4 +25,15 @@ public class Memo implements Serializable {
     private String remark;
     private Long sequence;
     private String mark;
+
+    public Memo(){
+
+    }
+
+    public Memo(String title, String address, Long sequence, String mark) {
+        this.title = title;
+        this.address = address;
+        this.sequence = sequence;
+        this.mark = mark;
+    }
 }
