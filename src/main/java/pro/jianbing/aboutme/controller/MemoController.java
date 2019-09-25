@@ -39,7 +39,7 @@ public class MemoController {
         return "memo_add";
     }
 
-    @GetMapping("edit")
+    @RequestMapping(value = "edit/{id}",method = RequestMethod.GET)
     public String edit(@PathVariable Long id,Model model){
         model.addAttribute("maxSequence",memoService.count()+1);
         model.addAttribute("memo",memoService.getOld(id));
@@ -88,7 +88,7 @@ public class MemoController {
     }
 
     @ResponseBody
-    @RequestMapping(value="/{id}", method=RequestMethod.PUT)
+    @RequestMapping(value="update/{id}", method=RequestMethod.POST)
     public Map<String,Object> update(@PathVariable Long id, @ModelAttribute Memo memo, HttpServletRequest request) {
         Map<String,Object> data = new HashMap<>(2);
         try {
