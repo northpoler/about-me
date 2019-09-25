@@ -9,7 +9,8 @@
         }
     </style>
 </head>
-<body style="background-color: lightgoldenrodyellow;padding-top: 20px;">
+<body style="background-color: lightgoldenrodyellow;">
+<div th:include="head :: head"></div>
 <div class="layui-row" style="margin-bottom: 200px;">
     <div class="layui-col-md6 layui-col-md-offset3">
         <div style="text-align: center;margin: 20px 0px">
@@ -22,11 +23,6 @@
         </div>
     </div>
 </div>
-
-<!--<div style="position: fixed;bottom: 6%;width: 100%;font-size: larger;text-align: center;color: gray;">
-    <a th:href="@{/search}"><i>www.jianbing.pro</i></a>
-</div>-->
-
 </body>
 <script th:src="@{../static/js/editor/wangEditor.min.js}"></script>
 <script type="text/javascript">

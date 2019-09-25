@@ -15,7 +15,7 @@
     </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
-
+<div th:include="head :: head"></div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <div class="layui-row layui-col-lg12" style="text-align: center">
@@ -53,12 +53,16 @@
 </div>
 </body>
 <script th:src="@{../static/js/me/common.js}"></script>
-<script type="text/javascript">
+<script th:inline="javascript">
     layui.use('layer', function () {
         var layer = layui.layer;
     });
 
     $("#operate").click(function () {
+        if ($("#username").length === 0){
+            alertMsg("请先登录！")
+            return false;
+        }
         $(".link-btn").removeClass("layui-hide");
         $("#operate").addClass("layui-hide");
         $("#operate_exit").removeClass("layui-hide");
@@ -164,6 +168,10 @@
     }
 
     $("#add").click(function () {
+        if ($("#username").length === 0){
+            alertMsg("请先登录！")
+            return false;
+        }
         layer.open({
             type : 2,
             title : "添加",
