@@ -9,6 +9,7 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.MemoService;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +28,12 @@ public class MemoController {
     }
 
     @GetMapping("")
-    public String getMemoList(Model model){
-        List<Memo> memoList = memoService.getMemoList();
+    public String getMemoList(Model model, HttpServletRequest request){
+        List<Memo> memoList = new ArrayList<>(5);
+        User user = (User)request.getSession().getAttribute("user");
+        if (null!=user){
+            memoList = memoService.getMemoList(user.getId());
+        }
         model.addAttribute("memos",memoList);
         return "memo";
     }

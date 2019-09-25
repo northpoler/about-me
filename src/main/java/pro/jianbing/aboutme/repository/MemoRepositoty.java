@@ -16,11 +16,11 @@ import java.util.List;
 @Repository("memoRepository")
 public interface MemoRepositoty extends JpaRepository<Memo,Long> {
     /**
-     * @param mark
+     * @param userId
      * @return
      */
     @Query
-    List<Memo> findAllByMarkOrderBySequenceAsc(String mark);
+    List<Memo> findAllByUserIdOrderBySequenceAsc(Long userId);
 
     /**
      * @param sequence

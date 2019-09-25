@@ -22,8 +22,8 @@ public class MemoService {
         this.memoRepositoty = memoRepositoty;
     }
 
-    public List<Memo> getMemoList(){
-        return memoRepositoty.findAllByMarkOrderBySequenceAsc("0");
+    public List<Memo> getMemoList(Long userId){
+        return memoRepositoty.findAllByUserIdOrderBySequenceAsc(userId);
     }
 
     public void delete(Long id){
