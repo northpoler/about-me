@@ -18,7 +18,7 @@ public class Knowledge implements Serializable {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
     @Column(name = "user_id")
-    private String userId;
+    private Long userId;
     private String title;
     private String content;
     @Column(name = "edit_time")

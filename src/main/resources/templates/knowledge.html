@@ -12,7 +12,7 @@
 <body style="background-color: lightgoldenrodyellow;">
 <div th:include="head :: head"></div>
 <div class="layui-row" style="margin-bottom: 200px;">
-    <div class="layui-col-md6 layui-col-md-offset3">
+    <div class="layui-col-md6 layui-col-md-offset3" style="padding: 0px 20px">
         <div style="text-align: center;margin: 20px 0px">
             <button type="button" id="edit" class="layui-btn layui-btn-lg layui-btn-normal">编辑内容</button>
             <button type="button" id="show" class="layui-btn layui-btn-lg layui-btn-warm layui-hide">退出编辑</button>
@@ -313,20 +313,28 @@
     ];
 
     $(function () {
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/knowledge/get',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                $("#editor").html(data.data);
-            }
-        });
+        if ($("#username").length === 0){
+            $("#editor").html("<p>在这里，可以随时记录<b>任何你想记录的信息</b> .......</p>");
+        } else {
+            $.ajax({
+                type: 'GET',
+                dataType: 'json',
+                url: '/knowledge/get',
+                data: {},
+                cache: false,
+                async: true,
+                success: function (data) {
+                    $("#editor").html(data.data);
+                }
+            });
+        }
     });
 
     $("#edit").click(function () {
+        if ($("#username").length === 0){
+            alertMsg("请先登录！")
+            return false;
+        }
         editor.create();
         autoSave();
         $("#show").removeClass("layui-hide");
@@ -335,12 +343,8 @@
     });
 
     $("#show").click(function () {
-        layer.confirm('确定直接退出？', {
-            btn: ['确定', '稍等'] //可以无限个按钮
-        }, function(index, layero){
+        dangerInquiry('确定直接退出','是的','稍等',true,function () {
             window.location.reload();
-        }, function(index){
-            //按钮【按钮二】的回调
         });
     });
 
@@ -369,11 +373,8 @@
             success: function (data) {
                 if (data.code==0){
                     layer.msg("保存成功！", {offset: '200px', anim: 0, time: 666});
-                    /*setTimeout(function () {
-                        window.location.reload()
-                    },1000);*/
                 } else {
-                    layer.msg("保存失败！", {offset: '200px', anim: 0, time: 666});
+                    alertMsg("保存失败！");
                 }
             }
         });

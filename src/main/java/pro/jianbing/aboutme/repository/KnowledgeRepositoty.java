@@ -16,6 +16,6 @@ public interface KnowledgeRepositoty extends JpaRepository<Knowledge,Long> {
      * @param
      * @return
      */
-    @Query("select content from Knowledge where id = (select max(id) from Knowledge)")
-    String getOne();
+    @Query("select content from Knowledge where id = (select max(id) from Knowledge) and userId = ?1")
+    String getByUserId(Long userId);
 }

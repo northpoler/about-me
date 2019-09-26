@@ -41,9 +41,9 @@ public class KnowledgeService {
         return 0;
     }
 
-    public String get(){
+    public String getByUserId(Long userId){
         try {
-            return knowledgeRepositoty.getOne();
+            return knowledgeRepositoty.getByUserId(userId);
         } catch (Exception e) {
             e.printStackTrace();
             return "内容出错";

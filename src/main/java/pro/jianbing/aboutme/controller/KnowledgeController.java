@@ -5,8 +5,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.entity.Knowledge;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.KnowledgeService;
-import pro.jianbing.aboutme.service.LikeService;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
@@ -34,10 +34,11 @@ public class KnowledgeController {
 
     @GetMapping("get")
     @ResponseBody
-    public Map<String,Object> get(Model model){
+    public Map<String,Object> get(Model model,HttpServletRequest request){
         Map<String,Object> data = new HashMap<>(4);
         try {
-            String knowledge = knowledgeService.get();
+            User user = (User)request.getSession().getAttribute("user");
+            String knowledge = knowledgeService.getByUserId(user.getId());
             model.addAttribute("knowledge",knowledge);
             data.put("data",knowledge);
         } catch (Exception e) {
