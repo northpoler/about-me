@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh">
+<head>
+    <title>编辑倒计时</title>
+    <meta th:include="top :: top"/>
+    <style>
+        .layui-form-item {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body class="layui-layout-body" style="background-color: lightcyan">
+<form class="layui-form" action="" style="padding: 10px 20px 0px 0px">
+    <div class="layui-form-item" style="margin-right: 5px">
+        <label class="layui-form-label" style="text-align: center">标&nbsp;&nbsp;题：</label>
+        <div class="layui-input-block">
+            <input type="text" name="title" autocomplete="off" required placeholder="倒计时标题"
+                   class="layui-input" th:value="${countdownDto.title}">
+        </div>
+    </div>
+
+    <div class="layui-form-item">
+        <div class="layui-inline">
+            <label class="layui-form-label" style="text-align: center">日&nbsp;&nbsp;期：</label>
+            <div class="layui-input-inline">
+                <input type="text" name="date" autocomplete="off" class="layui-input" id="date" required
+                       placeholder="倒计时的日期" th:value="${countdownDto.date}">
+            </div>
+        </div>
+    </div>
+
+    <div class="layui-form-item">
+        <div class="layui-inline">
+            <label class="layui-form-label" style="text-align: center">时&nbsp;&nbsp;间：</label>
+            <div class="layui-input-inline">
+                <input type="text" name="time" autocomplete="off" class="layui-input" id="time"
+                       required placeholder="具体时间" th:value="${countdownDto.time}">
+            </div>
+        </div>
+    </div>
+
+</form>
+<script>
+    layui.use('form', function(){
+        var form = layui.form;
+
+        //监听提交
+        form.on('submit(formDemo)', function(data){
+            layer.msg(JSON.stringify(data.field));
+            return false;
+        });
+    });
+
+    layui.use('laydate', function(){
+        var laydate = layui.laydate;
+
+        //开启公历节日
+        laydate.render({
+            elem: '#date'
+            ,mark: {
+                '0-2-8': '生日'
+                ,'0-0-28': '工资' //每月某天
+                ,'0-0-15': '月中'
+                ,'2017-8-15': '' //如果为空字符，则默认显示数字+徽章
+                ,'2099-10-14': '呵呵'
+            }
+            //初始赋值
+            /*,value: '1989-10-14'
+            ,isInitValue: true*/
+            /*,done: function(value, date){
+                if(date.year === 2017 && date.month === 8 && date.date === 15){ //点击2017年8月15日，弹出提示语
+                    layer.msg('这一天是：中国人民抗日战争胜利72周年');
+                }
+            }*/
+            ,trigger: 'click'
+            //前后若干天可选
+            ,min: 0
+            ,max: 999
+            ,calendar: true
+        });
+
+        //时间选择器
+        laydate.render({
+            elem: '#time'
+            /*,value: '18:00:00'*/
+            ,isInitValue: true
+            ,trigger: 'click'
+            ,type: 'time'
+        });
+    });
+</script>
+</body>
+</html>

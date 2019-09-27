@@ -5,9 +5,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import pro.jianbing.aboutme.entity.Countdown;
 import pro.jianbing.aboutme.repository.CountdownRepositoty;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,13 +24,27 @@ public class CountdownService {
         this.countdownRepositoty = countdownRepositoty;
     }
 
-    public List<Countdown> getTwoCountdown(Countdown countdown) {
-        List<Countdown> twoCountdown;
-        if (null == countdown || null == countdown.getUserId()){
-            twoCountdown = countdownRepositoty.getTwoWithoutUser(countdown.getEndTime());
+    public Countdown getCountdown(Countdown countdown) {
+        countdown.setEndTime(LocalDateTime.now());
+        List<Countdown> countdownList = countdownRepositoty.getByUserId(countdown.getUserId(),countdown.getEndTime());
+        if (null==countdownList||countdownList.size()==0){
+            countdown = new Countdown();
+            countdown.setTitle("元旦");
+            countdown.setEndTime(LocalDateTime.of(
+                    LocalDateTime.now().plusYears(1).getYear(),
+                    1,1,0,0,0,0));
         } else {
-            twoCountdown = countdownRepositoty.getTwoByUserId(countdown.getUserId(),countdown.getEndTime());
+            countdown = countdownList.get(0);
         }
-        return twoCountdown;
+        return countdown;
+    }
+
+    @Transactional
+    public Integer save(Countdown countdown) {
+        Countdown save = countdownRepositoty.save(countdown);
+        if (save!=null){
+            return 1;
+        }
+        return 0;
     }
 }

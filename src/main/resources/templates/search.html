@@ -12,41 +12,8 @@
             overflow-x: auto;
             white-space: nowrap;
         }
-
         #search li {
             display: inline;
-        }
-        /*ul::-webkit-scrollbar {
-            !*width: 2px;
-            height: 6px;*!
-            display: none;
-        }*/
-
-        /*定义滚动条高宽及背景 高宽分别对应横竖滚动条的尺寸*/
-        ::-webkit-scrollbar
-        {
-            width: 12px;
-            height: 12px;
-            background-color: lightgoldenrodyellow;
-        }
-
-        /*定义滚动条轨道 内阴影+圆角*/
-        ::-webkit-scrollbar-track
-        {
-            -webkit-box-shadow: inset 0 0 6px lightgoldenrodyellow;
-            border-radius: 10px;
-            background-color: lightgoldenrodyellow;
-        }
-
-        /*定义滑块 内阴影+圆角*/
-        ::-webkit-scrollbar-thumb
-        {
-            border-radius: 10px;
-            -webkit-box-shadow: inset 0 0 6px lightgoldenrodyellow;
-            background-color: lightgoldenrodyellow;
-        }
-        ::-webkit-scrollbar-button{
-            background-color: deeppink;
         }
     </style>
 </head>
@@ -85,12 +52,16 @@
                 <span id="countDownTitle" style="color: deeppink">
                     【倒计时标题】
                 </span>
+                <span id="editCountdown" style="cursor: pointer;font-size: larger">
+                    <i class="layui-icon layui-icon-edit"></i>
+                </span>
             </div>
         </div>
     </div>
     </form>
 </div>
 </body>
+<script th:src="@{../static/js/me/common.js}"></script>
 <script type="text/javascript">
     layui.use('element', function () {
         var element = layui.element;
@@ -114,6 +85,83 @@
     function toIndex() {
         window.open("/");
     }
+
+    $("#editCountdown").click(function () {
+        if ($("#username").length === 0){
+            alertMsg("请先登录！");
+            return false;
+        }
+        layer.open({
+            type : 2,
+            title : "编辑倒计时",
+            area : [ '400px', '300px' ],
+            shade : 0,
+            offset : "5px",
+            shadeClose : false,
+            content : "/countdown/edit",
+            btn:['确定','取消'],
+            yes:function(index,layero){
+                var body = top.layer.getChildFrame('body',index);
+                var title = body.find('#title').val();
+                var date = body.find('#date').val();
+                var time = body.find('#time').val();
+                if (title==''||date==''||time==''){
+                    alertMsg('内容填写不完整');
+                    return false;
+                }
+                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+                console.log(body.find('#classId').val());
+                $.ajax({
+                    url:"/countdown/update",
+                    type:'post',
+                    data:{
+                        'title':title,
+                        'endTime':date + " " + time,
+                    },
+                    dataType:'json',
+                    success:function(data){
+                        if (data.code == 0) {
+                            layer.msg(data.msg,{
+                                offset: '10px',
+                                icon:1,
+                                time:1000
+                            },function(){
+                                parent.layer.close(index)
+                                window.location.reload();
+                            });
+                        } else if (data.code == 500) {
+                            layer.msg(data.msg,{
+                                icon:2,
+                                time:1500
+                            },function(){});
+                        }
+                    }
+                });
+            },
+            btn2 : function() {
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
+
+                });
+                return false;
+            },
+            closeBtn : 1,
+            btnAlign:'c',
+            success : function(layero, index) {
+
+            },
+            cancel : function() {
+                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
+
+                });
+                return false;
+            },
+            end : function() {
+                layer.closeAll();
+                /*location.reload();*/
+            }
+        });
+    });
+
     function check(){
         var keyword = $("#searchBody").val();
         $.ajax({
@@ -153,20 +201,12 @@
             cache: false,
             async: true,
             success: function (data) {
-                titleA = data[0].title;
-                endTimeA = data[0].endTime;
-                daysA = data[0].days;
-                titleB = data[1].title;
-                endTimeB = data[1].endTime;
-                if (endTimeA.length<6){
-                    endTimeA[5] = 0;
+                countdown_title = data.title;
+                endTime = data.endTime;
+                if (endTime.length<6){
+                    endTime[5] = 0;
                 }
-                if (endTimeB.length<6){
-                    endTimeB[5] = 0;
-                }
-                daysB = data[1].days;
-                endA = new Date(endTimeA[0],endTimeA[1]-1,endTimeA[2],endTimeA[3],endTimeA[4],endTimeA[5]);
-                endB = new Date(endTimeB[0],endTimeB[1]-1,endTimeB[2],endTimeB[3],endTimeB[4],endTimeB[5]);
+                end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
                 countdown();
             }
         });
@@ -174,13 +214,9 @@
 
     function countdown() {
         var now = new Date();
-        var title = titleA;
-        if (now > endA){
-            endA = endB;
-            title = titleB;
-        }
+        var title = countdown_title;
         var today = now;
-        var stopTime = endA;
+        var stopTime = end;
         var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
             shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
             D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
