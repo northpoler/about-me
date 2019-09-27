@@ -116,7 +116,7 @@
                     type:'post',
                     data:{
                         'title':title,
-                        'endTime':date + " " + time,
+                        'endTime':date + " " + time
                     },
                     dataType:'json',
                     success:function(data){
@@ -177,14 +177,6 @@
         });
         return true;
     }
-
-    /*var form = layui.form;
-
-    //监听提交
-    form.on('submit(formDemo)', function (data) {
-        layer.msg(JSON.stringify(data.field));
-        return false;
-    });*/
 
     $("#searchBody").focus();
 
