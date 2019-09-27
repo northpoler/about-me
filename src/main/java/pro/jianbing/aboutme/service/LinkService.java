@@ -2,10 +2,7 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import pro.jianbing.aboutme.entity.Keyword;
 import pro.jianbing.aboutme.entity.Link;
-import pro.jianbing.aboutme.repository.KeywordRepositoty;
 import pro.jianbing.aboutme.repository.LinkRepositoty;
 
 import java.util.List;

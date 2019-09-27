@@ -4,13 +4,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.entity.Keyword;
 import pro.jianbing.aboutme.service.KeywordService;
-import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.UUID;
 
 /**
  * @author DefaultAccount

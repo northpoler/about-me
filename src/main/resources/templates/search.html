@@ -52,9 +52,9 @@
                 <span id="countDownTitle" style="color: deeppink">
                     【倒计时标题】
                 </span>
-                <span id="editCountdown" style="cursor: pointer;font-size: larger">
+                <button type="button" class="layui-btn layui-btn-xs layui-btn-normal" id="editCountdown">
                     <i class="layui-icon layui-icon-edit"></i>
-                </span>
+                </button>
             </div>
         </div>
     </div>
@@ -94,7 +94,7 @@
         layer.open({
             type : 2,
             title : "编辑倒计时",
-            area : [ '400px', '300px' ],
+            area : [ '400px', '500px' ],
             shade : 0,
             offset : "5px",
             shadeClose : false,
@@ -115,8 +115,10 @@
                     url:"/countdown/update",
                     type:'post',
                     data:{
+                        'id': body.find('#id').val(),
                         'title':title,
-                        'endTime':date + " " + time
+                        'date':date,
+                        'time':time
                     },
                     dataType:'json',
                     success:function(data){

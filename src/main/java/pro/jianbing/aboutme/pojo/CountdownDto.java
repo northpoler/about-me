@@ -7,7 +7,7 @@ import lombok.Data;
  */
 @Data
 public class CountdownDto {
-    private String id;
+    private Long id;
     private String field;
     private String value;
     private String title;

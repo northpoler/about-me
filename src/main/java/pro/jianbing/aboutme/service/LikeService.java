@@ -2,7 +2,6 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import pro.jianbing.aboutme.entity.Like;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.mapper.LikeMapper;
@@ -10,7 +9,6 @@ import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.sql.Timestamp;
-import java.util.Date;
 import java.util.UUID;
 
 @Service

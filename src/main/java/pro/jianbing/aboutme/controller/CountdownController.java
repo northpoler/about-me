@@ -5,7 +5,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.entity.Countdown;
-import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.pojo.CountdownDto;
 import pro.jianbing.aboutme.service.CountdownService;
@@ -14,7 +13,6 @@ import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,6 +39,7 @@ public class CountdownController {
     public String edit(HttpServletRequest request, Model model){
         Countdown countdown = getCountdown(request);
         CountdownDto countdownDto = new CountdownDto();
+        countdownDto.setId(countdown.getId());
         countdownDto.setTitle(countdown.getTitle());
         countdownDto.setDate(countdown.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
         countdownDto.setTime(countdown.getEndTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
@@ -50,9 +49,15 @@ public class CountdownController {
 
     @ResponseBody
     @PostMapping("update")
-    public Map<String,Object> update(Countdown countdown, HttpServletRequest request){
+    public Map<String,Object> update(CountdownDto countdownDto, HttpServletRequest request){
         Map<String,Object> data = new HashMap<>(2);
         try {
+            Countdown countdown = new Countdown();
+            countdown.setId(countdownDto.getId());
+            countdown.setTitle(countdownDto.getTitle());
+            LocalDateTime dateTime = LocalDateTime
+                    .parse(countdownDto.getDate()+" "+countdownDto.getTime(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            countdown.setEndTime(dateTime);
             User user = (User)request.getSession().getAttribute("user");
             if (null!=user){
                 countdown.setUserId(user.getId());
@@ -60,10 +65,10 @@ public class CountdownController {
             Integer save = countdownService.save(countdown);
             if (null != save && save>0){
                 data.put("code",0);
-                data.put("msg","添加成功");
+                data.put("msg","编辑成功");
             } else {
                 data.put("code",500);
-                data.put("msg","添加失败");
+                data.put("msg","编辑失败");
             }
         } catch (Exception e) {
             e.printStackTrace();
