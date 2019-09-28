@@ -20,7 +20,7 @@
     </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
-
+<div th:include="head :: head"></div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <div class="layui-card">
@@ -134,9 +134,9 @@
                 <i class="layui-icon layui-icon-carousel"></i>  照片拾忆
             </div>
             <div class="layui-card-body">
-                单人照 <i class="layui-icon layui-icon-username"></i><br/>
+                单人照 <i class="layui-icon layui-icon-friends"></i><br/>
                 <img alt="《单人照》" th:src="@{../static/image/lifephoto01.jpg}" style="width: 100%"/>
-                <br/><br/>合照 <i class="layui-icon layui-icon-user"></i><br/>
+                <br/><br/>合照 <i class="layui-icon layui-icon-group"></i><br/>
                 <img alt="《合照》" th:src="@{../static/image/lifephoto02.jpg}" style="width: 100%"/>
             </div>
         </div>
@@ -186,7 +186,6 @@
 </body>
 <script th:src="@{../static/js/me/common.js}"></script>
 <script type="text/javascript">
-
     var message = [[${likes}]];
     $("#like").text(message);
     var userLikes = 0;
@@ -379,6 +378,11 @@
                     $("#like").text(data);
                 }
             });
+            if ($("#username").length === 0){
+                if (userLikes===3){
+                    normalLoginInquiry("是否登录以便记录、查看鲜花信息","去登陆","去注册","不了")
+                }
+            }
         }
     }
 

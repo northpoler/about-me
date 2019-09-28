@@ -2,6 +2,7 @@ package pro.jianbing.aboutme.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,44 +20,42 @@ import java.util.Map;
  * @author DefaultAccount
  */
 @Controller
-@RequestMapping("register")
-public class RegisterController {
+@RequestMapping("user")
+public class UserController {
 
     private final UserService userService;
 
     @Autowired
-    public RegisterController(UserService userService) {
+    public UserController(UserService userService) {
         this.userService = userService;
     }
 
-    @GetMapping("")
-    public String login(){
-        return "register";
+    @GetMapping("edit")
+    public String edit(Model model, HttpServletRequest request){
+        User user = (User)request.getSession().getAttribute("user");
+        model.addAttribute("user",user);
+        return "user_edit";
     }
 
-    @PostMapping("save")
+    @PostMapping("edit")
     @ResponseBody
-    public Map<String,Object> checkLogin(User user, HttpServletRequest request) {
+    public Map<String,Object> update(User user, HttpServletRequest request){
         Map<String,Object> data = null;
         try {
-            User result = userService.FindUserByUsername(user.getUsername());
+            User userTemp = (User)request.getSession().getAttribute("user");
+            User result = userService.FindUserByUsernameAndUserId(user.getUsername(),userTemp.getId());
             data = new HashMap<>(2);
             if (null == result){
-                // 保存用户信息
-                user.setRole("1");
-                user.setMark("0");
-                user.setCreated(LocalDateTime.now());
-                String ipAddress = NetworkUtil.getIpAddress(request);
-                user.setLastTime(LocalDateTime.now());
-                user.setLastIP(ipAddress);
-                int save = userService.saveUser(user);
+                userTemp.setUsername(user.getUsername());
+                userTemp.setPassword(user.getPassword());
+                int save = userService.saveUser(userTemp);
                 if (1==save){
                     data.put("code",0);
-                    data.put("msg","注册成功,已自动登录!");
-                    request.getSession().setAttribute("user",user);
+                    data.put("msg","修改成功,已自动登录!");
+                    request.getSession().setAttribute("user",userTemp);
                 } else {
                     data.put("code",500);
-                    data.put("msg","注册出错");
+                    data.put("msg","修改出错");
                 }
             } else {
                 data.put("code",500);
@@ -64,7 +63,7 @@ public class RegisterController {
             }
         } catch (Exception e) {
             data.put("code",500);
-            data.put("msg","注册出错");
+            data.put("msg","修改出错");
             e.printStackTrace();
         }
         return data;

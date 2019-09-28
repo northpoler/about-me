@@ -13,7 +13,7 @@
         select count(1) from likes
     </select>
 
-    <select id="insertLike">
+    <insert id="insertLike">
         insert into likes (
         id,
         like_time,
@@ -26,6 +26,11 @@
         #{userId},
         #{ip}
         )
-    </select>
+    </insert>
 
+    <select id="getCountLikesByUsers" resultType="java.util.HashMap">
+        select count(1) as "value",ifnull(ur.username,'佚名') as "name" from likes lk
+        left join user ur on ur.id = lk.user_id
+        group by ur.username
+    </select>
 </mapper>

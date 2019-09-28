@@ -36,4 +36,8 @@ public class UserService {
             return 0;
         }
     }
+
+    public User FindUserByUsernameAndUserId(String username, Long id) {
+        return userRepositoty.findByUsernameAndId(username,id);
+    }
 }

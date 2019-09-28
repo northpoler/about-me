@@ -32,4 +32,7 @@ public interface UserRepositoty extends JpaRepository<User,Long> {
      * @return
      */
     User findByUsername(String username);
+
+    @Query("from User where username = ?1 and id <> ?2")
+    User findByUsernameAndId(String username, Long id);
 }
