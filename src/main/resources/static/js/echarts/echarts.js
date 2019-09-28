@@ -1552,21 +1552,126 @@ function on(eventful, event, query, handler, context, isOnce) {
 } // ----------------------
 
 /**
- * 事件辅助类
- * @module zrender/core/event
- * @author Kener (@Kener-林峰, kener.linfeng@gmail.com)
+ * The algoritm is learnt from
+ * https://franklinta.com/2014/09/08/computing-css-matrix3d-transforms/
+ * And we made some optimization for matrix inversion.
+ * Other similar approaches:
+ * "cv::getPerspectiveTransform", "Direct Linear Transformation".
+ */
+var LN2 = Math.log(2);
+
+function determinant(rows, rank, rowStart, rowMask, colMask, detCache) {
+  var cacheKey = rowMask + '-' + colMask;
+  var fullRank = rows.length;
+
+  if (detCache.hasOwnProperty(cacheKey)) {
+    return detCache[cacheKey];
+  }
+
+  if (rank === 1) {
+    // In this case the colMask must be like: `11101111`. We can find the place of `0`.
+    var colStart = Math.round(Math.log((1 << fullRank) - 1 & ~colMask) / LN2);
+    return rows[rowStart][colStart];
+  }
+
+  var subRowMask = rowMask | 1 << rowStart;
+  var subRowStart = rowStart + 1;
+
+  while (rowMask & 1 << subRowStart) {
+    subRowStart++;
+  }
+
+  var sum = 0;
+
+  for (var j = 0, colLocalIdx = 0; j < fullRank; j++) {
+    var colTag = 1 << j;
+
+    if (!(colTag & colMask)) {
+      sum += (colLocalIdx % 2 ? -1 : 1) * rows[rowStart][j] // det(subMatrix(0, j))
+      * determinant(rows, rank - 1, subRowStart, subRowMask, colMask | colTag, detCache);
+      colLocalIdx++;
+    }
+  }
+
+  detCache[cacheKey] = sum;
+  return sum;
+}
+/**
+ * Usage:
+ * ```js
+ * var transformer = buildTransformer(
+ *     [10, 44, 100, 44, 100, 300, 10, 300],
+ *     [50, 54, 130, 14, 140, 330, 14, 220]
+ * );
+ * var out = [];
+ * transformer && transformer([11, 33], out);
+ * ```
+ *
+ * Notice: `buildTransformer` may take more than 10ms in some Android device.
+ *
+ * @param {Array.<number>} src source four points, [x0, y0, x1, y1, x2, y2, x3, y3]
+ * @param {Array.<number>} dest destination four points, [x0, y0, x1, y1, x2, y2, x3, y3]
+ * @return {Function} transformer If fail, return null/undefined.
+ */
+
+
+function buildTransformer(src, dest) {
+  var mA = [[src[0], src[1], 1, 0, 0, 0, -dest[0] * src[0], -dest[0] * src[1]], [0, 0, 0, src[0], src[1], 1, -dest[1] * src[0], -dest[1] * src[1]], [src[2], src[3], 1, 0, 0, 0, -dest[2] * src[2], -dest[2] * src[3]], [0, 0, 0, src[2], src[3], 1, -dest[3] * src[2], -dest[3] * src[3]], [src[4], src[5], 1, 0, 0, 0, -dest[4] * src[4], -dest[4] * src[5]], [0, 0, 0, src[4], src[5], 1, -dest[5] * src[4], -dest[5] * src[5]], [src[6], src[7], 1, 0, 0, 0, -dest[6] * src[6], -dest[6] * src[7]], [0, 0, 0, src[6], src[7], 1, -dest[7] * src[6], -dest[7] * src[7]]];
+  var detCache = {};
+  var det = determinant(mA, 8, 0, 0, 0, detCache);
+
+  if (det === 0) {
+    return;
+  } // `invert(mA) * dest`, that is, `adj(mA) / det * dest`.
+
+
+  var vh = [];
+
+  for (var i = 0; i < 8; i++) {
+    for (var j = 0; j < 8; j++) {
+      vh[j] == null && (vh[j] = 0);
+      vh[j] += ((i + j) % 2 ? -1 : 1) * // det(subMatrix(i, j))
+      determinant(mA, 7, i === 0 ? 1 : 0, 1 << i, 1 << j, detCache) / det * dest[i];
+    }
+  }
+
+  return function (out, srcPointX, srcPointY) {
+    var pk = srcPointX * vh[6] + srcPointY * vh[7] + 1;
+    out[0] = (srcPointX * vh[0] + srcPointY * vh[1] + vh[2]) / pk;
+    out[1] = (srcPointX * vh[3] + srcPointY * vh[4] + vh[5]) / pk;
+  };
+}
+
+/**
+ * Utilities for mouse or touch events.
  */
 var isDomLevel2 = typeof window !== 'undefined' && !!window.addEventListener;
 var MOUSE_EVENT_REG = /^(?:mouse|pointer|contextmenu|drag|drop)|click/;
-
-function getBoundingClientRect(el) {
-  // BlackBerry 5, iOS 3 (original iPhone) don't have getBoundingRect
-  return el.getBoundingClientRect ? el.getBoundingClientRect() : {
-    left: 0,
-    top: 0
-  };
-} // `calculate` is optional, default false
-
+var EVENT_SAVED_PROP = '___zrEVENTSAVED';
+var _calcOut = [];
+/**
+ * Get the `zrX` and `zrY`, which are relative to the top-left of
+ * the input `el`.
+ * CSS transform (2D & 3D) is supported.
+ *
+ * The strategy to fetch the coords:
+ * + If `calculate` is not set as `true`, users of this method should
+ * ensure that `el` is the same or the same size & location as `e.target`.
+ * Otherwise the result coords are probably not expected. Because we
+ * firstly try to get coords from e.offsetX/e.offsetY.
+ * + If `calculate` is set as `true`, the input `el` can be any element
+ * and we force to calculate the coords based on `el`.
+ * + The input `el` should be positionable (not position:static).
+ *
+ * The force `calculate` can be used in case like:
+ * When mousemove event triggered on ec tooltip, `e.target` is not `el`(zr painter.dom).
+ *
+ * @param {HTMLElement} el DOM element.
+ * @param {Event} e Mouse event or touch event.
+ * @param {Object} out Get `out.zrX` and `out.zrY` as the result.
+ * @param {boolean} [calculate=false] Whether to force calculate
+ *        the coordinates but not use ones provided by browser.
+ */
 
 function clientToLocal(el, e, out, calculate) {
   out = out || {}; // According to the W3C Working Draft, offsetX and offsetY should be relative
@@ -1575,13 +1680,9 @@ function clientToLocal(el, e, out, calculate) {
   // not support the properties.
   // (see http://www.jacklmoore.com/notes/mouse-position/)
   // In zr painter.dom, padding edge equals to border edge.
-  // FIXME
-  // When mousemove event triggered on ec tooltip, target is not zr painter.dom, and
-  // offsetX/Y is relative to e.target, where the calculation of zrX/Y via offsetX/Y
-  // is too complex. So css-transfrom dont support in this case temporarily.
 
   if (calculate || !env$1.canvasSupported) {
-    defaultGetZrXY(el, e, out);
+    calculateZrXY(el, e, out);
   } // Caution: In FireFox, layerX/layerY Mouse position relative to the closest positioned
   // ancestor element, so we should make sure el is positioned (e.g., not position:static).
   // BTW1, Webkit don't return the same results as FF in non-simple cases (like add
@@ -1598,21 +1699,108 @@ function clientToLocal(el, e, out, calculate) {
         out.zrY = e.offsetY;
       } // For some other device, e.g., IOS safari.
       else {
-          defaultGetZrXY(el, e, out);
+          calculateZrXY(el, e, out);
         }
 
   return out;
 }
 
-function defaultGetZrXY(el, e, out) {
-  // This well-known method below does not support css transform.
-  var box = getBoundingClientRect(el);
-  out.zrX = e.clientX - box.left;
-  out.zrY = e.clientY - box.top;
+function calculateZrXY(el, e, out) {
+  // BlackBerry 5, iOS 3 (original iPhone) don't have getBoundingRect.
+  if (el.getBoundingClientRect && env$1.domSupported) {
+    var ex = e.clientX;
+    var ey = e.clientY;
+
+    if (el.nodeName.toUpperCase() === 'CANVAS') {
+      // Original approach, which do not support CSS transform.
+      // marker can not be locationed in a canvas container
+      // (getBoundingClientRect is always 0). We do not support
+      // that input a pre-created canvas to zr while using css
+      // transform in iOS.
+      var box = el.getBoundingClientRect();
+      out.zrX = ex - box.left;
+      out.zrY = ey - box.top;
+      return;
+    } else {
+      var saved = el[EVENT_SAVED_PROP] || (el[EVENT_SAVED_PROP] = {});
+      var transformer = preparePointerTransformer(prepareCoordMarkers(el, saved), saved);
+
+      if (transformer) {
+        transformer(_calcOut, ex, ey);
+        out.zrX = _calcOut[0];
+        out.zrY = _calcOut[1];
+        return;
+      }
+    }
+  }
+
+  out.zrX = out.zrY = 0;
+}
+
+function prepareCoordMarkers(el, saved) {
+  var markers = saved.markers;
+
+  if (markers) {
+    return markers;
+  }
+
+  markers = saved.markers = [];
+  var propLR = ['left', 'right'];
+  var propTB = ['top', 'bottom'];
+
+  for (var i = 0; i < 4; i++) {
+    var marker = document.createElement('div');
+    var stl = marker.style;
+    var idxLR = i % 2;
+    var idxTB = (i >> 1) % 2;
+    stl.cssText = ['position:absolute', 'visibility: hidden', 'padding: 0', 'margin: 0', 'border-width: 0', 'width:0', 'height:0', // 'width: 5px',
+    // 'height: 5px',
+    propLR[idxLR] + ':0', propTB[idxTB] + ':0', propLR[1 - idxLR] + ':auto', propTB[1 - idxTB] + ':auto', ''].join('!important;');
+    el.appendChild(marker);
+    markers.push(marker);
+  }
+
+  return markers;
+}
+
+function preparePointerTransformer(markers, saved) {
+  var transformer = saved.transformer;
+  var oldSrcCoords = saved.srcCoords;
+  var useOld = true;
+  var srcCoords = [];
+  var destCoords = [];
+
+  for (var i = 0; i < 4; i++) {
+    var rect = markers[i].getBoundingClientRect();
+    var ii = 2 * i;
+    var x = rect.left;
+    var y = rect.top;
+    srcCoords.push(x, y);
+    useOld &= oldSrcCoords && x === oldSrcCoords[ii] && y === oldSrcCoords[ii + 1];
+    destCoords.push(markers[i].offsetLeft, markers[i].offsetTop);
+  } // Cache to avoid time consuming of `buildTransformer`.
+
+
+  return useOld ? transformer : (saved.srcCoords = srcCoords, saved.transformer = buildTransformer(srcCoords, destCoords));
 }
 /**
- * 如果存在第三方嵌入的一些dom触发的事件，或touch事件，需要转换一下事件坐标.
- * `calculate` is optional, default false.
+ * Normalize the coordinates of the input event.
+ *
+ * Get the `e.zrX` and `e.zrY`, which are relative to the top-left of
+ * the input `el`.
+ * Get `e.zrDelta` if using mouse wheel.
+ * Get `e.which`, see the comment inside this function.
+ *
+ * Do not calculate repeatly if `zrX` and `zrY` already exist.
+ *
+ * Notice: see comments in `clientToLocal`. check the relationship
+ * between the result coords and the parameters `el` and `calculate`.
+ *
+ * @param {HTMLElement} el DOM element.
+ * @param {Event} [e] Mouse event or touch event. For lagency IE,
+ *        do not need to input it and `window.event` is used.
+ * @param {boolean} [calculate=false] Whether to force calculate
+ *        the coordinates but not use ones provided by browser.
  */
 
 
@@ -1634,7 +1822,7 @@ function normalizeEvent(el, e, calculate) {
     touch && clientToLocal(el, touch, e, calculate);
   } // Add which for click: 1 === left; 2 === middle; 3 === right; otherwise: 0;
   // See jQuery: https://github.com/jquery/jquery/blob/master/src/event.js
-  // If e.which has been defined, if may be readonly,
+  // If e.which has been defined, it may be readonly,
   // see: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/which
 
 
@@ -1692,12 +1880,10 @@ function removeEventListener(el, name, handler) {
 }
 /**
  * preventDefault and stopPropagation.
- * Notice: do not do that in zrender. Upper application
- * do that if necessary.
+ * Notice: do not use this method in zrender. It can only be
+ * used by upper applications if necessary.
  *
- * @memberOf module:zrender/core/event
- * @method
- * @param {Event} e : event对象
+ * @param {Event} e A mouse or touch event.
  */
 
 var stop = isDomLevel2 ? function (e) {
@@ -1716,15 +1902,13 @@ var stop = isDomLevel2 ? function (e) {
  * @return {boolean}
  */
 
-function isMiddleOrRightButtonOnMouseUpDown(e) {
-  return e.which === 2 || e.which === 3;
-}
+
 /**
  * To be removed.
  * @deprecated
  */
 
- // 做向上兼容
+ // For backward compatibility
 
 /**
  * Only implements needed gestures for mobile.
@@ -6615,7 +6799,12 @@ Style.prototype = {
   strokeOpacity: null,
 
   /**
-   * @type {Array.<number>}
+   * `true` is not supported.
+   * `false`/`null`/`undefined` are the same.
+   * `false` is used to remove lineDash in some 
+   * case that `null`/`undefined` can not be set. 
+   * (e.g., emphasis.lineStyle in echarts)
+   * @type {Array.<number>|boolean}
    */
   lineDash: null,
 
@@ -7443,14 +7632,17 @@ function adjustTextY(y, height, textVerticalAlign) {
   return y;
 }
 /**
+ * Follow same interface to `Displayable.prototype.calculateTextPosition`.
  * @public
- * @param {stirng} textPosition
- * @param {Object} rect {x, y, width, height}
- * @param {number} distance
- * @return {Object} {x, y, textAlign, textVerticalAlign}
+ * @param {Obejct} [out] Prepared out object. If not input, auto created in the method.
+ * @param {module:zrender/graphic/Style} style where `textPosition` and `textDistance` are visited.
+ * @param {Object} rect {x, y, width, height} Rect of the host elment, according to which the text positioned.
+ * @return {Object} The input `out`. Set: {x, y, textAlign, textVerticalAlign}
  */
 
-function adjustTextPositionOnRect(textPosition, rect, distance) {
+function calculateTextPosition(out, style, rect) {
+  var textPosition = style.textPosition;
+  var distance = style.textDistance;
   var x = rect.x;
   var y = rect.y;
   var height = rect.height;
@@ -7544,13 +7736,24 @@ function adjustTextPositionOnRect(textPosition, rect, distance) {
       break;
   }
 
-  return {
-    x: x,
-    y: y,
-    textAlign: textAlign,
-    textVerticalAlign: textVerticalAlign
-  };
+  out = out || {};
+  out.x = x;
+  out.y = y;
+  out.textAlign = textAlign;
+  out.textVerticalAlign = textVerticalAlign;
+  return out;
 }
+/**
+ * To be removed. But still do not remove in case that some one has imported it.
+ * @deprecated
+ * @public
+ * @param {stirng} textPosition
+ * @param {Object} rect {x, y, width, height}
+ * @param {number} distance
+ * @return {Object} {x, y, textAlign, textVerticalAlign}
+ */
+
+
 /**
  * Show ellipsis if overflow.
  *
@@ -8078,6 +8281,8 @@ var VALID_TEXT_VERTICAL_ALIGN = {
 // the default value of shadowColor is `'transparent'`.
 
 var SHADOW_STYLE_COMMON_PROPS = [['textShadowBlur', 'shadowBlur', 0], ['textShadowOffsetX', 'shadowOffsetX', 0], ['textShadowOffsetY', 'shadowOffsetY', 0], ['textShadowColor', 'shadowColor', 'transparent']];
+var _tmpTextPositionResult = {};
+var _tmpBoxPositionResult = {};
 /**
  * @param {module:zrender/graphic/Style} style
  * @return {module:zrender/graphic/Style} The input style.
@@ -8181,7 +8386,7 @@ function renderPlainText(hostEl, ctx, text, style, rect, prevEl) {
   var outerHeight = contentBlock.outerHeight;
   var textLines = contentBlock.lines;
   var lineHeight = contentBlock.lineHeight;
-  var boxPos = getBoxPosition(outerHeight, style, rect);
+  var boxPos = getBoxPosition(_tmpBoxPositionResult, hostEl, style, rect);
   var baseX = boxPos.baseX;
   var baseY = boxPos.baseY;
   var textAlign = boxPos.textAlign || 'left';
@@ -8288,7 +8493,7 @@ function drawRichText(hostEl, ctx, contentBlock, style, rect) {
   var outerWidth = contentBlock.outerWidth;
   var outerHeight = contentBlock.outerHeight;
   var textPadding = style.textPadding;
-  var boxPos = getBoxPosition(outerHeight, style, rect);
+  var boxPos = getBoxPosition(_tmpBoxPositionResult, hostEl, style, rect);
   var baseX = boxPos.baseX;
   var baseY = boxPos.baseY;
   var textAlign = boxPos.textAlign;
@@ -8492,7 +8697,7 @@ function onBgImageLoaded(image, textBackgroundColor) {
   textBackgroundColor.image = image;
 }
 
-function getBoxPosition(blockHeiht, style, rect) {
+function getBoxPosition(out, hostEl, style, rect) {
   var baseX = style.x || 0;
   var baseY = style.y || 0;
   var textAlign = style.textAlign;
@@ -8506,7 +8711,7 @@ function getBoxPosition(blockHeiht, style, rect) {
       baseX = rect.x + parsePercent(textPosition[0], rect.width);
       baseY = rect.y + parsePercent(textPosition[1], rect.height);
     } else {
-      var res = adjustTextPositionOnRect(textPosition, rect, style.textDistance);
+      var res = hostEl && hostEl.calculateTextPosition ? hostEl.calculateTextPosition(_tmpTextPositionResult, style, rect) : calculateTextPosition(_tmpTextPositionResult, style, rect);
       baseX = res.x;
       baseY = res.y; // Default align and baseline when has textPosition
 
@@ -8524,12 +8729,12 @@ function getBoxPosition(blockHeiht, style, rect) {
     }
   }
 
-  return {
-    baseX: baseX,
-    baseY: baseY,
-    textAlign: textAlign,
-    textVerticalAlign: textVerticalAlign
-  };
+  out = out || {};
+  out.baseX = baseX;
+  out.baseY = baseY;
+  out.textAlign = textAlign;
+  out.textVerticalAlign = textVerticalAlign;
+  return out;
 }
 
 function setCtx(ctx, prop, value) {
@@ -8658,8 +8863,10 @@ function Displayable(opts) {
 
   this.style = new Style(opts.style, this);
   this._rect = null; // Shapes for cascade clipping.
+  // Can only be `null`/`undefined` or an non-empty array, MUST NOT be an empty array.
+  // because it is easy to only using null to check whether clipPaths changed.
 
-  this.__clipPaths = []; // FIXME Stateful must be mixined after style is setted
+  this.__clipPaths = null; // FIXME Stateful must be mixined after style is setted
   // Stateful.call(this, opts);
 }
 
@@ -8876,7 +9083,28 @@ Displayable.prototype = {
     this.style = new Style(obj, this);
     this.dirty(false);
     return this;
-  }
+  },
+
+  /**
+   * The string value of `textPosition` needs to be calculated to a real postion.
+   * For example, `'inside'` is calculated to `[rect.width/2, rect.height/2]`
+   * by default. See `contain/text.js#calculateTextPosition` for more details.
+   * But some coutom shapes like "pin", "flag" have center that is not exactly
+   * `[width/2, height/2]`. So we provide this hook to customize the calculation
+   * for those shapes. It will be called if the `style.textPosition` is a string.
+   * @param {Obejct} [out] Prepared out object. If not provided, this method should
+   *        be responsible for creating one.
+   * @param {module:zrender/graphic/Style} style
+   * @param {Object} rect {x, y, width, height}
+   * @return {Obejct} out The same as the input out.
+   *         {
+   *             x: number. mandatory.
+   *             y: number. mandatory.
+   *             textAlign: string. optional. use style.textAlign by default.
+   *             textVerticalAlign: string. optional. use style.textVerticalAlign by default.
+   *         }
+   */
+  calculateTextPosition: null
 };
 inherits(Displayable, Element);
 mixin(Displayable, RectText); // zrUtil.mixin(Displayable, Stateful);
@@ -9006,8 +9234,8 @@ function isDisplayableCulled(el, width, height) {
 }
 
 function isClipPathChanged(clipPaths, prevClipPaths) {
+  // displayable.__clipPaths can only be `null`/`undefined` or an non-empty array.
   if (clipPaths === prevClipPaths) {
-    // Can both be null or undefined
     return false;
   }
 
@@ -9020,6 +9248,8 @@ function isClipPathChanged(clipPaths, prevClipPaths) {
       return true;
     }
   }
+
+  return false;
 }
 
 function doClip(clipPaths, ctx) {
@@ -9431,12 +9661,13 @@ Painter.prototype = {
     // And setTransform with scale 0 will cause set back transform failed.
     && !(m && !m[0] && !m[3]) // Ignore culled element
     && !(el.culling && isDisplayableCulled(el, this._width, this._height))) {
-      var clipPaths = el.__clipPaths; // Optimize when clipping on group with several elements
+      var clipPaths = el.__clipPaths;
+      var prevElClipPaths = scope.prevElClipPaths; // Optimize when clipping on group with several elements
 
-      if (!scope.prevElClipPaths || isClipPathChanged(clipPaths, scope.prevElClipPaths)) {
+      if (!prevElClipPaths || isClipPathChanged(clipPaths, prevElClipPaths)) {
         // If has previous clipping state, restore from it
-        if (scope.prevElClipPaths) {
-          currentLayer.ctx.restore();
+        if (prevElClipPaths) {
+          ctx.restore();
           scope.prevElClipPaths = null; // Reset prevEl since context has been restored
 
           scope.prevEl = null;
@@ -10505,7 +10736,7 @@ var instances$1 = {}; // ZRender实例map索引
  * @type {string}
  */
 
-var version$1 = '4.0.7';
+var version$1 = '4.1.0';
 /**
  * Initializing a zrender instance
  * @param {HTMLElement} dom
@@ -10702,13 +10933,10 @@ ZRender.prototype = {
     // var start = new Date();
     // Clear needsRefresh ahead to avoid something wrong happens in refresh
     // Or it will cause zrender refreshes again and again.
-    this._needsRefresh = false;
-    this.painter.refresh();
-    /**
-     * Avoid trigger zr.refresh in Element#beforeUpdate hook
-     */
+    this._needsRefresh = this._needsRefreshHover = false;
+    this.painter.refresh(); // Avoid trigger zr.refresh in Element#beforeUpdate hook
 
-    this._needsRefresh = false; // var end = new Date();
+    this._needsRefresh = this._needsRefreshHover = false; // var end = new Date();
     // var log = document.getElementById('log');
     // if (log) {
     //     log.innerHTML = log.innerHTML + '<br>' + (end - start);
@@ -11705,9 +11933,10 @@ var makeStyleMapper = function (properties) {
 var getLineStyle = makeStyleMapper([['lineWidth', 'width'], ['stroke', 'color'], ['opacity'], ['shadowBlur'], ['shadowOffsetX'], ['shadowOffsetY'], ['shadowColor']]);
 var lineStyleMixin = {
   getLineStyle: function (excludes) {
-    var style = getLineStyle(this, excludes);
-    var lineDash = this.getLineDash(style.lineWidth);
-    lineDash && (style.lineDash = lineDash);
+    var style = getLineStyle(this, excludes); // Always set lineDash whether dashed, otherwise we can not 
+    // erase the previous style when assigning to el.style.
+
+    style.lineDash = this.getLineDash(style.lineWidth);
     return style;
   },
   getLineDash: function (lineWidth) {
@@ -11718,7 +11947,12 @@ var lineStyleMixin = {
     var lineType = this.get('type');
     var dotSize = Math.max(lineWidth, 2);
     var dashSize = lineWidth * 4;
-    return lineType === 'solid' || lineType == null ? null : lineType === 'dashed' ? [dashSize, dashSize] : [dotSize, dotSize];
+    return lineType === 'solid' || lineType == null ? // Use `false` but not `null` for the solid line here, because `null` might be 
+    // ignored when assigning to `el.style`. e.g., when setting `lineStyle.type` as 
+    // `'dashed'` and `emphasis.lineStyle.type` as `'solid'` in graph series, the 
+    // `lineDash` gotten form the latter one is not able to erase that from the former 
+    // one if using `null` here according to the emhpsis strategy in `util/graphic.js`.
+    false : lineType === 'dashed' ? [dashSize, dashSize] : [dotSize, dotSize];
   }
 };
 
@@ -12539,9 +12773,11 @@ PathProxy.prototype = {
   /**
    * @readOnly
    */
-  setScale: function (sx, sy) {
-    this._ux = mathAbs(1 / devicePixelRatio / sx) || 0;
-    this._uy = mathAbs(1 / devicePixelRatio / sy) || 0;
+  setScale: function (sx, sy, segmentIgnoreThreshold) {
+    // Compat. Previously there is no segmentIgnoreThreshold.
+    segmentIgnoreThreshold = segmentIgnoreThreshold || 0;
+    this._ux = mathAbs(segmentIgnoreThreshold / devicePixelRatio / sx) || 0;
+    this._uy = mathAbs(segmentIgnoreThreshold / devicePixelRatio / sy) || 0;
   },
   getContext: function () {
     return this._ctx;
@@ -13796,6 +14032,10 @@ Path.prototype = {
   type: 'path',
   __dirtyPath: true,
   strokeContainThreshold: 5,
+  // This item default to be false. But in map series in echarts,
+  // in order to improve performance, it should be set to true,
+  // so the shorty segment won't draw.
+  segmentIgnoreThreshold: 0,
 
   /**
    * See `module:zrender/src/graphic/helper/subPixelOptimize`.
@@ -13849,7 +14089,7 @@ Path.prototype = {
     var ctxLineDash = !!ctx.setLineDash; // Update path sx, sy
 
     var scale = this.getGlobalScale();
-    path.setScale(scale[0], scale[1]); // Proxy context
+    path.setScale(scale[0], scale[1], this.segmentIgnoreThreshold); // Proxy context
     // Rebuild path in following 2 cases
     // 1. Path is dirty
     // 2. Path needs javascript implemented lineDash stroking.
@@ -15094,7 +15334,7 @@ var Polyline = Path.extend({
  * Sub-pixel optimize for canvas rendering, prevent from blur
  * when rendering a thin vertical/horizontal line.
  */
-var round$1 = Math.round;
+var round = Math.round;
 /**
  * Sub pixel optimize line for canvas
  *
@@ -15123,14 +15363,14 @@ function subPixelOptimizeLine$1(outputShape, inputShape, style) {
   var y1 = inputShape.y1;
   var y2 = inputShape.y2;
 
-  if (round$1(x1 * 2) === round$1(x2 * 2)) {
+  if (round(x1 * 2) === round(x2 * 2)) {
     outputShape.x1 = outputShape.x2 = subPixelOptimize$1(x1, lineWidth, true);
   } else {
     outputShape.x1 = x1;
     outputShape.x2 = x2;
   }
 
-  if (round$1(y1 * 2) === round$1(y2 * 2)) {
+  if (round(y1 * 2) === round(y2 * 2)) {
     outputShape.y1 = outputShape.y2 = subPixelOptimize$1(y1, lineWidth, true);
   } else {
     outputShape.y1 = y1;
@@ -15181,8 +15421,8 @@ function subPixelOptimizeRect$1(outputShape, inputShape, style) {
 function subPixelOptimize$1(position, lineWidth, positiveOrNegative) {
   // Assure that (position + lineWidth / 2) is near integer edge,
   // otherwise line will be fuzzy in canvas.
-  var doubledPosition = round$1(position * 2);
-  return (doubledPosition + round$1(lineWidth)) % 2 === 0 ? doubledPosition / 2 : (doubledPosition + (positiveOrNegative ? 1 : -1)) / 2;
+  var doubledPosition = round(position * 2);
+  return (doubledPosition + round(lineWidth)) % 2 === 0 ? doubledPosition / 2 : (doubledPosition + (positiveOrNegative ? 1 : -1)) / 2;
 }
 
 /**
@@ -15462,7 +15702,7 @@ var CompoundPath = Path.extend({
         paths[i].createPathProxy();
       }
 
-      paths[i].path.setScale(scale[0], scale[1]);
+      paths[i].path.setScale(scale[0], scale[1], paths[i].segmentIgnoreThreshold);
     }
   },
   buildPath: function (ctx, shape) {
@@ -15716,11 +15956,21 @@ inherits(IncrementalDisplayble, Displayable);
 * specific language governing permissions and limitations
 * under the License.
 */
-var round = Math.round;
 var mathMax$1 = Math.max;
 var mathMin$1 = Math.min;
 var EMPTY_OBJ = {};
-var Z2_EMPHASIS_LIFT = 1;
+var Z2_EMPHASIS_LIFT = 1; // key: label model property nane, value: style property name.
+
+var CACHED_LABEL_STYLE_PROPERTIES = {
+  color: 'textFill',
+  textBorderColor: 'textStroke',
+  textBorderWidth: 'textStrokeWidth'
+};
+var EMPHASIS = 'emphasis';
+var NORMAL = 'normal'; // Reserve 0 as default.
+
+var _highlightNextDigit = 1;
+var _highlightKeyMap = {};
 /**
  * Extend shape with parameters
  */
@@ -15847,17 +16097,7 @@ function resizePath(path, rect) {
  */
 
 function subPixelOptimizeLine(param) {
-  var shape = param.shape;
-  var lineWidth = param.style.lineWidth;
-
-  if (round(shape.x1 * 2) === round(shape.x2 * 2)) {
-    shape.x1 = shape.x2 = subPixelOptimize(shape.x1, lineWidth, true);
-  }
-
-  if (round(shape.y1 * 2) === round(shape.y2 * 2)) {
-    shape.y1 = shape.y2 = subPixelOptimize(shape.y1, lineWidth, true);
-  }
-
+  subPixelOptimizeLine$1(param.shape, param.shape, param.style);
   return param;
 }
 /**
@@ -15875,16 +16115,7 @@ function subPixelOptimizeLine(param) {
  */
 
 function subPixelOptimizeRect(param) {
-  var shape = param.shape;
-  var lineWidth = param.style.lineWidth;
-  var originX = shape.x;
-  var originY = shape.y;
-  var originWidth = shape.width;
-  var originHeight = shape.height;
-  shape.x = subPixelOptimize(shape.x, lineWidth, true);
-  shape.y = subPixelOptimize(shape.y, lineWidth, true);
-  shape.width = Math.max(subPixelOptimize(originX + originWidth, lineWidth, false) - shape.x, originWidth === 0 ? 0 : 1);
-  shape.height = Math.max(subPixelOptimize(originY + originHeight, lineWidth, false) - shape.y, originHeight === 0 ? 0 : 1);
+  subPixelOptimizeRect$1(param.shape, param.shape, param.style);
   return param;
 }
 /**
@@ -15896,12 +16127,7 @@ function subPixelOptimizeRect(param) {
  * @return {number} Optimized position.
  */
 
-function subPixelOptimize(position, lineWidth, positiveOrNegative) {
-  // Assure that (position + lineWidth / 2) is near integer edge,
-  // otherwise line will be fuzzy in canvas.
-  var doubledPosition = round(position * 2);
-  return (doubledPosition + round(lineWidth)) % 2 === 0 ? doubledPosition / 2 : (doubledPosition + (positiveOrNegative ? 1 : -1)) / 2;
-}
+var subPixelOptimize = subPixelOptimize$1;
 
 function hasFillOrStroke(fillOrStroke) {
   return fillOrStroke != null && fillOrStroke !== 'none';
@@ -15948,7 +16174,7 @@ function cacheElementStl(el) {
   var elStyle = el.style;
 
   for (var name in hoverStyle) {
-    // See comment in `doSingleEnterHover`.
+    // See comment in `singleEnterEmphasis`.
     if (hoverStyle[name] != null) {
       normalStyle[name] = elStyle[name];
     }
@@ -15959,7 +16185,7 @@ function cacheElementStl(el) {
   normalStyle.stroke = elStyle.stroke;
 }
 
-function doSingleEnterHover(el) {
+function singleEnterEmphasis(el) {
   var hoverStl = el.__hoverStl;
 
   if (!hoverStl || el.__highlighted) {
@@ -15970,7 +16196,7 @@ function doSingleEnterHover(el) {
   el.__highlighted = useHoverLayer ? 'layer' : 'plain';
   var zr = el.__zr;
 
-  if (!zr && useHoverLayer) {
+  if (el.isGroup || !zr && useHoverLayer) {
     return;
   }
 
@@ -16002,9 +16228,13 @@ function doSingleEnterHover(el) {
   // where properties of `emphasis` may not appear in `normal`. We previously use
   // module:echarts/util/model#defaultEmphasis to merge `normal` to `emphasis`.
   // But consider rich text and setOption in merge mode, it is impossible to cover
-  // all properties in merge. So we use merge mode when setting style here, where
-  // only properties that is not `null/undefined` can be set. The disadventage:
-  // null/undefined can not be used to remove style any more in `emphasis`.
+  // all properties in merge. So we use merge mode when setting style here.
+  // But we choose the merge strategy that only properties that is not `null/undefined`.
+  // Because when making a textStyle (espacially rich text), it is not easy to distinguish
+  // `hasOwnProperty` and `null/undefined` in code, so we trade them as the same for simplicity.
+  // But this strategy brings a trouble that `null/undefined` can not be used to remove
+  // style any more in `emphasis`. Users can both set properties directly on normal and
+  // emphasis to avoid this issue, or we might support `'none'` for this case if required.
 
 
   targetStyle.extendFrom(hoverStl);
@@ -16024,7 +16254,7 @@ function setDefaultHoverFillStroke(targetStyle, hoverStyle, prop) {
   }
 }
 
-function doSingleLeaveHover(el) {
+function singleEnterNormal(el) {
   var highlighted = el.__highlighted;
 
   if (!highlighted) {
@@ -16033,16 +16263,18 @@ function doSingleLeaveHover(el) {
 
   el.__highlighted = false;
 
+  if (el.isGroup) {
+    return;
+  }
+
   if (highlighted === 'layer') {
     el.__zr && el.__zr.removeHover(el);
-  } else if (highlighted) {
+  } else {
     var style = el.style;
     var normalStl = el.__cachedNormalStl;
 
     if (normalStl) {
-      rollbackDefaultTextStyle(style); // Consider null/undefined value, should use
-      // `setStyle` but not `extendFrom(stl, true)`.
-
+      rollbackDefaultTextStyle(style);
       el.setStyle(normalStl);
       applyDefaultTextStyle(style);
     } // `__cachedNormalZ2` will not be reset if calling `setElementHoverStyle`
@@ -16058,10 +16290,19 @@ function doSingleLeaveHover(el) {
   }
 }
 
-function traverseCall(el, method) {
-  el.isGroup ? el.traverse(function (child) {
-    !child.isGroup && method(child);
-  }) : method(el);
+function traverseUpdate(el, updater, commonParam) {
+  // If root is group, also enter updater for `highDownOnUpdate`.
+  var fromState = NORMAL;
+  var toState = NORMAL;
+  var trigger; // See the rule of `highDownOnUpdate` on `graphic.setAsHighDownDispatcher`.
+
+  el.__highlighted && (fromState = EMPHASIS, trigger = true);
+  updater(el, commonParam);
+  el.__highlighted && (toState = EMPHASIS, trigger = true);
+  el.isGroup && el.traverse(function (child) {
+    !child.isGroup && updater(child, commonParam);
+  });
+  trigger && el.__highDownOnUpdate && el.__highDownOnUpdate(fromState, toState);
 }
 /**
  * Set hover style (namely "emphasis style") of element, based on the current
@@ -16070,20 +16311,21 @@ function traverseCall(el, method) {
  * to the `el`. See the reason on `setHoverStyle`.
  *
  * @param {module:zrender/Element} el Should not be `zrender/container/Group`.
+ * @param {Object} [el.hoverStyle] Can be set on el or its descendants,
+ *        e.g., `el.hoverStyle = ...; graphic.setHoverStyle(el); `.
+ *        Often used when item group has a label element and it's hoverStyle is different.
  * @param {Object|boolean} [hoverStl] The specified hover style.
  *        If set as `false`, disable the hover style.
  *        Similarly, The `el.hoverStyle` can alse be set
  *        as `false` to disable the hover style.
  *        Otherwise, use the default hover style if not provided.
- * @param {Object} [opt]
- * @param {boolean} [opt.hoverSilentOnTouch=false] See `graphic.setAsHoverStyleTrigger`
  */
 
 
 function setElementHoverStyle(el, hoverStl) {
   // For performance consideration, it might be better to make the "hover style" only the
   // difference properties from the "normal style", but not a entire copy of all styles.
-  hoverStl = el.__hoverStl = hoverStl !== false && (hoverStl || {});
+  hoverStl = el.__hoverStl = hoverStl !== false && (el.hoverStyle || hoverStl || {});
   el.__hoverStlDirty = true; // FIXME
   // It is not completely right to save "normal"/"emphasis" flag on elements.
   // It probably should be saved on `data` of series. Consider the cases:
@@ -16101,52 +16343,32 @@ function setElementHoverStyle(el, hoverStl) {
     // to rollback. Of course, that would bring bug, but only in a rare case, see
     // `doSingleLeaveHover` for details.
 
-    doSingleLeaveHover(el);
-    doSingleEnterHover(el);
+    singleEnterNormal(el);
+    singleEnterEmphasis(el);
   }
-}
-/**
- * Emphasis (called by API) has higher priority than `mouseover`.
- * When element has been called to be entered emphasis, mouse over
- * should not trigger the highlight effect (for example, animation
- * scale) again, and `mouseout` should not downplay the highlight
- * effect. So the listener of `mouseover` and `mouseout` should
- * check `isInEmphasis`.
- *
- * @param {module:zrender/Element} el
- * @return {boolean}
- */
-
-function isInEmphasis(el) {
-  return el && el.__isEmphasisEntered;
 }
 
 function onElementMouseOver(e) {
-  if (this.__hoverSilentOnTouch && e.zrByTouch) {
-    return;
-  } // Only if element is not in emphasis status
-
-
-  !this.__isEmphasisEntered && traverseCall(this, doSingleEnterHover);
+  !shouldSilent(this, e) // "emphasis" event highlight has higher priority than mouse highlight.
+  && !this.__highByOuter && traverseUpdate(this, singleEnterEmphasis);
 }
 
 function onElementMouseOut(e) {
-  if (this.__hoverSilentOnTouch && e.zrByTouch) {
-    return;
-  } // Only if element is not in emphasis status
-
-
-  !this.__isEmphasisEntered && traverseCall(this, doSingleLeaveHover);
+  !shouldSilent(this, e) // "emphasis" event highlight has higher priority than mouse highlight.
+  && !this.__highByOuter && traverseUpdate(this, singleEnterNormal);
 }
 
-function enterEmphasis() {
-  this.__isEmphasisEntered = true;
-  traverseCall(this, doSingleEnterHover);
+function onElementEmphasisEvent(highlightDigit) {
+  this.__highByOuter |= 1 << (highlightDigit || 0);
+  traverseUpdate(this, singleEnterEmphasis);
 }
 
-function leaveEmphasis() {
-  this.__isEmphasisEntered = false;
-  traverseCall(this, doSingleLeaveHover);
+function onElementNormalEvent(highlightDigit) {
+  !(this.__highByOuter &= ~(1 << (highlightDigit || 0))) && traverseUpdate(this, singleEnterNormal);
+}
+
+function shouldSilent(el, e) {
+  return el.__highDownSilentOnTouch && e.zrByTouch;
 }
 /**
  * Set hover style (namely "emphasis style") of element,
@@ -16177,24 +16399,43 @@ function leaveEmphasis() {
  * root group, we can simply mount the style on `el.hoverStyle` for them, but should
  * not call this method for them.
  *
+ * (3) These input parameters can be set directly on `el`:
+ *
  * @param {module:zrender/Element} el
+ * @param {Object} [el.hoverStyle] See `graphic.setElementHoverStyle`.
+ * @param {boolean} [el.highDownSilentOnTouch=false] See `graphic.setAsHighDownDispatcher`.
+ * @param {Function} [el.highDownOnUpdate] See `graphic.setAsHighDownDispatcher`.
  * @param {Object|boolean} [hoverStyle] See `graphic.setElementHoverStyle`.
- * @param {Object} [opt]
- * @param {boolean} [opt.hoverSilentOnTouch=false] See `graphic.setAsHoverStyleTrigger`.
  */
 
 
-function setHoverStyle(el, hoverStyle, opt) {
-  el.isGroup ? el.traverse(function (child) {
-    // If element has sepcified hoverStyle, then use it instead of given hoverStyle
-    // Often used when item group has a label element and it's hoverStyle is different
-    !child.isGroup && setElementHoverStyle(child, child.hoverStyle || hoverStyle);
-  }) : setElementHoverStyle(el, el.hoverStyle || hoverStyle);
-  setAsHoverStyleTrigger(el, opt);
+function setHoverStyle(el, hoverStyle) {
+  setAsHighDownDispatcher(el, true);
+  traverseUpdate(el, setElementHoverStyle, hoverStyle);
 }
 /**
- * @param {Object|boolean} [opt] If `false`, means disable trigger.
- * @param {boolean} [opt.hoverSilentOnTouch=false]
+ * @param {module:zrender/Element} el
+ * @param {Function} [el.highDownOnUpdate] Called when state updated.
+ *        Since `setHoverStyle` has the constraint that it must be called after
+ *        all of the normal style updated, `highDownOnUpdate` is not needed to
+ *        trigger if both `fromState` and `toState` is 'normal', and needed to
+ *        trigger if both `fromState` and `toState` is 'emphasis', which enables
+ *        to sync outside style settings to "emphasis" state.
+ *        @this {string} This dispatcher `el`.
+ *        @param {string} fromState Can be "normal" or "emphasis".
+ *               `fromState` might equal to `toState`,
+ *               for example, when this method is called when `el` is
+ *               on "emphasis" state.
+ *        @param {string} toState Can be "normal" or "emphasis".
+ *
+ *        FIXME
+ *        CAUTION: Do not expose `highDownOnUpdate` outside echarts.
+ *        Because it is not a complete solution. The update
+ *        listener should not have been mount in element,
+ *        and the normal/emphasis state should not have
+ *        mantained on elements.
+ *
+ * @param {boolean} [el.highDownSilentOnTouch=false]
  *        In touch device, mouseover event will be trigger on touchstart event
  *        (see module:zrender/dom/HandlerProxy). By this mechanism, we can
  *        conveniently use hoverStyle when tap on touch screen without additional
@@ -16202,23 +16443,55 @@ function setHoverStyle(el, hoverStyle, opt) {
  *        But if the chart/component has select feature, which usually also use
  *        hoverStyle, there might be conflict between 'select-highlight' and
  *        'hover-highlight' especially when roam is enabled (see geo for example).
- *        In this case, hoverSilentOnTouch should be used to disable hover-highlight
- *        on touch device.
+ *        In this case, `highDownSilentOnTouch` should be used to disable
+ *        hover-highlight on touch device.
+ * @param {boolean} [asDispatcher=true] If `false`, do not set as "highDownDispatcher".
  */
 
-function setAsHoverStyleTrigger(el, opt) {
-  var disable = opt === false;
-  el.__hoverSilentOnTouch = opt != null && opt.hoverSilentOnTouch; // Simple optimize, since this method might be
+function setAsHighDownDispatcher(el, asDispatcher) {
+  var disable = asDispatcher === false; // Make `highDownSilentOnTouch` and `highDownOnUpdate` only work after
+  // `setAsHighDownDispatcher` called. Avoid it is modified by user unexpectedly.
+
+  el.__highDownSilentOnTouch = el.highDownSilentOnTouch;
+  el.__highDownOnUpdate = el.highDownOnUpdate; // Simple optimize, since this method might be
   // called for each elements of a group in some cases.
 
-  if (!disable || el.__hoverStyleTrigger) {
+  if (!disable || el.__highDownDispatcher) {
     var method = disable ? 'off' : 'on'; // Duplicated function will be auto-ignored, see Eventful.js.
 
-    el[method]('mouseover', onElementMouseOver)[method]('mouseout', onElementMouseOut); // Emphasis, normal can be triggered manually
+    el[method]('mouseover', onElementMouseOver)[method]('mouseout', onElementMouseOut); // Emphasis, normal can be triggered manually by API or other components like hover link.
 
-    el[method]('emphasis', enterEmphasis)[method]('normal', leaveEmphasis);
-    el.__hoverStyleTrigger = !disable;
+    el[method]('emphasis', onElementEmphasisEvent)[method]('normal', onElementNormalEvent); // Also keep previous record.
+
+    el.__highByOuter = el.__highByOuter || 0;
+    el.__highDownDispatcher = !disable;
   }
+}
+/**
+ * @param {module:zrender/src/Element} el
+ * @return {boolean}
+ */
+
+function isHighDownDispatcher(el) {
+  return !!(el && el.__highDownDispatcher);
+}
+/**
+ * Support hightlight/downplay record on each elements.
+ * For the case: hover highlight/downplay (legend, visualMap, ...) and
+ * user triggerred hightlight/downplay should not conflict.
+ * Only all of the highlightDigit cleared, return to normal.
+ * @param {string} highlightKey
+ * @return {number} highlightDigit
+ */
+
+function getHighlightDigit(highlightKey) {
+  var highlightDigit = _highlightKeyMap[highlightKey];
+
+  if (highlightDigit == null && _highlightNextDigit <= 32) {
+    highlightDigit = _highlightKeyMap[highlightKey] = _highlightNextDigit++;
+  }
+
+  return highlightDigit;
 }
 /**
  * See more info in `setTextStyleCommon`.
@@ -16278,6 +16551,32 @@ function setLabelStyle(normalStyle, emphasisStyle, normalModel, emphasisModel, o
 
   normalStyle.text = normalStyleText;
   emphasisStyle.text = emphasisStyleText;
+}
+/**
+ * Modify label style manually.
+ * Only works after `setLabelStyle` and `setElementHoverStyle` called.
+ *
+ * @param {module:zrender/src/Element} el
+ * @param {Object} [normalStyleProps] optional
+ * @param {Object} [emphasisStyleProps] optional
+ */
+
+function modifyLabelStyle(el, normalStyleProps, emphasisStyleProps) {
+  var elStyle = el.style;
+
+  if (normalStyleProps) {
+    rollbackDefaultTextStyle(elStyle);
+    el.setStyle(normalStyleProps);
+    applyDefaultTextStyle(elStyle);
+  }
+
+  elStyle = el.__hoverStl;
+
+  if (emphasisStyleProps && elStyle) {
+    rollbackDefaultTextStyle(elStyle);
+    extend(elStyle, emphasisStyleProps);
+    applyDefaultTextStyle(elStyle);
+  }
 }
 /**
  * Set basic textStyle properties.
@@ -16396,6 +16695,10 @@ function setTextStyleCommon(textStyle, textStyleModel, opt, isEmphasis) {
       if (richItemNames.hasOwnProperty(name)) {
         // Cascade is supported in rich.
         var richTextStyle = textStyleModel.getModel(['rich', name]); // In rich, never `disableBox`.
+        // FIXME: consider `label: {formatter: '{a|xx}', color: 'blue', rich: {a: {}}}`,
+        // the default color `'blue'` will not be adopted if no color declared in `rich`.
+        // That might confuses users. So probably we should put `textStyleModel` as the
+        // root ancestor of the `richTextStyle`. But that would be a break change.
 
         setTokenTextStyle(richResult[name] = {}, richTextStyle, globalTextStyle, opt, isEmphasis);
       }
@@ -16454,10 +16757,7 @@ function setTokenTextStyle(textStyle, textStyleModel, globalTextStyle, opt, isEm
   globalTextStyle = !isEmphasis && globalTextStyle || EMPTY_OBJ;
   textStyle.textFill = getAutoColor(textStyleModel.getShallow('color'), opt) || globalTextStyle.color;
   textStyle.textStroke = getAutoColor(textStyleModel.getShallow('textBorderColor'), opt) || globalTextStyle.textBorderColor;
-  textStyle.textStrokeWidth = retrieve2(textStyleModel.getShallow('textBorderWidth'), globalTextStyle.textBorderWidth); // Save original textPosition, because style.textPosition will be repalced by
-  // real location (like [10, 30]) in zrender.
-
-  textStyle.insideRawTextPosition = textStyle.textPosition;
+  textStyle.textStrokeWidth = retrieve2(textStyleModel.getShallow('textBorderWidth'), globalTextStyle.textBorderWidth);
 
   if (!isEmphasis) {
     if (isBlock) {
@@ -16526,42 +16826,42 @@ function getAutoColor(color, opt) {
 
 
 function applyDefaultTextStyle(textStyle) {
-  var opt = textStyle.insideRollbackOpt; // Only `insideRollbackOpt` created (in `setTextStyleCommon`),
-  // applyDefaultTextStyle works.
-
-  if (!opt || textStyle.textFill != null) {
-    return;
-  }
-
-  var useInsideStyle = opt.useInsideStyle;
-  var textPosition = textStyle.insideRawTextPosition;
+  var textPosition = textStyle.textPosition;
+  var opt = textStyle.insideRollbackOpt;
   var insideRollback;
-  var autoColor = opt.autoColor;
 
-  if (useInsideStyle !== false && (useInsideStyle === true || opt.isRectText && textPosition // textPosition can be [10, 30]
-  && typeof textPosition === 'string' && textPosition.indexOf('inside') >= 0)) {
-    insideRollback = {
-      textFill: null,
-      textStroke: textStyle.textStroke,
-      textStrokeWidth: textStyle.textStrokeWidth
-    };
-    textStyle.textFill = '#fff'; // Consider text with #fff overflow its container.
+  if (opt && textStyle.textFill == null) {
+    var autoColor = opt.autoColor;
+    var isRectText = opt.isRectText;
+    var useInsideStyle = opt.useInsideStyle;
+    var useInsideStyleCache = useInsideStyle !== false && (useInsideStyle === true || isRectText && textPosition // textPosition can be [10, 30]
+    && typeof textPosition === 'string' && textPosition.indexOf('inside') >= 0);
+    var useAutoColorCache = !useInsideStyleCache && autoColor != null; // All of the props declared in `CACHED_LABEL_STYLE_PROPERTIES` are to be cached.
 
-    if (textStyle.textStroke == null) {
-      textStyle.textStroke = autoColor;
-      textStyle.textStrokeWidth == null && (textStyle.textStrokeWidth = 2);
+    if (useInsideStyleCache || useAutoColorCache) {
+      insideRollback = {
+        textFill: textStyle.textFill,
+        textStroke: textStyle.textStroke,
+        textStrokeWidth: textStyle.textStrokeWidth
+      };
     }
-  } else if (autoColor != null) {
-    insideRollback = {
-      textFill: null
-    };
-    textStyle.textFill = autoColor;
-  } // Always set `insideRollback`, for clearing previous.
+
+    if (useInsideStyleCache) {
+      textStyle.textFill = '#fff'; // Consider text with #fff overflow its container.
+
+      if (textStyle.textStroke == null) {
+        textStyle.textStroke = autoColor;
+        textStyle.textStrokeWidth == null && (textStyle.textStrokeWidth = 2);
+      }
+    }
+
+    if (useAutoColorCache) {
+      textStyle.textFill = autoColor;
+    }
+  } // Always set `insideRollback`, so that the previous one can be cleared.
 
 
-  if (insideRollback) {
-    textStyle.insideRollback = insideRollback;
-  }
+  textStyle.insideRollback = insideRollback;
 }
 /**
  * Consider the case: in a scatter,
@@ -16579,6 +16879,7 @@ function rollbackDefaultTextStyle(style) {
   var insideRollback = style.insideRollback;
 
   if (insideRollback) {
+    // Reset all of the props in `CACHED_LABEL_STYLE_PROPERTIES`.
     style.textFill = insideRollback.textFill;
     style.textStroke = insideRollback.textStroke;
     style.textStrokeWidth = insideRollback.textStrokeWidth;
@@ -16841,10 +17142,99 @@ function createIcon(iconStr, opt, rect) {
     return iconStr.indexOf('image://') === 0 ? (style.image = iconStr.slice(8), defaults(style, rect), new ZImage(opt)) : makePath(iconStr.replace('path://', ''), opt, rect, 'center');
   }
 }
+/**
+ * Return `true` if the given line (line `a`) and the given polygon
+ * are intersect.
+ * Note that we do not count colinear as intersect here because no
+ * requirement for that. We could do that if required in future.
+ *
+ * @param {number} a1x
+ * @param {number} a1y
+ * @param {number} a2x
+ * @param {number} a2y
+ * @param {Array.<Array.<number>>} points Points of the polygon.
+ * @return {boolean}
+ */
+
+function linePolygonIntersect(a1x, a1y, a2x, a2y, points) {
+  for (var i = 0, p2 = points[points.length - 1]; i < points.length; i++) {
+    var p = points[i];
+
+    if (lineLineIntersect(a1x, a1y, a2x, a2y, p[0], p[1], p2[0], p2[1])) {
+      return true;
+    }
+
+    p2 = p;
+  }
+}
+/**
+ * Return `true` if the given two lines (line `a` and line `b`)
+ * are intersect.
+ * Note that we do not count colinear as intersect here because no
+ * requirement for that. We could do that if required in future.
+ *
+ * @param {number} a1x
+ * @param {number} a1y
+ * @param {number} a2x
+ * @param {number} a2y
+ * @param {number} b1x
+ * @param {number} b1y
+ * @param {number} b2x
+ * @param {number} b2y
+ * @return {boolean}
+ */
+
+function lineLineIntersect(a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y) {
+  // let `vec_m` to be `vec_a2 - vec_a1` and `vec_n` to be `vec_b2 - vec_b1`.
+  var mx = a2x - a1x;
+  var my = a2y - a1y;
+  var nx = b2x - b1x;
+  var ny = b2y - b1y; // `vec_m` and `vec_n` are parallel iff
+  //     exising `k` such that `vec_m = k · vec_n`, equivalent to `vec_m X vec_n = 0`.
+
+  var nmCrossProduct = crossProduct2d(nx, ny, mx, my);
+
+  if (nearZero(nmCrossProduct)) {
+    return false;
+  } // `vec_m` and `vec_n` are intersect iff
+  //     existing `p` and `q` in [0, 1] such that `vec_a1 + p * vec_m = vec_b1 + q * vec_n`,
+  //     such that `q = ((vec_a1 - vec_b1) X vec_m) / (vec_n X vec_m)`
+  //           and `p = ((vec_a1 - vec_b1) X vec_n) / (vec_n X vec_m)`.
 
 
-var graphicUtil = (Object.freeze || Object)({
+  var b1a1x = a1x - b1x;
+  var b1a1y = a1y - b1y;
+  var q = crossProduct2d(b1a1x, b1a1y, mx, my) / nmCrossProduct;
+
+  if (q < 0 || q > 1) {
+    return false;
+  }
+
+  var p = crossProduct2d(b1a1x, b1a1y, nx, ny) / nmCrossProduct;
+
+  if (p < 0 || p > 1) {
+    return false;
+  }
+
+  return true;
+}
+/**
+ * Cross product of 2-dimension vector.
+ */
+
+function crossProduct2d(x1, y1, x2, y2) {
+  return x1 * y2 - x2 * y1;
+}
+
+function nearZero(val) {
+  return val <= 1e-6 && val >= -1e-6;
+}
+
+
+
+var graphic = (Object.freeze || Object)({
 	Z2_EMPHASIS_LIFT: Z2_EMPHASIS_LIFT,
+	CACHED_LABEL_STYLE_PROPERTIES: CACHED_LABEL_STYLE_PROPERTIES,
 	extendShape: extendShape,
 	extendPath: extendPath,
 	makePath: makePath,
@@ -16855,10 +17245,12 @@ var graphicUtil = (Object.freeze || Object)({
 	subPixelOptimizeRect: subPixelOptimizeRect,
 	subPixelOptimize: subPixelOptimize,
 	setElementHoverStyle: setElementHoverStyle,
-	isInEmphasis: isInEmphasis,
 	setHoverStyle: setHoverStyle,
-	setAsHoverStyleTrigger: setAsHoverStyleTrigger,
+	setAsHighDownDispatcher: setAsHighDownDispatcher,
+	isHighDownDispatcher: isHighDownDispatcher,
+	getHighlightDigit: getHighlightDigit,
 	setLabelStyle: setLabelStyle,
+	modifyLabelStyle: modifyLabelStyle,
 	setTextStyle: setTextStyle,
 	setText: setText,
 	getFont: getFont,
@@ -16871,6 +17263,8 @@ var graphicUtil = (Object.freeze || Object)({
 	clipPointsByRect: clipPointsByRect,
 	clipRectByRect: clipRectByRect,
 	createIcon: createIcon,
+	linePolygonIntersect: linePolygonIntersect,
+	lineLineIntersect: lineLineIntersect,
 	Group: Group,
 	Image: ZImage,
 	Text: Text,
@@ -17482,7 +17876,7 @@ function parsePercent$1(percent, all) {
  * @return {number|string}
  */
 
-function round$2(x, precision, returnStr) {
+function round$1(x, precision, returnStr) {
   if (precision == null) {
     precision = 10;
   } // Avoid range error
@@ -17492,6 +17886,14 @@ function round$2(x, precision, returnStr) {
   x = (+x).toFixed(precision);
   return returnStr ? x : +x;
 }
+/**
+ * asc sort arr.
+ * The input arr will be modified.
+ *
+ * @param {Array} arr
+ * @return {Array} The input arr.
+ */
+
 function asc(arr) {
   arr.sort(function (a, b) {
     return a - b;
@@ -17857,7 +18259,7 @@ function isNumeric(v) {
 var number = (Object.freeze || Object)({
 	linearMap: linearMap,
 	parsePercent: parsePercent$1,
-	round: round$2,
+	round: round$1,
 	asc: asc,
 	getPrecision: getPrecision,
 	getPrecisionSafe: getPrecisionSafe,
@@ -20248,7 +20650,7 @@ var GlobalModel = Model.extend({
    * After filtering, series may be different.
    * frome raw series.
    *
-   * @parma {string} subType
+   * @param {string} subType.
    * @param {Function} cb
    * @param {*} context
    */
@@ -20666,7 +21068,7 @@ OptionManager.prototype = {
     // (create a new object when modify itself).
 
 
-    rawOption = clone$3(rawOption, true); // FIXME
+    rawOption = clone$3(rawOption); // FIXME
     // 如果 timeline options 或者 media 中设置了某个属性，而baseOption中没有设置，则进行警告。
 
     var oldOptionBackup = this._optionBackup;
@@ -21308,7 +21710,7 @@ var backwardCompat = function (option, isTheme) {
 
     if (seriesType === 'gauge') {
       var pointerColor = get(seriesOpt, 'pointer.color');
-      pointerColor != null && set$1(seriesOpt, 'itemStyle.normal.color', pointerColor);
+      pointerColor != null && set$1(seriesOpt, 'itemStyle.color', pointerColor);
     }
 
     compatLayoutProperties(seriesOpt);
@@ -21806,6 +22208,7 @@ var dataFormatMixin = {
     var renderMode = getTooltipRenderMode(renderModeOption);
     var mainType = this.mainType;
     var isSeries = mainType === 'series';
+    var userOutput = data.userOutput;
     return {
       componentType: mainType,
       componentSubType: this.subType,
@@ -21820,6 +22223,8 @@ var dataFormatMixin = {
       dataType: dataType,
       value: rawValue,
       color: color,
+      dimensionNames: userOutput ? userOutput.dimensionNames : null,
+      encode: userOutput ? userOutput.encode : null,
       marker: getTooltipMarker({
         color: color,
         renderMode: renderMode
@@ -21834,7 +22239,8 @@ var dataFormatMixin = {
    * @param {number} dataIndex
    * @param {string} [status='normal'] 'normal' or 'emphasis'
    * @param {string} [dataType]
-   * @param {number} [dimIndex]
+   * @param {number} [dimIndex] Only used in some chart that
+   *        use formatter in different dimensions, like radar.
    * @param {string} [labelProp='label']
    * @return {string} If not formatter, return null/undefined
    */
@@ -21852,6 +22258,7 @@ var dataFormatMixin = {
 
     if (typeof formatter === 'function') {
       params.status = status;
+      params.dimensionIndex = dimIndex;
       return formatter(params);
     } else if (typeof formatter === 'string') {
       var str = formatTpl(formatter, params); // Support 'aaa{@[3]}bbb{@product}ccc'.
@@ -22996,39 +23403,42 @@ chartProto.updateView = chartProto.updateLayout = chartProto.updateVisual = func
 };
 /**
  * Set state of single element
- * @param  {module:zrender/Element} el
- * @param  {string} state
+ * @param {module:zrender/Element} el
+ * @param {string} state 'normal'|'emphasis'
+ * @param {number} highlightDigit
  */
 
 
-function elSetState(el, state) {
+function elSetState(el, state, highlightDigit) {
   if (el) {
-    el.trigger(state);
+    el.trigger(state, highlightDigit);
 
-    if (el.type === 'group') {
-      for (var i = 0; i < el.childCount(); i++) {
-        elSetState(el.childAt(i), state);
+    if (el.isGroup // Simple optimize.
+    && !isHighDownDispatcher(el)) {
+      for (var i = 0, len = el.childCount(); i < len; i++) {
+        elSetState(el.childAt(i), state, highlightDigit);
       }
     }
   }
 }
 /**
- * @param  {module:echarts/data/List} data
- * @param  {Object} payload
- * @param  {string} state 'normal'|'emphasis'
+ * @param {module:echarts/data/List} data
+ * @param {Object} payload
+ * @param {string} state 'normal'|'emphasis'
  */
 
 
 function toggleHighlight(data, payload, state) {
   var dataIndex = queryDataIndex(data, payload);
+  var highlightDigit = payload && payload.highlightKey != null ? getHighlightDigit(payload.highlightKey) : null;
 
   if (dataIndex != null) {
     each$1(normalizeToArray(dataIndex), function (dataIdx) {
-      elSetState(data.getItemGraphicEl(dataIdx), state);
+      elSetState(data.getItemGraphicEl(dataIdx), state, highlightDigit);
     });
   } else {
     data.eachItemGraphicEl(function (el) {
-      elSetState(el, state);
+      elSetState(el, state, highlightDigit);
     });
   }
 } // Enable Chart.extend.
@@ -23245,14 +23655,6 @@ function createOrUpdate(obj, fnAttr, rate, throttleType) {
  * @param {Object} obj
  * @param {string} fnAttr
  */
-
-function clear(obj, fnAttr) {
-  var fn = obj[fnAttr];
-
-  if (fn && fn[ORIGIN_METHOD]) {
-    obj[fnAttr] = fn[ORIGIN_METHOD];
-  }
-}
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -25194,16 +25596,18 @@ var each = each$1;
 var isFunction = isFunction$1;
 var isObject = isObject$1;
 var parseClassType = ComponentModel.parseClassType;
-var version = '4.2.1';
+var version = '4.3.0';
 var dependencies = {
-  zrender: '4.0.6'
+  zrender: '4.1.0'
 };
 var TEST_FRAME_REMAIN_TIME = 1;
 var PRIORITY_PROCESSOR_FILTER = 1000;
 var PRIORITY_PROCESSOR_STATISTIC = 5000;
 var PRIORITY_VISUAL_LAYOUT = 1000;
+var PRIORITY_VISUAL_PROGRESSIVE_LAYOUT = 1100;
 var PRIORITY_VISUAL_GLOBAL = 2000;
 var PRIORITY_VISUAL_CHART = 3000;
+var PRIORITY_VISUAL_POST_CHART_LAYOUT = 3500;
 var PRIORITY_VISUAL_COMPONENT = 4000; // FIXME
 // necessary?
 
@@ -25215,8 +25619,10 @@ var PRIORITY = {
   },
   VISUAL: {
     LAYOUT: PRIORITY_VISUAL_LAYOUT,
+    PROGRESSIVE_LAYOUT: PRIORITY_VISUAL_PROGRESSIVE_LAYOUT,
     GLOBAL: PRIORITY_VISUAL_GLOBAL,
     CHART: PRIORITY_VISUAL_CHART,
+    POST_CHART_LAYOUT: PRIORITY_VISUAL_POST_CHART_LAYOUT,
     COMPONENT: PRIORITY_VISUAL_COMPONENT,
     BRUSH: PRIORITY_VISUAL_BRUSH
   }
@@ -25291,7 +25697,7 @@ function ECharts(dom, theme$$1, opts) {
     height: opts.height
   });
   /**
-   * Expect 60 pfs.
+   * Expect 60 fps.
    * @type {Function}
    * @private
    */
@@ -25470,7 +25876,7 @@ echartsProto.setOption = function (option, notMerge, lazyUpdate) {
   if (!this._model || notMerge) {
     var optionManager = new OptionManager(this._api);
     var theme$$1 = this._theme;
-    var ecModel = this._model = new GlobalModel(null, null, theme$$1, optionManager);
+    var ecModel = this._model = new GlobalModel();
     ecModel.scheduler = this._scheduler;
     ecModel.init(null, null, theme$$1, optionManager);
   }
@@ -25671,7 +26077,22 @@ echartsProto.getConnectedDataURL = function (opts) {
     var targetCanvas = createCanvas();
     targetCanvas.width = width;
     targetCanvas.height = height;
-    var zr = init$1(targetCanvas);
+    var zr = init$1(targetCanvas); // Background between the charts
+
+    if (opts.connectedBackgroundColor) {
+      zr.add(new Rect({
+        shape: {
+          x: 0,
+          y: 0,
+          width: width,
+          height: height
+        },
+        style: {
+          fill: opts.connectedBackgroundColor
+        }
+      }));
+    }
+
     each(canvasList, function (item) {
       var img = new ZImage({
         style: {
@@ -26471,7 +26892,7 @@ function renderSeries(ecIns, ecModel, api, payload, dirtyMap) {
   });
   scheduler.unfinished |= unfinished; // If use hover layer
 
-  updateHoverLayerStatus(ecIns._zr, ecModel); // Add aria
+  updateHoverLayerStatus(ecIns, ecModel); // Add aria
 
   aria(ecIns._zr.dom, ecModel);
 }
@@ -26600,20 +27021,27 @@ echartsProto.dispose = function () {
 
 mixin(ECharts, Eventful);
 
-function updateHoverLayerStatus(zr, ecModel) {
+function updateHoverLayerStatus(ecIns, ecModel) {
+  var zr = ecIns._zr;
   var storage = zr.storage;
   var elCount = 0;
   storage.traverse(function (el) {
-    if (!el.isGroup) {
-      elCount++;
-    }
+    elCount++;
   });
 
   if (elCount > ecModel.get('hoverLayerThreshold') && !env$1.node) {
-    storage.traverse(function (el) {
-      if (!el.isGroup) {
-        // Don't switch back.
-        el.useHoverLayer = true;
+    ecModel.eachSeries(function (seriesModel) {
+      if (seriesModel.preventUsingHoverLayer) {
+        return;
+      }
+
+      var chartView = ecIns._chartsMap[seriesModel.__viewId];
+
+      if (chartView.__alive) {
+        chartView.group.traverse(function (el) {
+          // Don't switch back.
+          el.useHoverLayer = true;
+        });
       }
     });
   }
@@ -26888,7 +27316,7 @@ function enableConnect(chart) {
  * @param {Object} [theme]
  * @param {Object} opts
  * @param {number} [opts.devicePixelRatio] Use window.devicePixelRatio by default
- * @param {string} [opts.renderer] Currently only 'canvas' is supported.
+ * @param {string} [opts.renderer] Can choose 'canvas' or 'svg' to render the chart.
  * @param {number} [opts.width] Use clientWidth of the input `dom` by default.
  *                              Can be 'auto' (the same as null/undefined)
  * @param {number} [opts.height] Use clientHeight of the input `dom` by default.
@@ -27429,19 +27857,19 @@ function summarizeDimensions(data) {
   var encode = summary.encode = {};
   var notExtraCoordDimMap = createHashMap();
   var defaultedLabel = [];
-  var defaultedTooltip = [];
+  var defaultedTooltip = []; // See the comment of `List.js#userOutput`.
+
+  var userOutput = summary.userOutput = {
+    dimensionNames: data.dimensions.slice(),
+    encode: {}
+  };
   each$1(data.dimensions, function (dimName) {
     var dimItem = data.getDimensionInfo(dimName);
     var coordDim = dimItem.coordDim;
 
     if (coordDim) {
-      var coordDimArr = encode[coordDim];
-
-      if (!encode.hasOwnProperty(coordDim)) {
-        coordDimArr = encode[coordDim] = [];
-      }
-
-      coordDimArr[dimItem.coordDimIndex] = dimName;
+      var coordDimIndex = dimItem.coordDimIndex;
+      getOrCreateEncodeArr(encode, coordDim)[coordDimIndex] = dimName;
 
       if (!dimItem.isExtraCoord) {
         notExtraCoordDimMap.set(coordDim, 1); // Use the last coord dim (and label friendly) as default label,
@@ -27451,7 +27879,11 @@ function summarizeDimensions(data) {
 
         if (mayLabelDimType(dimItem.type)) {
           defaultedLabel[0] = dimName;
-        }
+        } // User output encode do not contain generated coords.
+        // And it only has index. User can use index to retrieve value from the raw item array.
+
+
+        getOrCreateEncodeArr(userOutput.encode, coordDim)[coordDimIndex] = dimItem.index;
       }
 
       if (dimItem.defaultTooltip) {
@@ -27460,16 +27892,11 @@ function summarizeDimensions(data) {
     }
 
     OTHER_DIMENSIONS.each(function (v, otherDim) {
-      var otherDimArr = encode[otherDim];
-
-      if (!encode.hasOwnProperty(otherDim)) {
-        otherDimArr = encode[otherDim] = [];
-      }
-
+      var encodeArr = getOrCreateEncodeArr(encode, otherDim);
       var dimIndex = dimItem.otherDims[otherDim];
 
       if (dimIndex != null && dimIndex !== false) {
-        otherDimArr[dimIndex] = dimItem.name;
+        encodeArr[dimIndex] = dimItem.name;
       }
     });
   });
@@ -27506,6 +27933,15 @@ function summarizeDimensions(data) {
   encode.defaultedTooltip = defaultedTooltip;
   return summary;
 }
+
+function getOrCreateEncodeArr(encode, dim) {
+  if (!encode.hasOwnProperty(dim)) {
+    encode[dim] = [];
+  }
+
+  return encode[dim];
+}
+
 function getDimensionTypeByAxis(axisType) {
   return axisType === 'category' ? 'ordinal' : axisType === 'time' ? 'time' : 'float';
 }
@@ -27807,6 +28243,21 @@ var List = function (dimensions, hostModel) {
    */
 
   this._calculationInfo = {};
+  /**
+   * User output info of this data.
+   * DO NOT use it in other places!
+   *
+   * When preparing user params for user callbacks, we have
+   * to clone these inner data structures to prevent users
+   * from modifying them to effect built-in logic. And for
+   * performance consideration we make this `userOutput` to
+   * avoid clone them too many times.
+   *
+   * @type {Object}
+   * @readOnly
+   */
+
+  this.userOutput = this._dimensionsSummary.userOutput;
 };
 
 var listProto = List.prototype;
@@ -27818,16 +28269,30 @@ listProto.type = 'list';
 
 listProto.hasItemOption = true;
 /**
+ * The meanings of the input parameter `dim`:
+ *
+ * + If dim is a number (e.g., `1`), it means the index of the dimension.
+ *   For example, `getDimension(0)` will return 'x' or 'lng' or 'radius'.
+ * + If dim is a number-like string (e.g., `"1"`):
+ *     + If there is the same concrete dim name defined in `this.dimensions`, it means that concrete name.
+ *     + If not, it will be converted to a number, which means the index of the dimension.
+ *        (why? because of the backward compatbility. We have been tolerating number-like string in
+ *        dimension setting, although now it seems that it is not a good idea.)
+ *     For example, `visualMap[i].dimension: "1"` is the same meaning as `visualMap[i].dimension: 1`,
+ *     if no dimension name is defined as `"1"`.
+ * + If dim is a not-number-like string, it means the concrete dim name.
+ *   For example, it can be be default name `"x"`, `"y"`, `"z"`, `"lng"`, `"lat"`, `"angle"`, `"radius"`,
+ *   or customized in `dimensions` property of option like `"age"`.
+ *
  * Get dimension name
- * @param {string|number} dim
- *        Dimension can be concrete names like x, y, z, lng, lat, angle, radius
- *        Or a ordinal number. For example getDimensionInfo(0) will return 'x' or 'lng' or 'radius'
+ * @param {string|number} dim See above.
  * @return {string} Concrete dim name.
  */
 
 listProto.getDimension = function (dim) {
-  if (!isNaN(dim)) {
-    dim = this.dimensions[dim] || dim;
+  if (typeof dim === 'number' // If being a number-like string but not being defined a dimension name.
+  || !isNaN(dim) && !this._dimensionInfos.hasOwnProperty(dim)) {
+    dim = this.dimensions[dim];
   }
 
   return dim;
@@ -28372,12 +28837,12 @@ listProto.getValues = function (dimensions, idx
 
 listProto.hasValue = function (idx) {
   var dataDimsOnCoord = this._dimensionsSummary.dataDimsOnCoord;
-  var dimensionInfos = this._dimensionInfos;
 
   for (var i = 0, len = dataDimsOnCoord.length; i < len; i++) {
-    if ( // Ordinal type can be string or number
-    dimensionInfos[dataDimsOnCoord[i]].type !== 'ordinal' // FIXME check ordinal when using index?
-    && isNaN(this.get(dataDimsOnCoord[i], idx))) {
+    // Ordinal type originally can be string or number.
+    // But when an ordinal type is used on coord, it can
+    // not be string but only number. So we can also use isNaN.
+    if (isNaN(this.get(dataDimsOnCoord[i], idx))) {
       return false;
     }
   }
@@ -29639,7 +30104,7 @@ function completeDimensions(sysDims, source, opt) {
     // `{encode: {x: -1, y: 1}}`. Should not filter anything in
     // this case.
 
-    if (dataDims.length === 1 && dataDims[0] < 0) {
+    if (dataDims.length === 1 && !isString(dataDims[0]) && dataDims[0] < 0) {
       encodeDef.set(coordDim, false);
       return;
     }
@@ -30559,7 +31024,7 @@ OrdinalScale.create = function () {
 /**
  * For testable.
  */
-var roundNumber$1 = round$2;
+var roundNumber$1 = round$1;
 /**
  * @param {Array.<number>} extent Both extent[0] and extent[1] should be valid number.
  *                                Should be extent[0] < extent[1].
@@ -30678,7 +31143,7 @@ function intervalScaleGetTicks(interval, extent, niceTickExtent, intervalPrecisi
  * Interval scale
  * @module echarts/scale/Interval
  */
-var roundNumber = round$2;
+var roundNumber = round$1;
 /**
  * @alias module:echarts/coord/scale/Interval
  * @constructor
@@ -31054,101 +31519,7 @@ function retrieveColumnLayout(barWidthAndOffset, axis, seriesModel) {
  * @param {module:echarts/model/Global} ecModel
  */
 
-function layout(seriesType, ecModel) {
-  var seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
-  var barWidthAndOffset = makeColumnLayout(seriesModels);
-  var lastStackCoords = {};
-  each$1(seriesModels, function (seriesModel) {
-    var data = seriesModel.getData();
-    var cartesian = seriesModel.coordinateSystem;
-    var baseAxis = cartesian.getBaseAxis();
-    var stackId = getSeriesStackId(seriesModel);
-    var columnLayoutInfo = barWidthAndOffset[getAxisKey(baseAxis)][stackId];
-    var columnOffset = columnLayoutInfo.offset;
-    var columnWidth = columnLayoutInfo.width;
-    var valueAxis = cartesian.getOtherAxis(baseAxis);
-    var barMinHeight = seriesModel.get('barMinHeight') || 0;
-    lastStackCoords[stackId] = lastStackCoords[stackId] || [];
-    data.setLayout({
-      offset: columnOffset,
-      size: columnWidth
-    });
-    var valueDim = data.mapDimension(valueAxis.dim);
-    var baseDim = data.mapDimension(baseAxis.dim);
-    var stacked = isDimensionStacked(data, valueDim
-    /*, baseDim*/
-    );
-    var isValueAxisH = valueAxis.isHorizontal();
-    var valueAxisStart = getValueAxisStart(baseAxis, valueAxis, stacked);
-
-    for (var idx = 0, len = data.count(); idx < len; idx++) {
-      var value = data.get(valueDim, idx);
-      var baseValue = data.get(baseDim, idx);
-
-      if (isNaN(value)) {
-        continue;
-      }
-
-      var sign = value >= 0 ? 'p' : 'n';
-      var baseCoord = valueAxisStart; // Because of the barMinHeight, we can not use the value in
-      // stackResultDimension directly.
-
-      if (stacked) {
-        // Only ordinal axis can be stacked.
-        if (!lastStackCoords[stackId][baseValue]) {
-          lastStackCoords[stackId][baseValue] = {
-            p: valueAxisStart,
-            // Positive stack
-            n: valueAxisStart // Negative stack
-
-          };
-        } // Should also consider #4243
-
-
-        baseCoord = lastStackCoords[stackId][baseValue][sign];
-      }
-
-      var x;
-      var y;
-      var width;
-      var height;
-
-      if (isValueAxisH) {
-        var coord = cartesian.dataToPoint([value, baseValue]);
-        x = baseCoord;
-        y = coord[1] + columnOffset;
-        width = coord[0] - valueAxisStart;
-        height = columnWidth;
-
-        if (Math.abs(width) < barMinHeight) {
-          width = (width < 0 ? -1 : 1) * barMinHeight;
-        }
-
-        stacked && (lastStackCoords[stackId][baseValue][sign] += width);
-      } else {
-        var coord = cartesian.dataToPoint([baseValue, value]);
-        x = coord[0] + columnOffset;
-        y = baseCoord;
-        width = columnWidth;
-        height = coord[1] - valueAxisStart;
-
-        if (Math.abs(height) < barMinHeight) {
-          // Include zero to has a positive bar
-          height = (height <= 0 ? -1 : 1) * barMinHeight;
-        }
-
-        stacked && (lastStackCoords[stackId][baseValue][sign] += height);
-      }
-
-      data.setItemLayout(idx, {
-        x: x,
-        y: y,
-        width: width,
-        height: height
-      });
-    }
-  }, this);
-} // TODO: Do not support stack in large mode yet.
+ // TODO: Do not support stack in large mode yet.
 
 var largeLayout = {
   seriesType: 'bar',
@@ -31178,22 +31549,28 @@ var largeLayout = {
     };
 
     function progress(params, data) {
-      var largePoints = new LargeArr(params.count * 2);
+      var count = params.count;
+      var largePoints = new LargeArr(count * 2);
+      var largeDataIndices = new LargeArr(count);
       var dataIndex;
       var coord = [];
       var valuePair = [];
-      var offset = 0;
+      var pointsOffset = 0;
+      var idxOffset = 0;
 
       while ((dataIndex = params.next()) != null) {
         valuePair[valueDimIdx] = data.get(valueDim, dataIndex);
         valuePair[1 - valueDimIdx] = data.get(baseDim, dataIndex);
-        coord = cartesian.dataToPoint(valuePair, null, coord);
-        largePoints[offset++] = coord[0];
-        largePoints[offset++] = coord[1];
+        coord = cartesian.dataToPoint(valuePair, null, coord); // Data index might not be in order, depends on `progressiveChunkMode`.
+
+        largePoints[pointsOffset++] = coord[0];
+        largePoints[pointsOffset++] = coord[1];
+        largeDataIndices[idxOffset++] = dataIndex;
       }
 
       data.setLayout({
         largePoints: largePoints,
+        largeDataIndices: largeDataIndices,
         barWidth: barWidth,
         valueAxisStart: getValueAxisStart(baseAxis, valueAxis, false),
         valueAxisHorizontal: valueAxisHorizontal
@@ -31330,11 +31707,11 @@ var TimeScale = IntervalScale.extend({
     var interval = this._interval;
 
     if (!opt.fixMin) {
-      extent[0] = round$2(mathFloor(extent[0] / interval) * interval);
+      extent[0] = round$1(mathFloor(extent[0] / interval) * interval);
     }
 
     if (!opt.fixMax) {
-      extent[1] = round$2(mathCeil(extent[1] / interval) * interval);
+      extent[1] = round$1(mathCeil(extent[1] / interval) * interval);
     }
   },
 
@@ -31467,7 +31844,7 @@ TimeScale.create = function (model) {
 var scaleProto$1 = Scale.prototype;
 var intervalScaleProto$1 = IntervalScale.prototype;
 var getPrecisionSafe$1 = getPrecisionSafe;
-var roundingErrorFix = round$2;
+var roundingErrorFix = round$1;
 var mathFloor$1 = Math.floor;
 var mathCeil$1 = Math.ceil;
 var mathPow$1 = Math.pow;
@@ -31488,7 +31865,7 @@ var LogScale = Scale.extend({
     var extent = this._extent;
     var originalExtent = originalScale.getExtent();
     return map(intervalScaleProto$1.getTicks.call(this), function (val) {
-      var powVal = round$2(mathPow$1(this.base, val)); // Fix #4158
+      var powVal = round$1(mathPow$1(this.base, val)); // Fix #4158
 
       powVal = val === extent[0] && originalScale.__fixMin ? fixRoundingError(powVal, originalExtent[0]) : powVal;
       powVal = val === extent[1] && originalScale.__fixMax ? fixRoundingError(powVal, originalExtent[1]) : powVal;
@@ -31584,7 +31961,7 @@ var LogScale = Scale.extend({
       interval *= 10;
     }
 
-    var niceExtent = [round$2(mathCeil$1(extent[0] / interval) * interval), round$2(mathFloor$1(extent[1] / interval) * interval)];
+    var niceExtent = [round$1(mathCeil$1(extent[0] / interval) * interval), round$1(mathFloor$1(extent[1] / interval) * interval)];
     this._interval = interval;
     this._niceExtent = niceExtent;
   },
@@ -31850,12 +32227,7 @@ function createScaleByModel(model, axisType) {
  * Check if the axis corss 0
  */
 
-function ifAxisCrossZero(axis) {
-  var dataExtent = axis.scale.getExtent();
-  var min = dataExtent[0];
-  var max = dataExtent[1];
-  return !(min > 0 && max > 0 || min < 0 && max < 0);
-}
+
 /**
  * @param {module:echarts/coord/Axis} axis
  * @return {Function} Label formatter function.
@@ -31912,56 +32284,8 @@ function getAxisRawValue(axis, value) {
  * @return {module:zrender/core/BoundingRect} Be null/undefined if no labels.
  */
 
-function estimateLabelUnionRect(axis) {
-  var axisModel = axis.model;
-  var scale = axis.scale;
 
-  if (!axisModel.get('axisLabel.show') || scale.isBlank()) {
-    return;
-  }
 
-  var isCategory = axis.type === 'category';
-  var realNumberScaleTicks;
-  var tickCount;
-  var categoryScaleExtent = scale.getExtent(); // Optimize for large category data, avoid call `getTicks()`.
-
-  if (isCategory) {
-    tickCount = scale.count();
-  } else {
-    realNumberScaleTicks = scale.getTicks();
-    tickCount = realNumberScaleTicks.length;
-  }
-
-  var axisLabelModel = axis.getLabelModel();
-  var labelFormatter = makeLabelFormatter(axis);
-  var rect;
-  var step = 1; // Simple optimization for large amount of labels
-
-  if (tickCount > 40) {
-    step = Math.ceil(tickCount / 40);
-  }
-
-  for (var i = 0; i < tickCount; i += step) {
-    var tickValue = realNumberScaleTicks ? realNumberScaleTicks[i] : categoryScaleExtent[0] + i;
-    var label = labelFormatter(tickValue);
-    var unrotatedSingleRect = axisLabelModel.getTextRect(label);
-    var singleRect = rotateTextRect(unrotatedSingleRect, axisLabelModel.get('rotate') || 0);
-    rect ? rect.union(singleRect) : rect = singleRect;
-  }
-
-  return rect;
-}
-
-function rotateTextRect(textRect, rotate) {
-  var rotateRadians = rotate * Math.PI / 180;
-  var boundingBox = textRect.plain();
-  var beforeWidth = boundingBox.width;
-  var beforeHeight = boundingBox.height;
-  var afterWidth = beforeWidth * Math.cos(rotateRadians) + beforeHeight * Math.sin(rotateRadians);
-  var afterHeight = beforeWidth * Math.sin(rotateRadians) + beforeHeight * Math.cos(rotateRadians);
-  var rotatedRect = new BoundingRect(boundingBox.x, boundingBox.y, afterWidth, afterHeight);
-  return rotatedRect;
-}
 /**
  * @param {module:echarts/src/model/Model} model axisLabelModel or axisTickModel
  * @return {number|String} Can be null|'auto'|number|function
@@ -32285,21 +32609,22 @@ var SymbolClz = extendShape({
     width: 0,
     height: 0
   },
-  beforeBrush: function () {
-    var style = this.style;
-    var shape = this.shape; // FIXME
+  calculateTextPosition: function (out, style, rect) {
+    var res = calculateTextPosition(out, style, rect);
+    var shape = this.shape;
 
-    if (shape.symbolType === 'pin' && style.textPosition === 'inside') {
-      style.textPosition = ['50%', '40%'];
-      style.textAlign = 'center';
-      style.textVerticalAlign = 'middle';
+    if (shape && shape.symbolType === 'pin' && style.textPosition === 'inside') {
+      res.y = rect.y + rect.height * 0.4;
     }
+
+    return res;
   },
   buildPath: function (ctx, shape, inBundle) {
     var symbolType = shape.symbolType;
-    var proxySymbol = symbolBuildProxies[symbolType];
 
-    if (shape.symbolType !== 'none') {
+    if (symbolType !== 'none') {
+      var proxySymbol = symbolBuildProxies[symbolType];
+
       if (!proxySymbol) {
         // Default rect
         symbolType = 'rect';
@@ -33086,7 +33411,7 @@ function makeLabelsByNumericCategoryInterval(axis, categoryInterval, onlyTick) {
     addItem(tickValue);
   }
 
-  if (includeMaxLabel && tickValue !== ordinalExtent[1]) {
+  if (includeMaxLabel && tickValue - step !== ordinalExtent[1]) {
     addItem(ordinalExtent[1]);
   }
 
@@ -33473,9 +33798,9 @@ var ecUtil = {};
 each$1(['map', 'each', 'filter', 'indexOf', 'inherits', 'reduce', 'filter', 'bind', 'curry', 'isArray', 'isString', 'isObject', 'isFunction', 'extend', 'defaults', 'clone', 'merge'], function (name) {
   ecUtil[name] = zrUtil[name];
 });
-var graphic = {};
+var graphic$1 = {};
 each$1(['extendShape', 'extendPath', 'makePath', 'makeImage', 'mergePath', 'resizePath', 'createIcon', 'setHoverStyle', 'setLabelStyle', 'setTextStyle', 'setText', 'getFont', 'updateProps', 'initProps', 'getTransform', 'clipPointsByRect', 'clipRectByRect', 'Group', 'Image', 'Text', 'Circle', 'Sector', 'Ring', 'Polygon', 'Polyline', 'Rect', 'Line', 'BezierCurve', 'Arc', 'IncrementalDisplayable', 'CompoundPath', 'LinearGradient', 'RadialGradient', 'BoundingRect'], function (name) {
-  graphic[name] = graphicUtil[name];
+  graphic$1[name] = graphic[name];
 });
 
 /*
@@ -33496,102 +33821,32 @@ each$1(['extendShape', 'extendPath', 'makePath', 'makeImage', 'mergePath', 'resi
 * specific language governing permissions and limitations
 * under the License.
 */
-
 /**
- * Cartesian coordinate system
- * @module  echarts/coord/Cartesian
+ * [Usage]:
+ * (1)
+ * createListSimply(seriesModel, ['value']);
+ * (2)
+ * createListSimply(seriesModel, {
+ *     coordDimensions: ['value'],
+ *     dimensionsCount: 5
+ * });
  *
- */
-function dimAxisMapper(dim) {
-  return this._axes[dim];
-}
-/**
- * @alias module:echarts/coord/Cartesian
- * @constructor
+ * @param {module:echarts/model/Series} seriesModel
+ * @param {Object|Array.<string|Object>} opt opt or coordDimensions
+ *        The options in opt, see `echarts/data/helper/createDimensions`
+ * @param {Array.<string>} [nameList]
+ * @return {module:echarts/data/List}
  */
 
-
-var Cartesian = function (name) {
-  this._axes = {};
-  this._dimList = [];
-  /**
-   * @type {string}
-   */
-
-  this.name = name || '';
-};
-
-Cartesian.prototype = {
-  constructor: Cartesian,
-  type: 'cartesian',
-
-  /**
-   * Get axis
-   * @param  {number|string} dim
-   * @return {module:echarts/coord/Cartesian~Axis}
-   */
-  getAxis: function (dim) {
-    return this._axes[dim];
-  },
-
-  /**
-   * Get axes list
-   * @return {Array.<module:echarts/coord/Cartesian~Axis>}
-   */
-  getAxes: function () {
-    return map(this._dimList, dimAxisMapper, this);
-  },
-
-  /**
-   * Get axes list by given scale type
-   */
-  getAxesByScale: function (scaleType) {
-    scaleType = scaleType.toLowerCase();
-    return filter(this.getAxes(), function (axis) {
-      return axis.scale.type === scaleType;
-    });
-  },
-
-  /**
-   * Add axis
-   * @param {module:echarts/coord/Cartesian.Axis}
-   */
-  addAxis: function (axis) {
-    var dim = axis.dim;
-    this._axes[dim] = axis;
-
-    this._dimList.push(dim);
-  },
-
-  /**
-   * Convert data to coord in nd space
-   * @param {Array.<number>|Object.<string, number>} val
-   * @return {Array.<number>|Object.<string, number>}
-   */
-  dataToCoord: function (val) {
-    return this._dataCoordConvert(val, 'dataToCoord');
-  },
-
-  /**
-   * Convert coord in nd space to data
-   * @param  {Array.<number>|Object.<string, number>} val
-   * @return {Array.<number>|Object.<string, number>}
-   */
-  coordToData: function (val) {
-    return this._dataCoordConvert(val, 'coordToData');
-  },
-  _dataCoordConvert: function (input, method) {
-    var dimList = this._dimList;
-    var output = input instanceof Array ? [] : {};
-
-    for (var i = 0; i < dimList.length; i++) {
-      var dim = dimList[i];
-      var axis = this._axes[dim];
-      output[dim] = axis[method](input[dim]);
-    }
-
-    return output;
-  }
+var createListSimply = function (seriesModel, opt, nameList) {
+  opt = isArray(opt) && {
+    coordDimensions: opt
+  } || extend({}, opt);
+  var source = seriesModel.getSource();
+  var dimensionsInfo = createDimensions(source, opt);
+  var list = new List(dimensionsInfo, seriesModel);
+  list.initData(source, nameList);
+  return list;
 };
 
 /*
@@ -33612,226 +33867,89 @@ Cartesian.prototype = {
 * specific language governing permissions and limitations
 * under the License.
 */
-function Cartesian2D(name) {
-  Cartesian.call(this, name);
-}
 
-Cartesian2D.prototype = {
-  constructor: Cartesian2D,
-  type: 'cartesian2d',
-
+/**
+ * Data selectable mixin for chart series.
+ * To eanble data select, option of series must have `selectedMode`.
+ * And each data item will use `selected` to toggle itself selected status
+ */
+var dataSelectableMixin = {
   /**
-   * @type {Array.<string>}
-   * @readOnly
+   * @param {Array.<Object>} targetList [{name, value, selected}, ...]
+   *        If targetList is an array, it should like [{name: ..., value: ...}, ...].
+   *        If targetList is a "List", it must have coordDim: 'value' dimension and name.
    */
-  dimensions: ['x', 'y'],
+  updateSelectedMap: function (targetList) {
+    this._targetList = isArray(targetList) ? targetList.slice() : [];
+    this._selectTargetMap = reduce(targetList || [], function (targetMap, target) {
+      targetMap.set(target.name, target);
+      return targetMap;
+    }, createHashMap());
+  },
 
   /**
-   * Base axis will be used on stacking.
+   * Either name or id should be passed as input here.
+   * If both of them are defined, id is used.
    *
-   * @return {module:echarts/coord/cartesian/Axis2D}
+   * @param {string|undefined} name name of data
+   * @param {number|undefined} id dataIndex of data
    */
-  getBaseAxis: function () {
-    return this.getAxesByScale('ordinal')[0] || this.getAxesByScale('time')[0] || this.getAxis('x');
+  // PENGING If selectedMode is null ?
+  select: function (name, id) {
+    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name);
+    var selectedMode = this.get('selectedMode');
+
+    if (selectedMode === 'single') {
+      this._selectTargetMap.each(function (target) {
+        target.selected = false;
+      });
+    }
+
+    target && (target.selected = true);
   },
 
   /**
-   * If contain point
-   * @param {Array.<number>} point
-   * @return {boolean}
-   */
-  containPoint: function (point) {
-    var axisX = this.getAxis('x');
-    var axisY = this.getAxis('y');
-    return axisX.contain(axisX.toLocalCoord(point[0])) && axisY.contain(axisY.toLocalCoord(point[1]));
-  },
-
-  /**
-   * If contain data
-   * @param {Array.<number>} data
-   * @return {boolean}
-   */
-  containData: function (data) {
-    return this.getAxis('x').containData(data[0]) && this.getAxis('y').containData(data[1]);
-  },
-
-  /**
-   * @param {Array.<number>} data
-   * @param {Array.<number>} out
-   * @return {Array.<number>}
-   */
-  dataToPoint: function (data, reserved, out) {
-    var xAxis = this.getAxis('x');
-    var yAxis = this.getAxis('y');
-    out = out || [];
-    out[0] = xAxis.toGlobalCoord(xAxis.dataToCoord(data[0]));
-    out[1] = yAxis.toGlobalCoord(yAxis.dataToCoord(data[1]));
-    return out;
-  },
-
-  /**
-   * @param {Array.<number>} data
-   * @param {Array.<number>} out
-   * @return {Array.<number>}
-   */
-  clampData: function (data, out) {
-    var xScale = this.getAxis('x').scale;
-    var yScale = this.getAxis('y').scale;
-    var xAxisExtent = xScale.getExtent();
-    var yAxisExtent = yScale.getExtent();
-    var x = xScale.parse(data[0]);
-    var y = yScale.parse(data[1]);
-    out = out || [];
-    out[0] = Math.min(Math.max(Math.min(xAxisExtent[0], xAxisExtent[1]), x), Math.max(xAxisExtent[0], xAxisExtent[1]));
-    out[1] = Math.min(Math.max(Math.min(yAxisExtent[0], yAxisExtent[1]), y), Math.max(yAxisExtent[0], yAxisExtent[1]));
-    return out;
-  },
-
-  /**
-   * @param {Array.<number>} point
-   * @param {Array.<number>} out
-   * @return {Array.<number>}
-   */
-  pointToData: function (point, out) {
-    var xAxis = this.getAxis('x');
-    var yAxis = this.getAxis('y');
-    out = out || [];
-    out[0] = xAxis.coordToData(xAxis.toLocalCoord(point[0]));
-    out[1] = yAxis.coordToData(yAxis.toLocalCoord(point[1]));
-    return out;
-  },
-
-  /**
-   * Get other axis
-   * @param {module:echarts/coord/cartesian/Axis2D} axis
-   */
-  getOtherAxis: function (axis) {
-    return this.getAxis(axis.dim === 'x' ? 'y' : 'x');
-  }
-};
-inherits(Cartesian2D, Cartesian);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * Extend axis 2d
- * @constructor module:echarts/coord/cartesian/Axis2D
- * @extends {module:echarts/coord/cartesian/Axis}
- * @param {string} dim
- * @param {*} scale
- * @param {Array.<number>} coordExtent
- * @param {string} axisType
- * @param {string} position
- */
-
-var Axis2D = function (dim, scale, coordExtent, axisType, position) {
-  Axis.call(this, dim, scale, coordExtent);
-  /**
-   * Axis type
-   *  - 'category'
-   *  - 'value'
-   *  - 'time'
-   *  - 'log'
-   * @type {string}
-   */
-
-  this.type = axisType || 'value';
-  /**
-   * Axis position
-   *  - 'top'
-   *  - 'bottom'
-   *  - 'left'
-   *  - 'right'
-   */
-
-  this.position = position || 'bottom';
-};
-
-Axis2D.prototype = {
-  constructor: Axis2D,
-
-  /**
-   * Index of axis, can be used as key
-   */
-  index: 0,
-
-  /**
-   * Implemented in <module:echarts/coord/cartesian/Grid>.
-   * @return {Array.<module:echarts/coord/cartesian/Axis2D>}
-   *         If not on zero of other axis, return null/undefined.
-   *         If no axes, return an empty array.
-   */
-  getAxesOnZeroOf: null,
-
-  /**
-   * Axis model
-   * @param {module:echarts/coord/cartesian/AxisModel}
-   */
-  model: null,
-  isHorizontal: function () {
-    var position = this.position;
-    return position === 'top' || position === 'bottom';
-  },
-
-  /**
-   * Each item cooresponds to this.getExtent(), which
-   * means globalExtent[0] may greater than globalExtent[1],
-   * unless `asc` is input.
+   * Either name or id should be passed as input here.
+   * If both of them are defined, id is used.
    *
-   * @param {boolean} [asc]
-   * @return {Array.<number>}
+   * @param {string|undefined} name name of data
+   * @param {number|undefined} id dataIndex of data
    */
-  getGlobalExtent: function (asc) {
-    var ret = this.getExtent();
-    ret[0] = this.toGlobalCoord(ret[0]);
-    ret[1] = this.toGlobalCoord(ret[1]);
-    asc && ret[0] > ret[1] && ret.reverse();
-    return ret;
-  },
-  getOtherAxis: function () {
-    this.grid.getOtherAxis();
+  unSelect: function (name, id) {
+    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name); // var selectedMode = this.get('selectedMode');
+    // selectedMode !== 'single' && target && (target.selected = false);
+
+    target && (target.selected = false);
   },
 
   /**
-   * @override
+   * Either name or id should be passed as input here.
+   * If both of them are defined, id is used.
+   *
+   * @param {string|undefined} name name of data
+   * @param {number|undefined} id dataIndex of data
    */
-  pointToData: function (point, clamp) {
-    return this.coordToData(this.toLocalCoord(point[this.dim === 'x' ? 0 : 1]), clamp);
+  toggleSelected: function (name, id) {
+    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name);
+
+    if (target != null) {
+      this[target.selected ? 'unSelect' : 'select'](name, id);
+      return target.selected;
+    }
   },
 
   /**
-   * Transform global coord to local coord,
-   * i.e. var localCoord = axis.toLocalCoord(80);
-   * designate by module:echarts/coord/cartesian/Grid.
-   * @type {Function}
+   * Either name or id should be passed as input here.
+   * If both of them are defined, id is used.
+   *
+   * @param {string|undefined} name name of data
+   * @param {number|undefined} id dataIndex of data
    */
-  toLocalCoord: null,
-
-  /**
-   * Transform global coord to local coord,
-   * i.e. var globalCoord = axis.toLocalCoord(40);
-   * designate by module:echarts/coord/cartesian/Grid.
-   * @type {Function}
-   */
-  toGlobalCoord: null
+  isSelected: function (name, id) {
+    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name);
+    return target && target.selected;
+  }
 };
-inherits(Axis2D, Axis);
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -33851,363 +33969,129 @@ inherits(Axis2D, Axis);
 * specific language governing permissions and limitations
 * under the License.
 */
-var defaultOption = {
-  show: true,
-  zlevel: 0,
-  z: 0,
-  // Inverse the axis.
-  inverse: false,
-  // Axis name displayed.
-  name: '',
-  // 'start' | 'middle' | 'end'
-  nameLocation: 'end',
-  // By degree. By defualt auto rotate by nameLocation.
-  nameRotate: null,
-  nameTruncate: {
-    maxWidth: null,
-    ellipsis: '...',
-    placeholder: '.'
+var PieSeries = extendSeriesModel({
+  type: 'series.pie',
+  // Overwrite
+  init: function (option) {
+    PieSeries.superApply(this, 'init', arguments); // Enable legend selection for each data item
+    // Use a function instead of direct access because data reference may changed
+
+    this.legendDataProvider = function () {
+      return this.getRawData();
+    };
+
+    this.updateSelectedMap(this._createSelectableList());
+
+    this._defaultLabelLine(option);
   },
-  // Use global text style by default.
-  nameTextStyle: {},
-  // The gap between axisName and axisLine.
-  nameGap: 15,
-  // Default `false` to support tooltip.
-  silent: false,
-  // Default `false` to avoid legacy user event listener fail.
-  triggerEvent: false,
-  tooltip: {
-    show: false
+  // Overwrite
+  mergeOption: function (newOption) {
+    PieSeries.superCall(this, 'mergeOption', newOption);
+    this.updateSelectedMap(this._createSelectableList());
   },
-  axisPointer: {},
-  axisLine: {
-    show: true,
-    onZero: true,
-    onZeroAxisIndex: null,
-    lineStyle: {
-      color: '#333',
-      width: 1,
-      type: 'solid'
-    },
-    // The arrow at both ends the the axis.
-    symbol: ['none', 'none'],
-    symbolSize: [10, 15]
+  getInitialData: function (option, ecModel) {
+    return createListSimply(this, ['value']);
   },
-  axisTick: {
-    show: true,
-    // Whether axisTick is inside the grid or outside the grid.
-    inside: false,
-    // The length of axisTick.
-    length: 5,
-    lineStyle: {
-      width: 1
+  _createSelectableList: function () {
+    var data = this.getRawData();
+    var valueDim = data.mapDimension('value');
+    var targetList = [];
+
+    for (var i = 0, len = data.count(); i < len; i++) {
+      targetList.push({
+        name: data.getName(i),
+        value: data.get(valueDim, i),
+        selected: retrieveRawAttr(data, i, 'selected')
+      });
     }
+
+    return targetList;
   },
-  axisLabel: {
-    show: true,
-    // Whether axisLabel is inside the grid or outside the grid.
-    inside: false,
-    rotate: 0,
-    // true | false | null/undefined (auto)
-    showMinLabel: null,
-    // true | false | null/undefined (auto)
-    showMaxLabel: null,
-    margin: 8,
-    // formatter: null,
-    fontSize: 12
-  },
-  splitLine: {
-    show: true,
-    lineStyle: {
-      color: ['#ccc'],
-      width: 1,
-      type: 'solid'
-    }
-  },
-  splitArea: {
-    show: false,
-    areaStyle: {
-      color: ['rgba(250,250,250,0.3)', 'rgba(200,200,200,0.3)']
-    }
-  }
-};
-var axisDefault = {};
-axisDefault.categoryAxis = merge({
-  // The gap at both ends of the axis. For categoryAxis, boolean.
-  boundaryGap: true,
-  // Set false to faster category collection.
-  // Only usefull in the case like: category is
-  // ['2012-01-01', '2012-01-02', ...], where the input
-  // data has been ensured not duplicate and is large data.
-  // null means "auto":
-  // if axis.data provided, do not deduplication,
-  // else do deduplication.
-  deduplication: null,
-  // splitArea: {
-  // show: false
-  // },
-  splitLine: {
-    show: false
-  },
-  axisTick: {
-    // If tick is align with label when boundaryGap is true
-    alignWithLabel: false,
-    interval: 'auto'
-  },
-  axisLabel: {
-    interval: 'auto'
-  }
-}, defaultOption);
-axisDefault.valueAxis = merge({
-  // The gap at both ends of the axis. For value axis, [GAP, GAP], where
-  // `GAP` can be an absolute pixel number (like `35`), or percent (like `'30%'`)
-  boundaryGap: [0, 0],
-  // TODO
-  // min/max: [30, datamin, 60] or [20, datamin] or [datamin, 60]
-  // Min value of the axis. can be:
-  // + a number
-  // + 'dataMin': use the min value in data.
-  // + null/undefined: auto decide min value (consider pretty look and boundaryGap).
-  // min: null,
-  // Max value of the axis. can be:
-  // + a number
-  // + 'dataMax': use the max value in data.
-  // + null/undefined: auto decide max value (consider pretty look and boundaryGap).
-  // max: null,
-  // Readonly prop, specifies start value of the range when using data zoom.
-  // rangeStart: null
-  // Readonly prop, specifies end value of the range when using data zoom.
-  // rangeEnd: null
-  // Optional value can be:
-  // + `false`: always include value 0.
-  // + `true`: the extent do not consider value 0.
-  // scale: false,
-  // AxisTick and axisLabel and splitLine are caculated based on splitNumber.
-  splitNumber: 5 // Interval specifies the span of the ticks is mandatorily.
-  // interval: null
-  // Specify min interval when auto calculate tick interval.
-  // minInterval: null
-  // Specify max interval when auto calculate tick interval.
-  // maxInterval: null
+  // Overwrite
+  getDataParams: function (dataIndex) {
+    var data = this.getData();
+    var params = PieSeries.superCall(this, 'getDataParams', dataIndex); // FIXME toFixed?
 
-}, defaultOption);
-axisDefault.timeAxis = defaults({
-  scale: true,
-  min: 'dataMin',
-  max: 'dataMax'
-}, axisDefault.valueAxis);
-axisDefault.logAxis = defaults({
-  scale: true,
-  logBase: 10
-}, axisDefault.valueAxis);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var AXIS_TYPES = ['value', 'category', 'time', 'log'];
-/**
- * Generate sub axis model class
- * @param {string} axisName 'x' 'y' 'radius' 'angle' 'parallel'
- * @param {module:echarts/model/Component} BaseAxisModelClass
- * @param {Function} axisTypeDefaulter
- * @param {Object} [extraDefaultOption]
- */
-
-var axisModelCreator = function (axisName, BaseAxisModelClass, axisTypeDefaulter, extraDefaultOption) {
-  each$1(AXIS_TYPES, function (axisType) {
-    BaseAxisModelClass.extend({
-      /**
-       * @readOnly
-       */
-      type: axisName + 'Axis.' + axisType,
-      mergeDefaultAndTheme: function (option, ecModel) {
-        var layoutMode = this.layoutMode;
-        var inputPositionParams = layoutMode ? getLayoutParams(option) : {};
-        var themeModel = ecModel.getTheme();
-        merge(option, themeModel.get(axisType + 'Axis'));
-        merge(option, this.getDefaultOption());
-        option.type = axisTypeDefaulter(axisName, option);
-
-        if (layoutMode) {
-          mergeLayoutParam(option, inputPositionParams, layoutMode);
-        }
-      },
-
-      /**
-       * @override
-       */
-      optionUpdated: function () {
-        var thisOption = this.option;
-
-        if (thisOption.type === 'category') {
-          this.__ordinalMeta = OrdinalMeta.createByAxisModel(this);
-        }
-      },
-
-      /**
-       * Should not be called before all of 'getInitailData' finished.
-       * Because categories are collected during initializing data.
-       */
-      getCategories: function (rawData) {
-        var option = this.option; // FIXME
-        // warning if called before all of 'getInitailData' finished.
-
-        if (option.type === 'category') {
-          if (rawData) {
-            return option.data;
-          }
-
-          return this.__ordinalMeta.categories;
-        }
-      },
-      getOrdinalMeta: function () {
-        return this.__ordinalMeta;
-      },
-      defaultOption: mergeAll([{}, axisDefault[axisType + 'Axis'], extraDefaultOption], true)
+    var valueList = [];
+    data.each(data.mapDimension('value'), function (value) {
+      valueList.push(value);
     });
-  });
-  ComponentModel.registerSubTypeDefaulter(axisName + 'Axis', curry(axisTypeDefaulter, axisName));
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var AxisModel = ComponentModel.extend({
-  type: 'cartesian2dAxis',
-
-  /**
-   * @type {module:echarts/coord/cartesian/Axis2D}
-   */
-  axis: null,
-
-  /**
-   * @override
-   */
-  init: function () {
-    AxisModel.superApply(this, 'init', arguments);
-    this.resetRange();
+    params.percent = getPercentWithPrecision(valueList, dataIndex, data.hostModel.get('percentPrecision'));
+    params.$vars.push('percent');
+    return params;
   },
+  _defaultLabelLine: function (option) {
+    // Extend labelLine emphasis
+    defaultEmphasis(option, 'labelLine', ['show']);
+    var labelLineNormalOpt = option.labelLine;
+    var labelLineEmphasisOpt = option.emphasis.labelLine; // Not show label line if `label.normal.show = false`
 
-  /**
-   * @override
-   */
-  mergeOption: function () {
-    AxisModel.superApply(this, 'mergeOption', arguments);
-    this.resetRange();
+    labelLineNormalOpt.show = labelLineNormalOpt.show && option.label.show;
+    labelLineEmphasisOpt.show = labelLineEmphasisOpt.show && option.emphasis.label.show;
   },
-
-  /**
-   * @override
-   */
-  restoreData: function () {
-    AxisModel.superApply(this, 'restoreData', arguments);
-    this.resetRange();
-  },
-
-  /**
-   * @override
-   * @return {module:echarts/model/Component}
-   */
-  getCoordSysModel: function () {
-    return this.ecModel.queryComponents({
-      mainType: 'grid',
-      index: this.option.gridIndex,
-      id: this.option.gridId
-    })[0];
-  }
-});
-
-function getAxisType(axisDim, option) {
-  // Default axis with data is category axis
-  return option.type || (option.data ? 'category' : 'value');
-}
-
-merge(AxisModel.prototype, axisModelCommonMixin);
-var extraOption = {
-  // gridIndex: 0,
-  // gridId: '',
-  // Offset is for multiple axis on the same position
-  offset: 0
-};
-axisModelCreator('x', AxisModel, getAxisType, extraOption);
-axisModelCreator('y', AxisModel, getAxisType, extraOption);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Grid 是在有直角坐标系的时候必须要存在的
-// 所以这里也要被 Cartesian2D 依赖
-ComponentModel.extend({
-  type: 'grid',
-  dependencies: ['xAxis', 'yAxis'],
-  layoutMode: 'box',
-
-  /**
-   * @type {module:echarts/coord/cartesian/Grid}
-   */
-  coordinateSystem: null,
   defaultOption: {
-    show: false,
     zlevel: 0,
-    z: 0,
-    left: '10%',
-    top: 60,
-    right: '10%',
-    bottom: 60,
-    // If grid size contain label
-    containLabel: false,
-    // width: {totalWidth} - left - right,
-    // height: {totalHeight} - top - bottom,
-    backgroundColor: 'rgba(0,0,0,0)',
-    borderWidth: 1,
-    borderColor: '#ccc'
+    z: 2,
+    legendHoverLink: true,
+    hoverAnimation: true,
+    // 默认全局居中
+    center: ['50%', '50%'],
+    radius: [0, '75%'],
+    // 默认顺时针
+    clockwise: true,
+    startAngle: 90,
+    // 最小角度改为0
+    minAngle: 0,
+    // If the angle of a sector less than `minShowLabelAngle`,
+    // the label will not be displayed.
+    minShowLabelAngle: 0,
+    // 选中时扇区偏移量
+    selectedOffset: 10,
+    // 高亮扇区偏移量
+    hoverOffset: 10,
+    // If use strategy to avoid label overlapping
+    avoidLabelOverlap: true,
+    // 选择模式，默认关闭，可选single，multiple
+    // selectedMode: false,
+    // 南丁格尔玫瑰图模式，'radius'（半径） | 'area'（面积）
+    // roseType: null,
+    percentPrecision: 2,
+    // If still show when all data zero.
+    stillShowZeroSum: true,
+    // cursor: null,
+    label: {
+      // If rotate around circle
+      rotate: false,
+      show: true,
+      // 'outer', 'inside', 'center'
+      position: 'outer' // formatter: 标签文本格式器，同Tooltip.formatter，不支持异步回调
+      // 默认使用全局文本样式，详见TEXTSTYLE
+      // distance: 当position为inner时有效，为label位置到圆心的距离与圆半径(环状图为内外半径和)的比例系数
+
+    },
+    // Enabled when label.normal.position is 'outer'
+    labelLine: {
+      show: true,
+      // 引导线两段中的第一段长度
+      length: 15,
+      // 引导线两段中的第二段长度
+      length2: 15,
+      smooth: false,
+      lineStyle: {
+        // color: 各异,
+        width: 1,
+        type: 'solid'
+      }
+    },
+    itemStyle: {
+      borderWidth: 1
+    },
+    // Animation type canbe expansion, scale
+    animationType: 'expansion',
+    animationEasing: 'cubicOut'
   }
 });
+mixin(PieSeries, dataSelectableMixin);
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -34227,548 +34111,681 @@ ComponentModel.extend({
 * specific language governing permissions and limitations
 * under the License.
 */
-
 /**
- * Grid is a region which contains at most 4 cartesian systems
- *
- * TODO Default cartesian
- */
-/**
- * Check if the axis is used in the specified grid
+ * @param {module:echarts/model/Series} seriesModel
+ * @param {boolean} hasAnimation
  * @inner
  */
 
-function isAxisUsedInTheGrid(axisModel, gridModel, ecModel) {
-  return axisModel.getCoordSysModel() === gridModel;
+function updateDataSelected(uid, seriesModel, hasAnimation, api) {
+  var data = seriesModel.getData();
+  var dataIndex = this.dataIndex;
+  var name = data.getName(dataIndex);
+  var selectedOffset = seriesModel.get('selectedOffset');
+  api.dispatchAction({
+    type: 'pieToggleSelect',
+    from: uid,
+    name: name,
+    seriesId: seriesModel.id
+  });
+  data.each(function (idx) {
+    toggleItemSelected(data.getItemGraphicEl(idx), data.getItemLayout(idx), seriesModel.isSelected(data.getName(idx)), selectedOffset, hasAnimation);
+  });
+}
+/**
+ * @param {module:zrender/graphic/Sector} el
+ * @param {Object} layout
+ * @param {boolean} isSelected
+ * @param {number} selectedOffset
+ * @param {boolean} hasAnimation
+ * @inner
+ */
+
+
+function toggleItemSelected(el, layout, isSelected, selectedOffset, hasAnimation) {
+  var midAngle = (layout.startAngle + layout.endAngle) / 2;
+  var dx = Math.cos(midAngle);
+  var dy = Math.sin(midAngle);
+  var offset = isSelected ? selectedOffset : 0;
+  var position = [dx * offset, dy * offset];
+  hasAnimation // animateTo will stop revious animation like update transition
+  ? el.animate().when(200, {
+    position: position
+  }).start('bounceOut') : el.attr('position', position);
+}
+/**
+ * Piece of pie including Sector, Label, LabelLine
+ * @constructor
+ * @extends {module:zrender/graphic/Group}
+ */
+
+
+function PiePiece(data, idx) {
+  Group.call(this);
+  var sector = new Sector({
+    z2: 2
+  });
+  var polyline = new Polyline();
+  var text = new Text();
+  this.add(sector);
+  this.add(polyline);
+  this.add(text);
+  this.updateData(data, idx, true);
 }
 
-function Grid(gridModel, ecModel, api) {
-  /**
-   * @type {Object.<string, module:echarts/coord/cartesian/Cartesian2D>}
-   * @private
-   */
-  this._coordsMap = {};
-  /**
-   * @type {Array.<module:echarts/coord/cartesian/Cartesian>}
-   * @private
-   */
+var piePieceProto = PiePiece.prototype;
 
-  this._coordsList = [];
-  /**
-   * @type {Object.<string, module:echarts/coord/cartesian/Axis2D>}
-   * @private
-   */
+piePieceProto.updateData = function (data, idx, firstCreate) {
+  var sector = this.childAt(0);
+  var labelLine = this.childAt(1);
+  var labelText = this.childAt(2);
+  var seriesModel = data.hostModel;
+  var itemModel = data.getItemModel(idx);
+  var layout = data.getItemLayout(idx);
+  var sectorShape = extend({}, layout);
+  sectorShape.label = null;
 
-  this._axesMap = {};
-  /**
-   * @type {Array.<module:echarts/coord/cartesian/Axis2D>}
-   * @private
-   */
+  if (firstCreate) {
+    sector.setShape(sectorShape);
+    var animationType = seriesModel.getShallow('animationType');
 
-  this._axesList = [];
-
-  this._initCartesian(gridModel, ecModel, api);
-
-  this.model = gridModel;
-}
-
-var gridProto = Grid.prototype;
-gridProto.type = 'grid';
-gridProto.axisPointerEnabled = true;
-
-gridProto.getRect = function () {
-  return this._rect;
-};
-
-gridProto.update = function (ecModel, api) {
-  var axesMap = this._axesMap;
-
-  this._updateScale(ecModel, this.model);
-
-  each$1(axesMap.x, function (xAxis) {
-    niceScaleExtent(xAxis.scale, xAxis.model);
-  });
-  each$1(axesMap.y, function (yAxis) {
-    niceScaleExtent(yAxis.scale, yAxis.model);
-  }); // Key: axisDim_axisIndex, value: boolean, whether onZero target.
-
-  var onZeroRecords = {};
-  each$1(axesMap.x, function (xAxis) {
-    fixAxisOnZero(axesMap, 'y', xAxis, onZeroRecords);
-  });
-  each$1(axesMap.y, function (yAxis) {
-    fixAxisOnZero(axesMap, 'x', yAxis, onZeroRecords);
-  }); // Resize again if containLabel is enabled
-  // FIXME It may cause getting wrong grid size in data processing stage
-
-  this.resize(this.model, api);
-};
-
-function fixAxisOnZero(axesMap, otherAxisDim, axis, onZeroRecords) {
-  axis.getAxesOnZeroOf = function () {
-    // TODO: onZero of multiple axes.
-    return otherAxisOnZeroOf ? [otherAxisOnZeroOf] : [];
-  }; // onZero can not be enabled in these two situations:
-  // 1. When any other axis is a category axis.
-  // 2. When no axis is cross 0 point.
-
-
-  var otherAxes = axesMap[otherAxisDim];
-  var otherAxisOnZeroOf;
-  var axisModel = axis.model;
-  var onZero = axisModel.get('axisLine.onZero');
-  var onZeroAxisIndex = axisModel.get('axisLine.onZeroAxisIndex');
-
-  if (!onZero) {
-    return;
-  } // If target axis is specified.
-
-
-  if (onZeroAxisIndex != null) {
-    if (canOnZeroToAxis(otherAxes[onZeroAxisIndex])) {
-      otherAxisOnZeroOf = otherAxes[onZeroAxisIndex];
-    }
+    if (animationType === 'scale') {
+      sector.shape.r = layout.r0;
+      initProps(sector, {
+        shape: {
+          r: layout.r
+        }
+      }, seriesModel, idx);
+    } // Expansion
+    else {
+        sector.shape.endAngle = layout.startAngle;
+        updateProps(sector, {
+          shape: {
+            endAngle: layout.endAngle
+          }
+        }, seriesModel, idx);
+      }
   } else {
-    // Find the first available other axis.
-    for (var idx in otherAxes) {
-      if (otherAxes.hasOwnProperty(idx) && canOnZeroToAxis(otherAxes[idx]) // Consider that two Y axes on one value axis,
-      // if both onZero, the two Y axes overlap.
-      && !onZeroRecords[getOnZeroRecordKey(otherAxes[idx])]) {
-        otherAxisOnZeroOf = otherAxes[idx];
+    updateProps(sector, {
+      shape: sectorShape
+    }, seriesModel, idx);
+  } // Update common style
+
+
+  var visualColor = data.getItemVisual(idx, 'color');
+  sector.useStyle(defaults({
+    lineJoin: 'bevel',
+    fill: visualColor
+  }, itemModel.getModel('itemStyle').getItemStyle()));
+  sector.hoverStyle = itemModel.getModel('emphasis.itemStyle').getItemStyle();
+  var cursorStyle = itemModel.getShallow('cursor');
+  cursorStyle && sector.attr('cursor', cursorStyle); // Toggle selected
+
+  toggleItemSelected(this, data.getItemLayout(idx), seriesModel.isSelected(null, idx), seriesModel.get('selectedOffset'), seriesModel.get('animation'));
+
+  this._updateLabel(data, idx);
+
+  this.highDownOnUpdate = itemModel.get('hoverAnimation') && seriesModel.isAnimationEnabled() ? function (fromState, toState) {
+    if (toState === 'emphasis') {
+      labelLine.ignore = labelLine.hoverIgnore;
+      labelText.ignore = labelText.hoverIgnore; // Sector may has animation of updating data. Force to move to the last frame
+      // Or it may stopped on the wrong shape
+
+      sector.stopAnimation(true);
+      sector.animateTo({
+        shape: {
+          r: layout.r + seriesModel.get('hoverOffset')
+        }
+      }, 300, 'elasticOut');
+    } else {
+      labelLine.ignore = labelLine.normalIgnore;
+      labelText.ignore = labelText.normalIgnore;
+      sector.stopAnimation(true);
+      sector.animateTo({
+        shape: {
+          r: layout.r
+        }
+      }, 300, 'elasticOut');
+    }
+  } : null;
+  setHoverStyle(this);
+};
+
+piePieceProto._updateLabel = function (data, idx) {
+  var labelLine = this.childAt(1);
+  var labelText = this.childAt(2);
+  var seriesModel = data.hostModel;
+  var itemModel = data.getItemModel(idx);
+  var layout = data.getItemLayout(idx);
+  var labelLayout = layout.label;
+  var visualColor = data.getItemVisual(idx, 'color');
+
+  if (!labelLayout || isNaN(labelLayout.x) || isNaN(labelLayout.y)) {
+    labelText.ignore = labelText.normalIgnore = labelText.hoverIgnore = labelLine.ignore = labelLine.normalIgnore = labelLine.hoverIgnore = true;
+    return;
+  }
+
+  updateProps(labelLine, {
+    shape: {
+      points: labelLayout.linePoints || [[labelLayout.x, labelLayout.y], [labelLayout.x, labelLayout.y], [labelLayout.x, labelLayout.y]]
+    }
+  }, seriesModel, idx);
+  updateProps(labelText, {
+    style: {
+      x: labelLayout.x,
+      y: labelLayout.y
+    }
+  }, seriesModel, idx);
+  labelText.attr({
+    rotation: labelLayout.rotation,
+    origin: [labelLayout.x, labelLayout.y],
+    z2: 10
+  });
+  var labelModel = itemModel.getModel('label');
+  var labelHoverModel = itemModel.getModel('emphasis.label');
+  var labelLineModel = itemModel.getModel('labelLine');
+  var labelLineHoverModel = itemModel.getModel('emphasis.labelLine');
+  var visualColor = data.getItemVisual(idx, 'color');
+  setLabelStyle(labelText.style, labelText.hoverStyle = {}, labelModel, labelHoverModel, {
+    labelFetcher: data.hostModel,
+    labelDataIndex: idx,
+    defaultText: data.getName(idx),
+    autoColor: visualColor,
+    useInsideStyle: !!labelLayout.inside
+  }, {
+    textAlign: labelLayout.textAlign,
+    textVerticalAlign: labelLayout.verticalAlign,
+    opacity: data.getItemVisual(idx, 'opacity')
+  });
+  labelText.ignore = labelText.normalIgnore = !labelModel.get('show');
+  labelText.hoverIgnore = !labelHoverModel.get('show');
+  labelLine.ignore = labelLine.normalIgnore = !labelLineModel.get('show');
+  labelLine.hoverIgnore = !labelLineHoverModel.get('show'); // Default use item visual color
+
+  labelLine.setStyle({
+    stroke: visualColor,
+    opacity: data.getItemVisual(idx, 'opacity')
+  });
+  labelLine.setStyle(labelLineModel.getModel('lineStyle').getLineStyle());
+  labelLine.hoverStyle = labelLineHoverModel.getModel('lineStyle').getLineStyle();
+  var smooth = labelLineModel.get('smooth');
+
+  if (smooth && smooth === true) {
+    smooth = 0.4;
+  }
+
+  labelLine.setShape({
+    smooth: smooth
+  });
+};
+
+inherits(PiePiece, Group); // Pie view
+
+var PieView = Chart.extend({
+  type: 'pie',
+  init: function () {
+    var sectorGroup = new Group();
+    this._sectorGroup = sectorGroup;
+  },
+  render: function (seriesModel, ecModel, api, payload) {
+    if (payload && payload.from === this.uid) {
+      return;
+    }
+
+    var data = seriesModel.getData();
+    var oldData = this._data;
+    var group = this.group;
+    var hasAnimation = ecModel.get('animation');
+    var isFirstRender = !oldData;
+    var animationType = seriesModel.get('animationType');
+    var onSectorClick = curry(updateDataSelected, this.uid, seriesModel, hasAnimation, api);
+    var selectedMode = seriesModel.get('selectedMode');
+    data.diff(oldData).add(function (idx) {
+      var piePiece = new PiePiece(data, idx); // Default expansion animation
+
+      if (isFirstRender && animationType !== 'scale') {
+        piePiece.eachChild(function (child) {
+          child.stopAnimation(true);
+        });
+      }
+
+      selectedMode && piePiece.on('click', onSectorClick);
+      data.setItemGraphicEl(idx, piePiece);
+      group.add(piePiece);
+    }).update(function (newIdx, oldIdx) {
+      var piePiece = oldData.getItemGraphicEl(oldIdx);
+      piePiece.updateData(data, newIdx);
+      piePiece.off('click');
+      selectedMode && piePiece.on('click', onSectorClick);
+      group.add(piePiece);
+      data.setItemGraphicEl(newIdx, piePiece);
+    }).remove(function (idx) {
+      var piePiece = oldData.getItemGraphicEl(idx);
+      group.remove(piePiece);
+    }).execute();
+
+    if (hasAnimation && isFirstRender && data.count() > 0 // Default expansion animation
+    && animationType !== 'scale') {
+      var shape = data.getItemLayout(0);
+
+      for (var s = 1; isNaN(shape.startAngle) && s < data.count(); ++s) {
+        shape = data.getItemLayout(s);
+      }
+
+      var r = Math.max(api.getWidth(), api.getHeight()) / 2;
+      var removeClipPath = bind(group.removeClipPath, group);
+      group.setClipPath(this._createClipPath(shape.cx, shape.cy, r, shape.startAngle, shape.clockwise, removeClipPath, seriesModel));
+    } else {
+      // clipPath is used in first-time animation, so remove it when otherwise. See: #8994
+      group.removeClipPath();
+    }
+
+    this._data = data;
+  },
+  dispose: function () {},
+  _createClipPath: function (cx, cy, r, startAngle, clockwise, cb, seriesModel) {
+    var clipPath = new Sector({
+      shape: {
+        cx: cx,
+        cy: cy,
+        r0: 0,
+        r: r,
+        startAngle: startAngle,
+        endAngle: startAngle,
+        clockwise: clockwise
+      }
+    });
+    initProps(clipPath, {
+      shape: {
+        endAngle: startAngle + (clockwise ? 1 : -1) * Math.PI * 2
+      }
+    }, seriesModel, cb);
+    return clipPath;
+  },
+
+  /**
+   * @implement
+   */
+  containPoint: function (point, seriesModel) {
+    var data = seriesModel.getData();
+    var itemLayout = data.getItemLayout(0);
+
+    if (itemLayout) {
+      var dx = point[0] - itemLayout.cx;
+      var dy = point[1] - itemLayout.cy;
+      var radius = Math.sqrt(dx * dx + dy * dy);
+      return radius <= itemLayout.r && radius >= itemLayout.r0;
+    }
+  }
+});
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+var createDataSelectAction = function (seriesType, actionInfos) {
+  each$1(actionInfos, function (actionInfo) {
+    actionInfo.update = 'updateView';
+    /**
+     * @payload
+     * @property {string} seriesName
+     * @property {string} name
+     */
+
+    registerAction(actionInfo, function (payload, ecModel) {
+      var selected = {};
+      ecModel.eachComponent({
+        mainType: 'series',
+        subType: seriesType,
+        query: payload
+      }, function (seriesModel) {
+        if (seriesModel[actionInfo.method]) {
+          seriesModel[actionInfo.method](payload.name, payload.dataIndex);
+        }
+
+        var data = seriesModel.getData(); // Create selected map
+
+        data.each(function (idx) {
+          var name = data.getName(idx);
+          selected[name] = seriesModel.isSelected(name) || false;
+        });
+      });
+      return {
+        name: payload.name,
+        selected: selected,
+        seriesId: payload.seriesId
+      };
+    });
+  });
+};
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+// Pick color from palette for each data item.
+// Applicable for charts that require applying color palette
+// in data level (like pie, funnel, chord).
+var dataColor = function (seriesType) {
+  return {
+    getTargetSeries: function (ecModel) {
+      // Pie and funnel may use diferrent scope
+      var paletteScope = {};
+      var seiresModelMap = createHashMap();
+      ecModel.eachSeriesByType(seriesType, function (seriesModel) {
+        seriesModel.__paletteScope = paletteScope;
+        seiresModelMap.set(seriesModel.uid, seriesModel);
+      });
+      return seiresModelMap;
+    },
+    reset: function (seriesModel, ecModel) {
+      var dataAll = seriesModel.getRawData();
+      var idxMap = {};
+      var data = seriesModel.getData();
+      data.each(function (idx) {
+        var rawIdx = data.getRawIndex(idx);
+        idxMap[rawIdx] = idx;
+      });
+      dataAll.each(function (rawIdx) {
+        var filteredIdx = idxMap[rawIdx]; // If series.itemStyle.normal.color is a function. itemVisual may be encoded
+
+        var singleDataColor = filteredIdx != null && data.getItemVisual(filteredIdx, 'color', true);
+
+        if (!singleDataColor) {
+          // FIXME Performance
+          var itemModel = dataAll.getItemModel(rawIdx);
+          var color = itemModel.get('itemStyle.color') || seriesModel.getColorFromPalette(dataAll.getName(rawIdx) || rawIdx + '', seriesModel.__paletteScope, dataAll.count()); // Legend may use the visual info in data before processed
+
+          dataAll.setItemVisual(rawIdx, 'color', color); // Data is not filtered
+
+          if (filteredIdx != null) {
+            data.setItemVisual(filteredIdx, 'color', color);
+          }
+        } else {
+          // Set data all color for legend
+          dataAll.setItemVisual(rawIdx, 'color', singleDataColor);
+        }
+      });
+    }
+  };
+};
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+// FIXME emphasis label position is not same with normal label position
+var RADIAN$1 = Math.PI / 180;
+
+function adjustSingleSide(list, cx, cy, r, dir, viewWidth, viewHeight) {
+  list.sort(function (a, b) {
+    return a.y - b.y;
+  });
+
+  function shiftDown(start, end, delta, dir) {
+    for (var j = start; j < end; j++) {
+      list[j].y += delta;
+
+      if (j > start && j + 1 < end && list[j + 1].y > list[j].y + list[j].height) {
+        shiftUp(j, delta / 2);
+        return;
+      }
+    }
+
+    shiftUp(end - 1, delta / 2);
+  }
+
+  function shiftUp(end, delta) {
+    for (var j = end; j >= 0; j--) {
+      list[j].y -= delta;
+
+      if (j > 0 && list[j].y > list[j - 1].y + list[j - 1].height) {
         break;
       }
     }
   }
 
-  if (otherAxisOnZeroOf) {
-    onZeroRecords[getOnZeroRecordKey(otherAxisOnZeroOf)] = true;
+  function changeX(list, isDownList, cx, cy, r, dir) {
+    var lastDeltaX = dir > 0 ? isDownList // right-side
+    ? Number.MAX_VALUE // down
+    : 0 // up
+    : isDownList // left-side
+    ? Number.MAX_VALUE // down
+    : 0; // up
+
+    for (var i = 0, l = list.length; i < l; i++) {
+      var deltaY = Math.abs(list[i].y - cy);
+      var length = list[i].len;
+      var length2 = list[i].len2;
+      var deltaX = deltaY < r + length ? Math.sqrt((r + length + length2) * (r + length + length2) - deltaY * deltaY) : Math.abs(list[i].x - cx);
+
+      if (isDownList && deltaX >= lastDeltaX) {
+        // right-down, left-down
+        deltaX = lastDeltaX - 10;
+      }
+
+      if (!isDownList && deltaX <= lastDeltaX) {
+        // right-up, left-up
+        deltaX = lastDeltaX + 10;
+      }
+
+      list[i].x = cx + deltaX * dir;
+      lastDeltaX = deltaX;
+    }
   }
 
-  function getOnZeroRecordKey(axis) {
-    return axis.dim + '_' + axis.index;
+  var lastY = 0;
+  var delta;
+  var len = list.length;
+  var upList = [];
+  var downList = [];
+
+  for (var i = 0; i < len; i++) {
+    delta = list[i].y - lastY;
+
+    if (delta < 0) {
+      shiftDown(i, len, -delta, dir);
+    }
+
+    lastY = list[i].y + list[i].height;
   }
+
+  if (viewHeight - lastY < 0) {
+    shiftUp(len - 1, lastY - viewHeight);
+  }
+
+  for (var i = 0; i < len; i++) {
+    if (list[i].y >= cy) {
+      downList.push(list[i]);
+    } else {
+      upList.push(list[i]);
+    }
+  }
+
+  changeX(upList, false, cx, cy, r, dir);
+  changeX(downList, true, cx, cy, r, dir);
 }
 
-function canOnZeroToAxis(axis) {
-  return axis && axis.type !== 'category' && axis.type !== 'time' && ifAxisCrossZero(axis);
-}
-/**
- * Resize the grid
- * @param {module:echarts/coord/cartesian/GridModel} gridModel
- * @param {module:echarts/ExtensionAPI} api
- */
+function avoidOverlap(labelLayoutList, cx, cy, r, viewWidth, viewHeight) {
+  var leftList = [];
+  var rightList = [];
 
-
-gridProto.resize = function (gridModel, api, ignoreContainLabel) {
-  var gridRect = getLayoutRect(gridModel.getBoxLayoutParams(), {
-    width: api.getWidth(),
-    height: api.getHeight()
-  });
-  this._rect = gridRect;
-  var axesList = this._axesList;
-  adjustAxes(); // Minus label size
-
-  if (!ignoreContainLabel && gridModel.get('containLabel')) {
-    each$1(axesList, function (axis) {
-      if (!axis.model.get('axisLabel.inside')) {
-        var labelUnionRect = estimateLabelUnionRect(axis);
-
-        if (labelUnionRect) {
-          var dim = axis.isHorizontal() ? 'height' : 'width';
-          var margin = axis.model.get('axisLabel.margin');
-          gridRect[dim] -= labelUnionRect[dim] + margin;
-
-          if (axis.position === 'top') {
-            gridRect.y += labelUnionRect.height + margin;
-          } else if (axis.position === 'left') {
-            gridRect.x += labelUnionRect.width + margin;
-          }
-        }
-      }
-    });
-    adjustAxes();
-  }
-
-  function adjustAxes() {
-    each$1(axesList, function (axis) {
-      var isHorizontal = axis.isHorizontal();
-      var extent = isHorizontal ? [0, gridRect.width] : [0, gridRect.height];
-      var idx = axis.inverse ? 1 : 0;
-      axis.setExtent(extent[idx], extent[1 - idx]);
-      updateAxisTransform(axis, isHorizontal ? gridRect.x : gridRect.y);
-    });
-  }
-};
-/**
- * @param {string} axisType
- * @param {number} [axisIndex]
- */
-
-
-gridProto.getAxis = function (axisType, axisIndex) {
-  var axesMapOnDim = this._axesMap[axisType];
-
-  if (axesMapOnDim != null) {
-    if (axisIndex == null) {
-      // Find first axis
-      for (var name in axesMapOnDim) {
-        if (axesMapOnDim.hasOwnProperty(name)) {
-          return axesMapOnDim[name];
-        }
-      }
+  for (var i = 0; i < labelLayoutList.length; i++) {
+    if (isPositionCenter(labelLayoutList[i])) {
+      continue;
     }
 
-    return axesMapOnDim[axisIndex];
-  }
-};
-/**
- * @return {Array.<module:echarts/coord/Axis>}
- */
-
-
-gridProto.getAxes = function () {
-  return this._axesList.slice();
-};
-/**
- * Usage:
- *      grid.getCartesian(xAxisIndex, yAxisIndex);
- *      grid.getCartesian(xAxisIndex);
- *      grid.getCartesian(null, yAxisIndex);
- *      grid.getCartesian({xAxisIndex: ..., yAxisIndex: ...});
- *
- * @param {number|Object} [xAxisIndex]
- * @param {number} [yAxisIndex]
- */
-
-
-gridProto.getCartesian = function (xAxisIndex, yAxisIndex) {
-  if (xAxisIndex != null && yAxisIndex != null) {
-    var key = 'x' + xAxisIndex + 'y' + yAxisIndex;
-    return this._coordsMap[key];
-  }
-
-  if (isObject$1(xAxisIndex)) {
-    yAxisIndex = xAxisIndex.yAxisIndex;
-    xAxisIndex = xAxisIndex.xAxisIndex;
-  } // When only xAxisIndex or yAxisIndex given, find its first cartesian.
-
-
-  for (var i = 0, coordList = this._coordsList; i < coordList.length; i++) {
-    if (coordList[i].getAxis('x').index === xAxisIndex || coordList[i].getAxis('y').index === yAxisIndex) {
-      return coordList[i];
+    if (labelLayoutList[i].x < cx) {
+      leftList.push(labelLayoutList[i]);
+    } else {
+      rightList.push(labelLayoutList[i]);
     }
   }
-};
 
-gridProto.getCartesians = function () {
-  return this._coordsList.slice();
-};
-/**
- * @implements
- * see {module:echarts/CoodinateSystem}
- */
+  adjustSingleSide(rightList, cx, cy, r, 1, viewWidth, viewHeight);
+  adjustSingleSide(leftList, cx, cy, r, -1, viewWidth, viewHeight);
 
-
-gridProto.convertToPixel = function (ecModel, finder, value) {
-  var target = this._findConvertTarget(ecModel, finder);
-
-  return target.cartesian ? target.cartesian.dataToPoint(value) : target.axis ? target.axis.toGlobalCoord(target.axis.dataToCoord(value)) : null;
-};
-/**
- * @implements
- * see {module:echarts/CoodinateSystem}
- */
-
-
-gridProto.convertFromPixel = function (ecModel, finder, value) {
-  var target = this._findConvertTarget(ecModel, finder);
-
-  return target.cartesian ? target.cartesian.pointToData(value) : target.axis ? target.axis.coordToData(target.axis.toLocalCoord(value)) : null;
-};
-/**
- * @inner
- */
-
-
-gridProto._findConvertTarget = function (ecModel, finder) {
-  var seriesModel = finder.seriesModel;
-  var xAxisModel = finder.xAxisModel || seriesModel && seriesModel.getReferringComponents('xAxis')[0];
-  var yAxisModel = finder.yAxisModel || seriesModel && seriesModel.getReferringComponents('yAxis')[0];
-  var gridModel = finder.gridModel;
-  var coordsList = this._coordsList;
-  var cartesian;
-  var axis;
-
-  if (seriesModel) {
-    cartesian = seriesModel.coordinateSystem;
-    indexOf(coordsList, cartesian) < 0 && (cartesian = null);
-  } else if (xAxisModel && yAxisModel) {
-    cartesian = this.getCartesian(xAxisModel.componentIndex, yAxisModel.componentIndex);
-  } else if (xAxisModel) {
-    axis = this.getAxis('x', xAxisModel.componentIndex);
-  } else if (yAxisModel) {
-    axis = this.getAxis('y', yAxisModel.componentIndex);
-  } // Lowest priority.
-  else if (gridModel) {
-      var grid = gridModel.coordinateSystem;
-
-      if (grid === this) {
-        cartesian = this._coordsList[0];
-      }
+  for (var i = 0; i < labelLayoutList.length; i++) {
+    if (isPositionCenter(labelLayoutList[i])) {
+      continue;
     }
 
-  return {
-    cartesian: cartesian,
-    axis: axis
-  };
-};
-/**
- * @implements
- * see {module:echarts/CoodinateSystem}
- */
+    var linePoints = labelLayoutList[i].linePoints;
 
+    if (linePoints) {
+      var dist = linePoints[1][0] - linePoints[2][0];
 
-gridProto.containPoint = function (point) {
-  var coord = this._coordsList[0];
-
-  if (coord) {
-    return coord.containPoint(point);
-  }
-};
-/**
- * Initialize cartesian coordinate systems
- * @private
- */
-
-
-gridProto._initCartesian = function (gridModel, ecModel, api) {
-  var axisPositionUsed = {
-    left: false,
-    right: false,
-    top: false,
-    bottom: false
-  };
-  var axesMap = {
-    x: {},
-    y: {}
-  };
-  var axesCount = {
-    x: 0,
-    y: 0
-  }; /// Create axis
-
-  ecModel.eachComponent('xAxis', createAxisCreator('x'), this);
-  ecModel.eachComponent('yAxis', createAxisCreator('y'), this);
-
-  if (!axesCount.x || !axesCount.y) {
-    // Roll back when there no either x or y axis
-    this._axesMap = {};
-    this._axesList = [];
-    return;
-  }
-
-  this._axesMap = axesMap; /// Create cartesian2d
-
-  each$1(axesMap.x, function (xAxis, xAxisIndex) {
-    each$1(axesMap.y, function (yAxis, yAxisIndex) {
-      var key = 'x' + xAxisIndex + 'y' + yAxisIndex;
-      var cartesian = new Cartesian2D(key);
-      cartesian.grid = this;
-      cartesian.model = gridModel;
-      this._coordsMap[key] = cartesian;
-
-      this._coordsList.push(cartesian);
-
-      cartesian.addAxis(xAxis);
-      cartesian.addAxis(yAxis);
-    }, this);
-  }, this);
-
-  function createAxisCreator(axisType) {
-    return function (axisModel, idx) {
-      if (!isAxisUsedInTheGrid(axisModel, gridModel, ecModel)) {
-        return;
-      }
-
-      var axisPosition = axisModel.get('position');
-
-      if (axisType === 'x') {
-        // Fix position
-        if (axisPosition !== 'top' && axisPosition !== 'bottom') {
-          // Default bottom of X
-          axisPosition = 'bottom';
-
-          if (axisPositionUsed[axisPosition]) {
-            axisPosition = axisPosition === 'top' ? 'bottom' : 'top';
-          }
-        }
+      if (labelLayoutList[i].x < cx) {
+        linePoints[2][0] = labelLayoutList[i].x + 3;
       } else {
-        // Fix position
-        if (axisPosition !== 'left' && axisPosition !== 'right') {
-          // Default left of Y
-          axisPosition = 'left';
-
-          if (axisPositionUsed[axisPosition]) {
-            axisPosition = axisPosition === 'left' ? 'right' : 'left';
-          }
-        }
+        linePoints[2][0] = labelLayoutList[i].x - 3;
       }
 
-      axisPositionUsed[axisPosition] = true;
-      var axis = new Axis2D(axisType, createScaleByModel(axisModel), [0, 0], axisModel.get('type'), axisPosition);
-      var isCategory = axis.type === 'category';
-      axis.onBand = isCategory && axisModel.get('boundaryGap');
-      axis.inverse = axisModel.get('inverse'); // Inject axis into axisModel
-
-      axisModel.axis = axis; // Inject axisModel into axis
-
-      axis.model = axisModel; // Inject grid info axis
-
-      axis.grid = this; // Index of axis, can be used as key
-
-      axis.index = idx;
-
-      this._axesList.push(axis);
-
-      axesMap[axisType][idx] = axis;
-      axesCount[axisType]++;
-    };
-  }
-};
-/**
- * Update cartesian properties from series
- * @param  {module:echarts/model/Option} option
- * @private
- */
-
-
-gridProto._updateScale = function (ecModel, gridModel) {
-  // Reset scale
-  each$1(this._axesList, function (axis) {
-    axis.scale.setExtent(Infinity, -Infinity);
-  });
-  ecModel.eachSeries(function (seriesModel) {
-    if (isCartesian2D(seriesModel)) {
-      var axesModels = findAxesModels(seriesModel, ecModel);
-      var xAxisModel = axesModels[0];
-      var yAxisModel = axesModels[1];
-
-      if (!isAxisUsedInTheGrid(xAxisModel, gridModel, ecModel) || !isAxisUsedInTheGrid(yAxisModel, gridModel, ecModel)) {
-        return;
-      }
-
-      var cartesian = this.getCartesian(xAxisModel.componentIndex, yAxisModel.componentIndex);
-      var data = seriesModel.getData();
-      var xAxis = cartesian.getAxis('x');
-      var yAxis = cartesian.getAxis('y');
-
-      if (data.type === 'list') {
-        unionExtent(data, xAxis, seriesModel);
-        unionExtent(data, yAxis, seriesModel);
-      }
+      linePoints[1][1] = linePoints[2][1] = labelLayoutList[i].y;
+      linePoints[1][0] = linePoints[2][0] + dist;
     }
-  }, this);
-
-  function unionExtent(data, axis, seriesModel) {
-    each$1(data.mapDimension(axis.dim, true), function (dim) {
-      axis.scale.unionExtentFromData( // For example, the extent of the orginal dimension
-      // is [0.1, 0.5], the extent of the `stackResultDimension`
-      // is [7, 9], the final extent should not include [0.1, 0.5].
-      data, getStackedDimension(data, dim));
-    });
   }
-};
-/**
- * @param {string} [dim] 'x' or 'y' or 'auto' or null/undefined
- * @return {Object} {baseAxes: [], otherAxes: []}
- */
-
-
-gridProto.getTooltipAxes = function (dim) {
-  var baseAxes = [];
-  var otherAxes = [];
-  each$1(this.getCartesians(), function (cartesian) {
-    var baseAxis = dim != null && dim !== 'auto' ? cartesian.getAxis(dim) : cartesian.getBaseAxis();
-    var otherAxis = cartesian.getOtherAxis(baseAxis);
-    indexOf(baseAxes, baseAxis) < 0 && baseAxes.push(baseAxis);
-    indexOf(otherAxes, otherAxis) < 0 && otherAxes.push(otherAxis);
-  });
-  return {
-    baseAxes: baseAxes,
-    otherAxes: otherAxes
-  };
-};
-/**
- * @inner
- */
-
-
-function updateAxisTransform(axis, coordBase) {
-  var axisExtent = axis.getExtent();
-  var axisExtentSum = axisExtent[0] + axisExtent[1]; // Fast transform
-
-  axis.toGlobalCoord = axis.dim === 'x' ? function (coord) {
-    return coord + coordBase;
-  } : function (coord) {
-    return axisExtentSum - coord + coordBase;
-  };
-  axis.toLocalCoord = axis.dim === 'x' ? function (coord) {
-    return coord - coordBase;
-  } : function (coord) {
-    return axisExtentSum - coord + coordBase;
-  };
 }
 
-var axesTypes = ['xAxis', 'yAxis'];
-/**
- * @inner
- */
-
-function findAxesModels(seriesModel, ecModel) {
-  return map(axesTypes, function (axisType) {
-    var axisModel = seriesModel.getReferringComponents(axisType)[0];
-    return axisModel;
-  });
-}
-/**
- * @inner
- */
-
-
-function isCartesian2D(seriesModel) {
-  return seriesModel.get('coordinateSystem') === 'cartesian2d';
+function isPositionCenter(layout) {
+  // Not change x for center label
+  return layout.position === 'center';
 }
 
-Grid.create = function (ecModel, api) {
-  var grids = [];
-  ecModel.eachComponent('grid', function (gridModel, idx) {
-    var grid = new Grid(gridModel, ecModel, api);
-    grid.name = 'grid_' + idx; // dataSampling requires axis extent, so resize
-    // should be performed in create stage.
+var labelLayout = function (seriesModel, r, viewWidth, viewHeight, sum) {
+  var data = seriesModel.getData();
+  var labelLayoutList = [];
+  var cx;
+  var cy;
+  var hasLabelRotate = false;
+  var minShowLabelRadian = (seriesModel.get('minShowLabelAngle') || 0) * RADIAN$1;
+  data.each(function (idx) {
+    var layout = data.getItemLayout(idx);
+    var itemModel = data.getItemModel(idx);
+    var labelModel = itemModel.getModel('label'); // Use position in normal or emphasis
 
-    grid.resize(gridModel, api, true);
-    gridModel.coordinateSystem = grid;
-    grids.push(grid);
-  }); // Inject the coordinateSystems into seriesModel
+    var labelPosition = labelModel.get('position') || itemModel.get('emphasis.label.position');
+    var labelLineModel = itemModel.getModel('labelLine');
+    var labelLineLen = labelLineModel.get('length');
+    var labelLineLen2 = labelLineModel.get('length2');
 
-  ecModel.eachSeries(function (seriesModel) {
-    if (!isCartesian2D(seriesModel)) {
+    if (layout.angle < minShowLabelRadian) {
       return;
     }
 
-    var axesModels = findAxesModels(seriesModel, ecModel);
-    var xAxisModel = axesModels[0];
-    var yAxisModel = axesModels[1];
-    var gridModel = xAxisModel.getCoordSysModel();
-    var grid = gridModel.coordinateSystem;
-    seriesModel.coordinateSystem = grid.getCartesian(xAxisModel.componentIndex, yAxisModel.componentIndex);
+    var midAngle = (layout.startAngle + layout.endAngle) / 2;
+    var dx = Math.cos(midAngle);
+    var dy = Math.sin(midAngle);
+    var textX;
+    var textY;
+    var linePoints;
+    var textAlign;
+    cx = layout.cx;
+    cy = layout.cy;
+    var isLabelInside = labelPosition === 'inside' || labelPosition === 'inner';
+
+    if (labelPosition === 'center') {
+      textX = layout.cx;
+      textY = layout.cy;
+      textAlign = 'center';
+    } else {
+      var x1 = (isLabelInside ? (layout.r + layout.r0) / 2 * dx : layout.r * dx) + cx;
+      var y1 = (isLabelInside ? (layout.r + layout.r0) / 2 * dy : layout.r * dy) + cy;
+      textX = x1 + dx * 3;
+      textY = y1 + dy * 3;
+
+      if (!isLabelInside) {
+        // For roseType
+        var x2 = x1 + dx * (labelLineLen + r - layout.r);
+        var y2 = y1 + dy * (labelLineLen + r - layout.r);
+        var x3 = x2 + (dx < 0 ? -1 : 1) * labelLineLen2;
+        var y3 = y2;
+        textX = x3 + (dx < 0 ? -5 : 5);
+        textY = y3;
+        linePoints = [[x1, y1], [x2, y2], [x3, y3]];
+      }
+
+      textAlign = isLabelInside ? 'center' : dx > 0 ? 'left' : 'right';
+    }
+
+    var font = labelModel.getFont();
+    var labelRotate;
+    var rotate = labelModel.get('rotate');
+
+    if (typeof rotate === 'number') {
+      labelRotate = rotate * (Math.PI / 180);
+    } else {
+      labelRotate = rotate ? dx < 0 ? -midAngle + Math.PI : -midAngle : 0;
+    }
+
+    var text = seriesModel.getFormattedLabel(idx, 'normal') || data.getName(idx);
+    var textRect = getBoundingRect(text, font, textAlign, 'top');
+    hasLabelRotate = !!labelRotate;
+    layout.label = {
+      x: textX,
+      y: textY,
+      position: labelPosition,
+      height: textRect.height,
+      len: labelLineLen,
+      len2: labelLineLen2,
+      linePoints: linePoints,
+      textAlign: textAlign,
+      verticalAlign: 'middle',
+      rotation: labelRotate,
+      inside: isLabelInside
+    }; // Not layout the inside label
+
+    if (!isLabelInside) {
+      labelLayoutList.push(layout.label);
+    }
   });
-  return grids;
-}; // For deciding which dimensions to use when creating list data
 
-
-Grid.dimensions = Grid.prototype.dimensions = Cartesian2D.prototype.dimensions;
-CoordinateSystemManager.register('cartesian2d', Grid);
+  if (!hasLabelRotate && seriesModel.get('avoidLabelOverlap')) {
+    avoidOverlap(labelLayoutList, cx, cy, r, viewWidth, viewHeight);
+  }
+};
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -34788,1129 +34805,416 @@ CoordinateSystemManager.register('cartesian2d', Grid);
 * specific language governing permissions and limitations
 * under the License.
 */
-var BaseBarSeries = SeriesModel.extend({
-  type: 'series.__base_bar__',
-  getInitialData: function (option, ecModel) {
-    return createListFromArray(this.getSource(), this);
-  },
-  getMarkerPosition: function (value) {
-    var coordSys = this.coordinateSystem;
+var PI2$4 = Math.PI * 2;
+var RADIAN = Math.PI / 180;
+var pieLayout = function (seriesType, ecModel, api, payload) {
+  ecModel.eachSeriesByType(seriesType, function (seriesModel) {
+    var data = seriesModel.getData();
+    var valueDim = data.mapDimension('value');
+    var center = seriesModel.get('center');
+    var radius = seriesModel.get('radius');
 
-    if (coordSys) {
-      // PENDING if clamp ?
-      var pt = coordSys.dataToPoint(coordSys.clampData(value));
-      var data = this.getData();
-      var offset = data.getLayout('offset');
-      var size = data.getLayout('size');
-      var offsetIndex = coordSys.getBaseAxis().isHorizontal() ? 0 : 1;
-      pt[offsetIndex] += offset + size / 2;
-      return pt;
+    if (!isArray(radius)) {
+      radius = [0, radius];
     }
 
-    return [NaN, NaN];
+    if (!isArray(center)) {
+      center = [center, center];
+    }
+
+    var width = api.getWidth();
+    var height = api.getHeight();
+    var size = Math.min(width, height);
+    var cx = parsePercent$1(center[0], width);
+    var cy = parsePercent$1(center[1], height);
+    var r0 = parsePercent$1(radius[0], size / 2);
+    var r = parsePercent$1(radius[1], size / 2);
+    var startAngle = -seriesModel.get('startAngle') * RADIAN;
+    var minAngle = seriesModel.get('minAngle') * RADIAN;
+    var validDataCount = 0;
+    data.each(valueDim, function (value) {
+      !isNaN(value) && validDataCount++;
+    });
+    var sum = data.getSum(valueDim); // Sum may be 0
+
+    var unitRadian = Math.PI / (sum || validDataCount) * 2;
+    var clockwise = seriesModel.get('clockwise');
+    var roseType = seriesModel.get('roseType');
+    var stillShowZeroSum = seriesModel.get('stillShowZeroSum'); // [0...max]
+
+    var extent = data.getDataExtent(valueDim);
+    extent[0] = 0; // In the case some sector angle is smaller than minAngle
+
+    var restAngle = PI2$4;
+    var valueSumLargerThanMinAngle = 0;
+    var currentAngle = startAngle;
+    var dir = clockwise ? 1 : -1;
+    data.each(valueDim, function (value, idx) {
+      var angle;
+
+      if (isNaN(value)) {
+        data.setItemLayout(idx, {
+          angle: NaN,
+          startAngle: NaN,
+          endAngle: NaN,
+          clockwise: clockwise,
+          cx: cx,
+          cy: cy,
+          r0: r0,
+          r: roseType ? NaN : r
+        });
+        return;
+      } // FIXME 兼容 2.0 但是 roseType 是 area 的时候才是这样？
+
+
+      if (roseType !== 'area') {
+        angle = sum === 0 && stillShowZeroSum ? unitRadian : value * unitRadian;
+      } else {
+        angle = PI2$4 / validDataCount;
+      }
+
+      if (angle < minAngle) {
+        angle = minAngle;
+        restAngle -= minAngle;
+      } else {
+        valueSumLargerThanMinAngle += value;
+      }
+
+      var endAngle = currentAngle + dir * angle;
+      data.setItemLayout(idx, {
+        angle: angle,
+        startAngle: currentAngle,
+        endAngle: endAngle,
+        clockwise: clockwise,
+        cx: cx,
+        cy: cy,
+        r0: r0,
+        r: roseType ? linearMap(value, extent, [r0, r]) : r
+      });
+      currentAngle = endAngle;
+    }); // Some sector is constrained by minAngle
+    // Rest sectors needs recalculate angle
+
+    if (restAngle < PI2$4 && validDataCount) {
+      // Average the angle if rest angle is not enough after all angles is
+      // Constrained by minAngle
+      if (restAngle <= 1e-3) {
+        var angle = PI2$4 / validDataCount;
+        data.each(valueDim, function (value, idx) {
+          if (!isNaN(value)) {
+            var layout = data.getItemLayout(idx);
+            layout.angle = angle;
+            layout.startAngle = startAngle + dir * idx * angle;
+            layout.endAngle = startAngle + dir * (idx + 1) * angle;
+          }
+        });
+      } else {
+        unitRadian = restAngle / valueSumLargerThanMinAngle;
+        currentAngle = startAngle;
+        data.each(valueDim, function (value, idx) {
+          if (!isNaN(value)) {
+            var layout = data.getItemLayout(idx);
+            var angle = layout.angle === minAngle ? minAngle : value * unitRadian;
+            layout.startAngle = currentAngle;
+            layout.endAngle = currentAngle + dir * angle;
+            currentAngle += dir * angle;
+          }
+        });
+      }
+    }
+
+    labelLayout(seriesModel, r, width, height);
+  });
+};
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+var dataFilter = function (seriesType) {
+  return {
+    seriesType: seriesType,
+    reset: function (seriesModel, ecModel) {
+      var legendModels = ecModel.findComponents({
+        mainType: 'legend'
+      });
+
+      if (!legendModels || !legendModels.length) {
+        return;
+      }
+
+      var data = seriesModel.getData();
+      data.filterSelf(function (idx) {
+        var name = data.getName(idx); // If in any legend component the status is not selected.
+
+        for (var i = 0; i < legendModels.length; i++) {
+          if (!legendModels[i].isSelected(name)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    }
+  };
+};
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+createDataSelectAction('pie', [{
+  type: 'pieToggleSelect',
+  event: 'pieselectchanged',
+  method: 'toggleSelected'
+}, {
+  type: 'pieSelect',
+  event: 'pieselected',
+  method: 'select'
+}, {
+  type: 'pieUnSelect',
+  event: 'pieunselected',
+  method: 'unSelect'
+}]);
+registerVisual(dataColor('pie'));
+registerLayout(curry(pieLayout, 'pie'));
+registerProcessor(dataFilter('pie'));
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+extendComponentModel({
+  type: 'title',
+  layoutMode: {
+    type: 'box',
+    ignoreSize: true
   },
   defaultOption: {
-    zlevel: 0,
     // 一级层叠
-    z: 2,
+    zlevel: 0,
     // 二级层叠
-    coordinateSystem: 'cartesian2d',
-    legendHoverLink: true,
-    // stack: null
-    // Cartesian coordinate system
-    // xAxisIndex: 0,
-    // yAxisIndex: 0,
-    // 最小高度改为0
-    barMinHeight: 0,
-    // 最小角度为0，仅对极坐标系下的柱状图有效
-    barMinAngle: 0,
-    // cursor: null,
-    large: false,
-    largeThreshold: 400,
-    progressive: 3e3,
-    progressiveChunkMode: 'mod',
-    // barMaxWidth: null,
-    // 默认自适应
-    // barWidth: null,
-    // 柱间距离，默认为柱形宽度的30%，可设固定值
-    // barGap: '30%',
-    // 类目间柱形距离，默认为类目间距的20%，可设固定值
-    // barCategoryGap: '20%',
-    // label: {
-    //      show: false
-    // },
-    itemStyle: {},
-    emphasis: {}
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-BaseBarSeries.extend({
-  type: 'series.bar',
-  dependencies: ['grid', 'polar'],
-  brushSelector: 'rect',
-
-  /**
-   * @override
-   */
-  getProgressive: function () {
-    // Do not support progressive in normal mode.
-    return this.get('large') ? this.get('progressive') : false;
-  },
-
-  /**
-   * @override
-   */
-  getProgressiveThreshold: function () {
-    // Do not support progressive in normal mode.
-    var progressiveThreshold = this.get('progressiveThreshold');
-    var largeThreshold = this.get('largeThreshold');
-
-    if (largeThreshold > progressiveThreshold) {
-      progressiveThreshold = largeThreshold;
-    }
-
-    return progressiveThreshold;
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * @param {module:echarts/data/List} data
- * @param {number} dataIndex
- * @return {string} label string. Not null/undefined
- */
-
-function getDefaultLabel(data, dataIndex) {
-  var labelDims = data.mapDimension('defaultedLabel', true);
-  var len = labelDims.length; // Simple optimization (in lots of cases, label dims length is 1)
-
-  if (len === 1) {
-    return retrieveRawValue(data, dataIndex, labelDims[0]);
-  } else if (len) {
-    var vals = [];
-
-    for (var i = 0; i < labelDims.length; i++) {
-      var val = retrieveRawValue(data, dataIndex, labelDims[i]);
-      vals.push(val);
-    }
-
-    return vals.join(' ');
-  }
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-function setLabel(normalStyle, hoverStyle, itemModel, color, seriesModel, dataIndex, labelPositionOutside) {
-  var labelModel = itemModel.getModel('label');
-  var hoverLabelModel = itemModel.getModel('emphasis.label');
-  setLabelStyle(normalStyle, hoverStyle, labelModel, hoverLabelModel, {
-    labelFetcher: seriesModel,
-    labelDataIndex: dataIndex,
-    defaultText: getDefaultLabel(seriesModel.getData(), dataIndex),
-    isRectText: true,
-    autoColor: color
-  });
-  fixPosition(normalStyle);
-  fixPosition(hoverStyle);
-}
-
-function fixPosition(style, labelPositionOutside) {
-  if (style.textPosition === 'outside') {
-    style.textPosition = labelPositionOutside;
-  }
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var getBarItemStyle = makeStyleMapper([['fill', 'color'], ['stroke', 'borderColor'], ['lineWidth', 'borderWidth'], // Compatitable with 2
-['stroke', 'barBorderColor'], ['lineWidth', 'barBorderWidth'], ['opacity'], ['shadowBlur'], ['shadowOffsetX'], ['shadowOffsetY'], ['shadowColor']]);
-var barItemStyle = {
-  getBarItemStyle: function (excludes) {
-    var style = getBarItemStyle(this, excludes);
-
-    if (this.getBorderLineDash) {
-      var lineDash = this.getBorderLineDash();
-      lineDash && (style.lineDash = lineDash);
-    }
-
-    return style;
-  }
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var BAR_BORDER_WIDTH_QUERY = ['itemStyle', 'barBorderWidth']; // FIXME
-// Just for compatible with ec2.
-
-extend(Model.prototype, barItemStyle);
-extendChartView({
-  type: 'bar',
-  render: function (seriesModel, ecModel, api) {
-    this._updateDrawMode(seriesModel);
-
-    var coordinateSystemType = seriesModel.get('coordinateSystem');
-
-    if (coordinateSystemType === 'cartesian2d' || coordinateSystemType === 'polar') {
-      this._isLargeDraw ? this._renderLarge(seriesModel, ecModel, api) : this._renderNormal(seriesModel, ecModel, api);
-    } else {}
-
-    return this.group;
-  },
-  incrementalPrepareRender: function (seriesModel, ecModel, api) {
-    this._clear();
-
-    this._updateDrawMode(seriesModel);
-  },
-  incrementalRender: function (params, seriesModel, ecModel, api) {
-    // Do not support progressive in normal mode.
-    this._incrementalRenderLarge(params, seriesModel);
-  },
-  _updateDrawMode: function (seriesModel) {
-    var isLargeDraw = seriesModel.pipelineContext.large;
-
-    if (this._isLargeDraw == null || isLargeDraw ^ this._isLargeDraw) {
-      this._isLargeDraw = isLargeDraw;
-
-      this._clear();
-    }
-  },
-  _renderNormal: function (seriesModel, ecModel, api) {
-    var group = this.group;
-    var data = seriesModel.getData();
-    var oldData = this._data;
-    var coord = seriesModel.coordinateSystem;
-    var baseAxis = coord.getBaseAxis();
-    var isHorizontalOrRadial;
-
-    if (coord.type === 'cartesian2d') {
-      isHorizontalOrRadial = baseAxis.isHorizontal();
-    } else if (coord.type === 'polar') {
-      isHorizontalOrRadial = baseAxis.dim === 'angle';
-    }
-
-    var animationModel = seriesModel.isAnimationEnabled() ? seriesModel : null;
-    data.diff(oldData).add(function (dataIndex) {
-      if (!data.hasValue(dataIndex)) {
-        return;
-      }
-
-      var itemModel = data.getItemModel(dataIndex);
-      var layout = getLayout[coord.type](data, dataIndex, itemModel);
-      var el = elementCreator[coord.type](data, dataIndex, itemModel, layout, isHorizontalOrRadial, animationModel);
-      data.setItemGraphicEl(dataIndex, el);
-      group.add(el);
-      updateStyle(el, data, dataIndex, itemModel, layout, seriesModel, isHorizontalOrRadial, coord.type === 'polar');
-    }).update(function (newIndex, oldIndex) {
-      var el = oldData.getItemGraphicEl(oldIndex);
-
-      if (!data.hasValue(newIndex)) {
-        group.remove(el);
-        return;
-      }
-
-      var itemModel = data.getItemModel(newIndex);
-      var layout = getLayout[coord.type](data, newIndex, itemModel);
-
-      if (el) {
-        updateProps(el, {
-          shape: layout
-        }, animationModel, newIndex);
-      } else {
-        el = elementCreator[coord.type](data, newIndex, itemModel, layout, isHorizontalOrRadial, animationModel, true);
-      }
-
-      data.setItemGraphicEl(newIndex, el); // Add back
-
-      group.add(el);
-      updateStyle(el, data, newIndex, itemModel, layout, seriesModel, isHorizontalOrRadial, coord.type === 'polar');
-    }).remove(function (dataIndex) {
-      var el = oldData.getItemGraphicEl(dataIndex);
-
-      if (coord.type === 'cartesian2d') {
-        el && removeRect(dataIndex, animationModel, el);
-      } else {
-        el && removeSector(dataIndex, animationModel, el);
-      }
-    }).execute();
-    this._data = data;
-  },
-  _renderLarge: function (seriesModel, ecModel, api) {
-    this._clear();
-
-    createLarge(seriesModel, this.group);
-  },
-  _incrementalRenderLarge: function (params, seriesModel) {
-    createLarge(seriesModel, this.group, true);
-  },
-  dispose: noop,
-  remove: function (ecModel) {
-    this._clear(ecModel);
-  },
-  _clear: function (ecModel) {
-    var group = this.group;
-    var data = this._data;
-
-    if (ecModel && ecModel.get('animation') && data && !this._isLargeDraw) {
-      data.eachItemGraphicEl(function (el) {
-        if (el.type === 'sector') {
-          removeSector(el.dataIndex, ecModel, el);
-        } else {
-          removeRect(el.dataIndex, ecModel, el);
-        }
-      });
-    } else {
-      group.removeAll();
-    }
-
-    this._data = null;
-  }
-});
-var elementCreator = {
-  cartesian2d: function (data, dataIndex, itemModel, layout, isHorizontal, animationModel, isUpdate) {
-    var rect = new Rect({
-      shape: extend({}, layout)
-    }); // Animation
-
-    if (animationModel) {
-      var rectShape = rect.shape;
-      var animateProperty = isHorizontal ? 'height' : 'width';
-      var animateTarget = {};
-      rectShape[animateProperty] = 0;
-      animateTarget[animateProperty] = layout[animateProperty];
-      graphicUtil[isUpdate ? 'updateProps' : 'initProps'](rect, {
-        shape: animateTarget
-      }, animationModel, dataIndex);
-    }
-
-    return rect;
-  },
-  polar: function (data, dataIndex, itemModel, layout, isRadial, animationModel, isUpdate) {
-    // Keep the same logic with bar in catesion: use end value to control
-    // direction. Notice that if clockwise is true (by default), the sector
-    // will always draw clockwisely, no matter whether endAngle is greater
-    // or less than startAngle.
-    var clockwise = layout.startAngle < layout.endAngle;
-    var sector = new Sector({
-      shape: defaults({
-        clockwise: clockwise
-      }, layout)
-    }); // Animation
-
-    if (animationModel) {
-      var sectorShape = sector.shape;
-      var animateProperty = isRadial ? 'r' : 'endAngle';
-      var animateTarget = {};
-      sectorShape[animateProperty] = isRadial ? 0 : layout.startAngle;
-      animateTarget[animateProperty] = layout[animateProperty];
-      graphicUtil[isUpdate ? 'updateProps' : 'initProps'](sector, {
-        shape: animateTarget
-      }, animationModel, dataIndex);
-    }
-
-    return sector;
-  }
-};
-
-function removeRect(dataIndex, animationModel, el) {
-  // Not show text when animating
-  el.style.text = null;
-  updateProps(el, {
-    shape: {
-      width: 0
-    }
-  }, animationModel, dataIndex, function () {
-    el.parent && el.parent.remove(el);
-  });
-}
-
-function removeSector(dataIndex, animationModel, el) {
-  // Not show text when animating
-  el.style.text = null;
-  updateProps(el, {
-    shape: {
-      r: el.shape.r0
-    }
-  }, animationModel, dataIndex, function () {
-    el.parent && el.parent.remove(el);
-  });
-}
-
-var getLayout = {
-  cartesian2d: function (data, dataIndex, itemModel) {
-    var layout = data.getItemLayout(dataIndex);
-    var fixedLineWidth = getLineWidth(itemModel, layout); // fix layout with lineWidth
-
-    var signX = layout.width > 0 ? 1 : -1;
-    var signY = layout.height > 0 ? 1 : -1;
-    return {
-      x: layout.x + signX * fixedLineWidth / 2,
-      y: layout.y + signY * fixedLineWidth / 2,
-      width: layout.width - signX * fixedLineWidth,
-      height: layout.height - signY * fixedLineWidth
-    };
-  },
-  polar: function (data, dataIndex, itemModel) {
-    var layout = data.getItemLayout(dataIndex);
-    return {
-      cx: layout.cx,
-      cy: layout.cy,
-      r0: layout.r0,
-      r: layout.r,
-      startAngle: layout.startAngle,
-      endAngle: layout.endAngle
-    };
-  }
-};
-
-function updateStyle(el, data, dataIndex, itemModel, layout, seriesModel, isHorizontal, isPolar) {
-  var color = data.getItemVisual(dataIndex, 'color');
-  var opacity = data.getItemVisual(dataIndex, 'opacity');
-  var itemStyleModel = itemModel.getModel('itemStyle');
-  var hoverStyle = itemModel.getModel('emphasis.itemStyle').getBarItemStyle();
-
-  if (!isPolar) {
-    el.setShape('r', itemStyleModel.get('barBorderRadius') || 0);
-  }
-
-  el.useStyle(defaults({
-    fill: color,
-    opacity: opacity
-  }, itemStyleModel.getBarItemStyle()));
-  var cursorStyle = itemModel.getShallow('cursor');
-  cursorStyle && el.attr('cursor', cursorStyle);
-  var labelPositionOutside = isHorizontal ? layout.height > 0 ? 'bottom' : 'top' : layout.width > 0 ? 'left' : 'right';
-
-  if (!isPolar) {
-    setLabel(el.style, hoverStyle, itemModel, color, seriesModel, dataIndex, labelPositionOutside);
-  }
-
-  setHoverStyle(el, hoverStyle);
-} // In case width or height are too small.
-
-
-function getLineWidth(itemModel, rawLayout) {
-  var lineWidth = itemModel.get(BAR_BORDER_WIDTH_QUERY) || 0;
-  return Math.min(lineWidth, Math.abs(rawLayout.width), Math.abs(rawLayout.height));
-}
-
-var LargePath = Path.extend({
-  type: 'largeBar',
-  shape: {
-    points: []
-  },
-  buildPath: function (ctx, shape) {
-    // Drawing lines is more efficient than drawing
-    // a whole line or drawing rects.
-    var points = shape.points;
-    var startPoint = this.__startPoint;
-    var valueIdx = this.__valueIdx;
-
-    for (var i = 0; i < points.length; i += 2) {
-      startPoint[this.__valueIdx] = points[i + valueIdx];
-      ctx.moveTo(startPoint[0], startPoint[1]);
-      ctx.lineTo(points[i], points[i + 1]);
-    }
-  }
-});
-
-function createLarge(seriesModel, group, incremental) {
-  // TODO support polar
-  var data = seriesModel.getData();
-  var startPoint = [];
-  var valueIdx = data.getLayout('valueAxisHorizontal') ? 1 : 0;
-  startPoint[1 - valueIdx] = data.getLayout('valueAxisStart');
-  var el = new LargePath({
-    shape: {
-      points: data.getLayout('largePoints')
+    z: 6,
+    show: true,
+    text: '',
+    // 超链接跳转
+    // link: null,
+    // 仅支持self | blank
+    target: 'blank',
+    subtext: '',
+    // 超链接跳转
+    // sublink: null,
+    // 仅支持self | blank
+    subtarget: 'blank',
+    // 'center' ¦ 'left' ¦ 'right'
+    // ¦ {number}（x坐标，单位px）
+    left: 0,
+    // 'top' ¦ 'bottom' ¦ 'center'
+    // ¦ {number}（y坐标，单位px）
+    top: 0,
+    // 水平对齐
+    // 'auto' | 'left' | 'right' | 'center'
+    // 默认根据 left 的位置判断是左对齐还是右对齐
+    // textAlign: null
+    //
+    // 垂直对齐
+    // 'auto' | 'top' | 'bottom' | 'middle'
+    // 默认根据 top 位置判断是上对齐还是下对齐
+    // textVerticalAlign: null
+    // textBaseline: null // The same as textVerticalAlign.
+    backgroundColor: 'rgba(0,0,0,0)',
+    // 标题边框颜色
+    borderColor: '#ccc',
+    // 标题边框线宽，单位px，默认为0（无边框）
+    borderWidth: 0,
+    // 标题内边距，单位px，默认各方向内边距为5，
+    // 接受数组分别设定上右下左边距，同css
+    padding: 5,
+    // 主副标题纵向间隔，单位px，默认为10，
+    itemGap: 10,
+    textStyle: {
+      fontSize: 18,
+      fontWeight: 'bolder',
+      color: '#333'
     },
-    incremental: !!incremental,
-    __startPoint: startPoint,
-    __valueIdx: valueIdx
-  });
-  group.add(el);
-  setLargeStyle(el, seriesModel, data);
-}
-
-function setLargeStyle(el, seriesModel, data) {
-  var borderColor = data.getVisual('borderColor') || data.getVisual('color');
-  var itemStyle = seriesModel.getModel('itemStyle').getItemStyle(['color', 'borderColor']);
-  el.useStyle(itemStyle);
-  el.style.fill = null;
-  el.style.stroke = borderColor;
-  el.style.lineWidth = data.getLayout('barWidth');
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var PI$2 = Math.PI;
-
-function makeAxisEventDataBase(axisModel) {
-  var eventData = {
-    componentType: axisModel.mainType,
-    componentIndex: axisModel.componentIndex
-  };
-  eventData[axisModel.mainType + 'Index'] = axisModel.componentIndex;
-  return eventData;
-}
-/**
- * A final axis is translated and rotated from a "standard axis".
- * So opt.position and opt.rotation is required.
- *
- * A standard axis is and axis from [0, 0] to [0, axisExtent[1]],
- * for example: (0, 0) ------------> (0, 50)
- *
- * nameDirection or tickDirection or labelDirection is 1 means tick
- * or label is below the standard axis, whereas is -1 means above
- * the standard axis. labelOffset means offset between label and axis,
- * which is useful when 'onZero', where axisLabel is in the grid and
- * label in outside grid.
- *
- * Tips: like always,
- * positive rotation represents anticlockwise, and negative rotation
- * represents clockwise.
- * The direction of position coordinate is the same as the direction
- * of screen coordinate.
- *
- * Do not need to consider axis 'inverse', which is auto processed by
- * axis extent.
- *
- * @param {module:zrender/container/Group} group
- * @param {Object} axisModel
- * @param {Object} opt Standard axis parameters.
- * @param {Array.<number>} opt.position [x, y]
- * @param {number} opt.rotation by radian
- * @param {number} [opt.nameDirection=1] 1 or -1 Used when nameLocation is 'middle' or 'center'.
- * @param {number} [opt.tickDirection=1] 1 or -1
- * @param {number} [opt.labelDirection=1] 1 or -1
- * @param {number} [opt.labelOffset=0] Usefull when onZero.
- * @param {string} [opt.axisLabelShow] default get from axisModel.
- * @param {string} [opt.axisName] default get from axisModel.
- * @param {number} [opt.axisNameAvailableWidth]
- * @param {number} [opt.labelRotate] by degree, default get from axisModel.
- * @param {number} [opt.strokeContainThreshold] Default label interval when label
- * @param {number} [opt.nameTruncateMaxWidth]
- */
-
-
-var AxisBuilder = function (axisModel, opt) {
-  /**
-   * @readOnly
-   */
-  this.opt = opt;
-  /**
-   * @readOnly
-   */
-
-  this.axisModel = axisModel; // Default value
-
-  defaults(opt, {
-    labelOffset: 0,
-    nameDirection: 1,
-    tickDirection: 1,
-    labelDirection: 1,
-    silent: true
-  });
-  /**
-   * @readOnly
-   */
-
-  this.group = new Group(); // FIXME Not use a seperate text group?
-
-  var dumbGroup = new Group({
-    position: opt.position.slice(),
-    rotation: opt.rotation
-  }); // this.group.add(dumbGroup);
-  // this._dumbGroup = dumbGroup;
-
-  dumbGroup.updateTransform();
-  this._transform = dumbGroup.transform;
-  this._dumbGroup = dumbGroup;
-};
-
-AxisBuilder.prototype = {
-  constructor: AxisBuilder,
-  hasBuilder: function (name) {
-    return !!builders[name];
-  },
-  add: function (name) {
-    builders[name].call(this);
-  },
-  getGroup: function () {
-    return this.group;
+    subtextStyle: {
+      color: '#aaa'
+    }
   }
-};
-var builders = {
-  /**
-   * @private
-   */
-  axisLine: function () {
-    var opt = this.opt;
-    var axisModel = this.axisModel;
+}); // View
 
-    if (!axisModel.get('axisLine.show')) {
+extendComponentView({
+  type: 'title',
+  render: function (titleModel, ecModel, api) {
+    this.group.removeAll();
+
+    if (!titleModel.get('show')) {
       return;
     }
 
-    var extent = this.axisModel.axis.getExtent();
-    var matrix = this._transform;
-    var pt1 = [extent[0], 0];
-    var pt2 = [extent[1], 0];
-
-    if (matrix) {
-      applyTransform(pt1, pt1, matrix);
-      applyTransform(pt2, pt2, matrix);
-    }
-
-    var lineStyle = extend({
-      lineCap: 'round'
-    }, axisModel.getModel('axisLine.lineStyle').getLineStyle());
-    this.group.add(new Line(subPixelOptimizeLine({
-      // Id for animation
-      anid: 'line',
-      shape: {
-        x1: pt1[0],
-        y1: pt1[1],
-        x2: pt2[0],
-        y2: pt2[1]
-      },
-      style: lineStyle,
-      strokeContainThreshold: opt.strokeContainThreshold || 5,
-      silent: true,
-      z2: 1
-    })));
-    var arrows = axisModel.get('axisLine.symbol');
-    var arrowSize = axisModel.get('axisLine.symbolSize');
-    var arrowOffset = axisModel.get('axisLine.symbolOffset') || 0;
-
-    if (typeof arrowOffset === 'number') {
-      arrowOffset = [arrowOffset, arrowOffset];
-    }
-
-    if (arrows != null) {
-      if (typeof arrows === 'string') {
-        // Use the same arrow for start and end point
-        arrows = [arrows, arrows];
-      }
-
-      if (typeof arrowSize === 'string' || typeof arrowSize === 'number') {
-        // Use the same size for width and height
-        arrowSize = [arrowSize, arrowSize];
-      }
-
-      var symbolWidth = arrowSize[0];
-      var symbolHeight = arrowSize[1];
-      each$1([{
-        rotate: opt.rotation + Math.PI / 2,
-        offset: arrowOffset[0],
-        r: 0
+    var group = this.group;
+    var textStyleModel = titleModel.getModel('textStyle');
+    var subtextStyleModel = titleModel.getModel('subtextStyle');
+    var textAlign = titleModel.get('textAlign');
+    var textVerticalAlign = retrieve2(titleModel.get('textBaseline'), titleModel.get('textVerticalAlign'));
+    var textEl = new Text({
+      style: setTextStyle({}, textStyleModel, {
+        text: titleModel.get('text'),
+        textFill: textStyleModel.getTextColor()
       }, {
-        rotate: opt.rotation - Math.PI / 2,
-        offset: arrowOffset[1],
-        r: Math.sqrt((pt1[0] - pt2[0]) * (pt1[0] - pt2[0]) + (pt1[1] - pt2[1]) * (pt1[1] - pt2[1]))
-      }], function (point, index) {
-        if (arrows[index] !== 'none' && arrows[index] != null) {
-          var symbol = createSymbol(arrows[index], -symbolWidth / 2, -symbolHeight / 2, symbolWidth, symbolHeight, lineStyle.stroke, true); // Calculate arrow position with offset
-
-          var r = point.r + point.offset;
-          var pos = [pt1[0] + r * Math.cos(opt.rotation), pt1[1] - r * Math.sin(opt.rotation)];
-          symbol.attr({
-            rotation: point.rotate,
-            position: pos,
-            silent: true,
-            z2: 11
-          });
-          this.group.add(symbol);
-        }
-      }, this);
-    }
-  },
-
-  /**
-   * @private
-   */
-  axisTickLabel: function () {
-    var axisModel = this.axisModel;
-    var opt = this.opt;
-    var tickEls = buildAxisTick(this, axisModel, opt);
-    var labelEls = buildAxisLabel(this, axisModel, opt);
-    fixMinMaxLabelShow(axisModel, labelEls, tickEls);
-  },
-
-  /**
-   * @private
-   */
-  axisName: function () {
-    var opt = this.opt;
-    var axisModel = this.axisModel;
-    var name = retrieve(opt.axisName, axisModel.get('name'));
-
-    if (!name) {
-      return;
-    }
-
-    var nameLocation = axisModel.get('nameLocation');
-    var nameDirection = opt.nameDirection;
-    var textStyleModel = axisModel.getModel('nameTextStyle');
-    var gap = axisModel.get('nameGap') || 0;
-    var extent = this.axisModel.axis.getExtent();
-    var gapSignal = extent[0] > extent[1] ? -1 : 1;
-    var pos = [nameLocation === 'start' ? extent[0] - gapSignal * gap : nameLocation === 'end' ? extent[1] + gapSignal * gap : (extent[0] + extent[1]) / 2, // 'middle'
-    // Reuse labelOffset.
-    isNameLocationCenter(nameLocation) ? opt.labelOffset + nameDirection * gap : 0];
-    var labelLayout;
-    var nameRotation = axisModel.get('nameRotate');
-
-    if (nameRotation != null) {
-      nameRotation = nameRotation * PI$2 / 180; // To radian.
-    }
-
-    var axisNameAvailableWidth;
-
-    if (isNameLocationCenter(nameLocation)) {
-      labelLayout = innerTextLayout(opt.rotation, nameRotation != null ? nameRotation : opt.rotation, // Adapt to axis.
-      nameDirection);
-    } else {
-      labelLayout = endTextLayout(opt, nameLocation, nameRotation || 0, extent);
-      axisNameAvailableWidth = opt.axisNameAvailableWidth;
-
-      if (axisNameAvailableWidth != null) {
-        axisNameAvailableWidth = Math.abs(axisNameAvailableWidth / Math.sin(labelLayout.rotation));
-        !isFinite(axisNameAvailableWidth) && (axisNameAvailableWidth = null);
-      }
-    }
-
-    var textFont = textStyleModel.getFont();
-    var truncateOpt = axisModel.get('nameTruncate', true) || {};
-    var ellipsis = truncateOpt.ellipsis;
-    var maxWidth = retrieve(opt.nameTruncateMaxWidth, truncateOpt.maxWidth, axisNameAvailableWidth); // FIXME
-    // truncate rich text? (consider performance)
-
-    var truncatedText = ellipsis != null && maxWidth != null ? truncateText$1(name, maxWidth, textFont, ellipsis, {
-      minChar: 2,
-      placeholder: truncateOpt.placeholder
-    }) : name;
-    var tooltipOpt = axisModel.get('tooltip', true);
-    var mainType = axisModel.mainType;
-    var formatterParams = {
-      componentType: mainType,
-      name: name,
-      $vars: ['name']
-    };
-    formatterParams[mainType + 'Index'] = axisModel.componentIndex;
-    var textEl = new Text({
-      // Id for animation
-      anid: 'name',
-      __fullText: name,
-      __truncatedText: truncatedText,
-      position: pos,
-      rotation: labelLayout.rotation,
-      silent: isSilent(axisModel),
-      z2: 1,
-      tooltip: tooltipOpt && tooltipOpt.show ? extend({
-        content: name,
-        formatter: function () {
-          return name;
-        },
-        formatterParams: formatterParams
-      }, tooltipOpt) : null
-    });
-    setTextStyle(textEl.style, textStyleModel, {
-      text: truncatedText,
-      textFont: textFont,
-      textFill: textStyleModel.getTextColor() || axisModel.get('axisLine.lineStyle.color'),
-      textAlign: labelLayout.textAlign,
-      textVerticalAlign: labelLayout.textVerticalAlign
-    });
-
-    if (axisModel.get('triggerEvent')) {
-      textEl.eventData = makeAxisEventDataBase(axisModel);
-      textEl.eventData.targetType = 'axisName';
-      textEl.eventData.name = name;
-    } // FIXME
-
-
-    this._dumbGroup.add(textEl);
-
-    textEl.updateTransform();
-    this.group.add(textEl);
-    textEl.decomposeTransform();
-  }
-};
-/**
- * @public
- * @static
- * @param {Object} opt
- * @param {number} axisRotation in radian
- * @param {number} textRotation in radian
- * @param {number} direction
- * @return {Object} {
- *  rotation, // according to axis
- *  textAlign,
- *  textVerticalAlign
- * }
- */
-
-var innerTextLayout = AxisBuilder.innerTextLayout = function (axisRotation, textRotation, direction) {
-  var rotationDiff = remRadian(textRotation - axisRotation);
-  var textAlign;
-  var textVerticalAlign;
-
-  if (isRadianAroundZero(rotationDiff)) {
-    // Label is parallel with axis line.
-    textVerticalAlign = direction > 0 ? 'top' : 'bottom';
-    textAlign = 'center';
-  } else if (isRadianAroundZero(rotationDiff - PI$2)) {
-    // Label is inverse parallel with axis line.
-    textVerticalAlign = direction > 0 ? 'bottom' : 'top';
-    textAlign = 'center';
-  } else {
-    textVerticalAlign = 'middle';
-
-    if (rotationDiff > 0 && rotationDiff < PI$2) {
-      textAlign = direction > 0 ? 'right' : 'left';
-    } else {
-      textAlign = direction > 0 ? 'left' : 'right';
-    }
-  }
-
-  return {
-    rotation: rotationDiff,
-    textAlign: textAlign,
-    textVerticalAlign: textVerticalAlign
-  };
-};
-
-function endTextLayout(opt, textPosition, textRotate, extent) {
-  var rotationDiff = remRadian(textRotate - opt.rotation);
-  var textAlign;
-  var textVerticalAlign;
-  var inverse = extent[0] > extent[1];
-  var onLeft = textPosition === 'start' && !inverse || textPosition !== 'start' && inverse;
-
-  if (isRadianAroundZero(rotationDiff - PI$2 / 2)) {
-    textVerticalAlign = onLeft ? 'bottom' : 'top';
-    textAlign = 'center';
-  } else if (isRadianAroundZero(rotationDiff - PI$2 * 1.5)) {
-    textVerticalAlign = onLeft ? 'top' : 'bottom';
-    textAlign = 'center';
-  } else {
-    textVerticalAlign = 'middle';
-
-    if (rotationDiff < PI$2 * 1.5 && rotationDiff > PI$2 / 2) {
-      textAlign = onLeft ? 'left' : 'right';
-    } else {
-      textAlign = onLeft ? 'right' : 'left';
-    }
-  }
-
-  return {
-    rotation: rotationDiff,
-    textAlign: textAlign,
-    textVerticalAlign: textVerticalAlign
-  };
-}
-
-function isSilent(axisModel) {
-  var tooltipOpt = axisModel.get('tooltip');
-  return axisModel.get('silent') // Consider mouse cursor, add these restrictions.
-  || !(axisModel.get('triggerEvent') || tooltipOpt && tooltipOpt.show);
-}
-
-function fixMinMaxLabelShow(axisModel, labelEls, tickEls) {
-  if (shouldShowAllLabels(axisModel.axis)) {
-    return;
-  } // If min or max are user set, we need to check
-  // If the tick on min(max) are overlap on their neighbour tick
-  // If they are overlapped, we need to hide the min(max) tick label
-
-
-  var showMinLabel = axisModel.get('axisLabel.showMinLabel');
-  var showMaxLabel = axisModel.get('axisLabel.showMaxLabel'); // FIXME
-  // Have not consider onBand yet, where tick els is more than label els.
-
-  labelEls = labelEls || [];
-  tickEls = tickEls || [];
-  var firstLabel = labelEls[0];
-  var nextLabel = labelEls[1];
-  var lastLabel = labelEls[labelEls.length - 1];
-  var prevLabel = labelEls[labelEls.length - 2];
-  var firstTick = tickEls[0];
-  var nextTick = tickEls[1];
-  var lastTick = tickEls[tickEls.length - 1];
-  var prevTick = tickEls[tickEls.length - 2];
-
-  if (showMinLabel === false) {
-    ignoreEl(firstLabel);
-    ignoreEl(firstTick);
-  } else if (isTwoLabelOverlapped(firstLabel, nextLabel)) {
-    if (showMinLabel) {
-      ignoreEl(nextLabel);
-      ignoreEl(nextTick);
-    } else {
-      ignoreEl(firstLabel);
-      ignoreEl(firstTick);
-    }
-  }
-
-  if (showMaxLabel === false) {
-    ignoreEl(lastLabel);
-    ignoreEl(lastTick);
-  } else if (isTwoLabelOverlapped(prevLabel, lastLabel)) {
-    if (showMaxLabel) {
-      ignoreEl(prevLabel);
-      ignoreEl(prevTick);
-    } else {
-      ignoreEl(lastLabel);
-      ignoreEl(lastTick);
-    }
-  }
-}
-
-function ignoreEl(el) {
-  el && (el.ignore = true);
-}
-
-function isTwoLabelOverlapped(current, next, labelLayout) {
-  // current and next has the same rotation.
-  var firstRect = current && current.getBoundingRect().clone();
-  var nextRect = next && next.getBoundingRect().clone();
-
-  if (!firstRect || !nextRect) {
-    return;
-  } // When checking intersect of two rotated labels, we use mRotationBack
-  // to avoid that boundingRect is enlarge when using `boundingRect.applyTransform`.
-
-
-  var mRotationBack = identity([]);
-  rotate(mRotationBack, mRotationBack, -current.rotation);
-  firstRect.applyTransform(mul$1([], mRotationBack, current.getLocalTransform()));
-  nextRect.applyTransform(mul$1([], mRotationBack, next.getLocalTransform()));
-  return firstRect.intersect(nextRect);
-}
-
-function isNameLocationCenter(nameLocation) {
-  return nameLocation === 'middle' || nameLocation === 'center';
-}
-
-function buildAxisTick(axisBuilder, axisModel, opt) {
-  var axis = axisModel.axis;
-
-  if (!axisModel.get('axisTick.show') || axis.scale.isBlank()) {
-    return;
-  }
-
-  var tickModel = axisModel.getModel('axisTick');
-  var lineStyleModel = tickModel.getModel('lineStyle');
-  var tickLen = tickModel.get('length');
-  var ticksCoords = axis.getTicksCoords();
-  var pt1 = [];
-  var pt2 = [];
-  var matrix = axisBuilder._transform;
-  var tickEls = [];
-
-  for (var i = 0; i < ticksCoords.length; i++) {
-    var tickCoord = ticksCoords[i].coord;
-    pt1[0] = tickCoord;
-    pt1[1] = 0;
-    pt2[0] = tickCoord;
-    pt2[1] = opt.tickDirection * tickLen;
-
-    if (matrix) {
-      applyTransform(pt1, pt1, matrix);
-      applyTransform(pt2, pt2, matrix);
-    } // Tick line, Not use group transform to have better line draw
-
-
-    var tickEl = new Line(subPixelOptimizeLine({
-      // Id for animation
-      anid: 'tick_' + ticksCoords[i].tickValue,
-      shape: {
-        x1: pt1[0],
-        y1: pt1[1],
-        x2: pt2[0],
-        y2: pt2[1]
-      },
-      style: defaults(lineStyleModel.getLineStyle(), {
-        stroke: axisModel.get('axisLine.lineStyle.color')
+        disableBox: true
       }),
-      z2: 2,
-      silent: true
-    }));
-    axisBuilder.group.add(tickEl);
-    tickEls.push(tickEl);
-  }
-
-  return tickEls;
-}
-
-function buildAxisLabel(axisBuilder, axisModel, opt) {
-  var axis = axisModel.axis;
-  var show = retrieve(opt.axisLabelShow, axisModel.get('axisLabel.show'));
-
-  if (!show || axis.scale.isBlank()) {
-    return;
-  }
-
-  var labelModel = axisModel.getModel('axisLabel');
-  var labelMargin = labelModel.get('margin');
-  var labels = axis.getViewLabels(); // Special label rotate.
-
-  var labelRotation = (retrieve(opt.labelRotate, labelModel.get('rotate')) || 0) * PI$2 / 180;
-  var labelLayout = innerTextLayout(opt.rotation, labelRotation, opt.labelDirection);
-  var rawCategoryData = axisModel.getCategories(true);
-  var labelEls = [];
-  var silent = isSilent(axisModel);
-  var triggerEvent = axisModel.get('triggerEvent');
-  each$1(labels, function (labelItem, index) {
-    var tickValue = labelItem.tickValue;
-    var formattedLabel = labelItem.formattedLabel;
-    var rawLabel = labelItem.rawLabel;
-    var itemLabelModel = labelModel;
-
-    if (rawCategoryData && rawCategoryData[tickValue] && rawCategoryData[tickValue].textStyle) {
-      itemLabelModel = new Model(rawCategoryData[tickValue].textStyle, labelModel, axisModel.ecModel);
-    }
-
-    var textColor = itemLabelModel.getTextColor() || axisModel.get('axisLine.lineStyle.color');
-    var tickCoord = axis.dataToCoord(tickValue);
-    var pos = [tickCoord, opt.labelOffset + opt.labelDirection * labelMargin];
-    var textEl = new Text({
-      // Id for animation
-      anid: 'label_' + tickValue,
-      position: pos,
-      rotation: labelLayout.rotation,
-      silent: silent,
       z2: 10
     });
-    setTextStyle(textEl.style, itemLabelModel, {
-      text: formattedLabel,
-      textAlign: itemLabelModel.getShallow('align', true) || labelLayout.textAlign,
-      textVerticalAlign: itemLabelModel.getShallow('verticalAlign', true) || itemLabelModel.getShallow('baseline', true) || labelLayout.textVerticalAlign,
-      textFill: typeof textColor === 'function' ? textColor( // (1) In category axis with data zoom, tick is not the original
-      // index of axis.data. So tick should not be exposed to user
-      // in category axis.
-      // (2) Compatible with previous version, which always use formatted label as
-      // input. But in interval scale the formatted label is like '223,445', which
-      // maked user repalce ','. So we modify it to return original val but remain
-      // it as 'string' to avoid error in replacing.
-      axis.type === 'category' ? rawLabel : axis.type === 'value' ? tickValue + '' : tickValue, index) : textColor
-    }); // Pack data for mouse event
+    var textRect = textEl.getBoundingRect();
+    var subText = titleModel.get('subtext');
+    var subTextEl = new Text({
+      style: setTextStyle({}, subtextStyleModel, {
+        text: subText,
+        textFill: subtextStyleModel.getTextColor(),
+        y: textRect.height + titleModel.get('itemGap'),
+        textVerticalAlign: 'top'
+      }, {
+        disableBox: true
+      }),
+      z2: 10
+    });
+    var link = titleModel.get('link');
+    var sublink = titleModel.get('sublink');
+    var triggerEvent = titleModel.get('triggerEvent', true);
+    textEl.silent = !link && !triggerEvent;
+    subTextEl.silent = !sublink && !triggerEvent;
 
-    if (triggerEvent) {
-      textEl.eventData = makeAxisEventDataBase(axisModel);
-      textEl.eventData.targetType = 'axisLabel';
-      textEl.eventData.value = rawLabel;
-    } // FIXME
+    if (link) {
+      textEl.on('click', function () {
+        window.open(link, '_' + titleModel.get('target'));
+      });
+    }
+
+    if (sublink) {
+      subTextEl.on('click', function () {
+        window.open(sublink, '_' + titleModel.get('subtarget'));
+      });
+    }
+
+    textEl.eventData = subTextEl.eventData = triggerEvent ? {
+      componentType: 'title',
+      componentIndex: titleModel.componentIndex
+    } : null;
+    group.add(textEl);
+    subText && group.add(subTextEl); // If no subText, but add subTextEl, there will be an empty line.
+
+    var groupRect = group.getBoundingRect();
+    var layoutOption = titleModel.getBoxLayoutParams();
+    layoutOption.width = groupRect.width;
+    layoutOption.height = groupRect.height;
+    var layoutRect = getLayoutRect(layoutOption, {
+      width: api.getWidth(),
+      height: api.getHeight()
+    }, titleModel.get('padding')); // Adjust text align based on position
+
+    if (!textAlign) {
+      // Align left if title is on the left. center and right is same
+      textAlign = titleModel.get('left') || titleModel.get('right');
+
+      if (textAlign === 'middle') {
+        textAlign = 'center';
+      } // Adjust layout by text align
 
 
-    axisBuilder._dumbGroup.add(textEl);
+      if (textAlign === 'right') {
+        layoutRect.x += layoutRect.width;
+      } else if (textAlign === 'center') {
+        layoutRect.x += layoutRect.width / 2;
+      }
+    }
 
-    textEl.updateTransform();
-    labelEls.push(textEl);
-    axisBuilder.group.add(textEl);
-    textEl.decomposeTransform();
-  });
-  return labelEls;
-}
+    if (!textVerticalAlign) {
+      textVerticalAlign = titleModel.get('top') || titleModel.get('bottom');
+
+      if (textVerticalAlign === 'center') {
+        textVerticalAlign = 'middle';
+      }
+
+      if (textVerticalAlign === 'bottom') {
+        layoutRect.y += layoutRect.height;
+      } else if (textVerticalAlign === 'middle') {
+        layoutRect.y += layoutRect.height / 2;
+      }
+
+      textVerticalAlign = textVerticalAlign || 'top';
+    }
+
+    group.attr('position', [layoutRect.x, layoutRect.y]);
+    var alignStyle = {
+      textAlign: textAlign,
+      textVerticalAlign: textVerticalAlign
+    };
+    textEl.setStyle(alignStyle);
+    subTextEl.setStyle(alignStyle); // Render background
+    // Get groupRect again because textAlign has been changed
+
+    groupRect = group.getBoundingRect();
+    var padding = layoutRect.margin;
+    var style = titleModel.getItemStyle(['color', 'opacity']);
+    style.fill = titleModel.get('backgroundColor');
+    var rect = new Rect({
+      shape: {
+        x: groupRect.x - padding[3],
+        y: groupRect.y - padding[0],
+        width: groupRect.width + padding[1] + padding[3],
+        height: groupRect.height + padding[0] + padding[2],
+        r: titleModel.get('borderRadius')
+      },
+      style: style,
+      subPixelOptimize: true,
+      silent: true
+    });
+    group.add(rect);
+  }
+});
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -36229,5446 +35533,6 @@ function makeKey(model) {
 * under the License.
 */
 /**
- * Base class of AxisView.
- */
-
-var AxisView = extendComponentView({
-  type: 'axis',
-
-  /**
-   * @private
-   */
-  _axisPointer: null,
-
-  /**
-   * @protected
-   * @type {string}
-   */
-  axisPointerClass: null,
-
-  /**
-   * @override
-   */
-  render: function (axisModel, ecModel, api, payload) {
-    // FIXME
-    // This process should proformed after coordinate systems updated
-    // (axis scale updated), and should be performed each time update.
-    // So put it here temporarily, although it is not appropriate to
-    // put a model-writing procedure in `view`.
-    this.axisPointerClass && fixValue(axisModel);
-    AxisView.superApply(this, 'render', arguments);
-    updateAxisPointer(this, axisModel, ecModel, api, payload, true);
-  },
-
-  /**
-   * Action handler.
-   * @public
-   * @param {module:echarts/coord/cartesian/AxisModel} axisModel
-   * @param {module:echarts/model/Global} ecModel
-   * @param {module:echarts/ExtensionAPI} api
-   * @param {Object} payload
-   */
-  updateAxisPointer: function (axisModel, ecModel, api, payload, force) {
-    updateAxisPointer(this, axisModel, ecModel, api, payload, false);
-  },
-
-  /**
-   * @override
-   */
-  remove: function (ecModel, api) {
-    var axisPointer = this._axisPointer;
-    axisPointer && axisPointer.remove(api);
-    AxisView.superApply(this, 'remove', arguments);
-  },
-
-  /**
-   * @override
-   */
-  dispose: function (ecModel, api) {
-    disposeAxisPointer(this, api);
-    AxisView.superApply(this, 'dispose', arguments);
-  }
-});
-
-function updateAxisPointer(axisView, axisModel, ecModel, api, payload, forceRender) {
-  var Clazz = AxisView.getAxisPointerClass(axisView.axisPointerClass);
-
-  if (!Clazz) {
-    return;
-  }
-
-  var axisPointerModel = getAxisPointerModel(axisModel);
-  axisPointerModel ? (axisView._axisPointer || (axisView._axisPointer = new Clazz())).render(axisModel, axisPointerModel, api, forceRender) : disposeAxisPointer(axisView, api);
-}
-
-function disposeAxisPointer(axisView, ecModel, api) {
-  var axisPointer = axisView._axisPointer;
-  axisPointer && axisPointer.dispose(ecModel, api);
-  axisView._axisPointer = null;
-}
-
-var axisPointerClazz = [];
-
-AxisView.registerAxisPointerClass = function (type, clazz) {
-  axisPointerClazz[type] = clazz;
-};
-
-AxisView.getAxisPointerClass = function (type) {
-  return type && axisPointerClazz[type];
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * Can only be called after coordinate system creation stage.
- * (Can be called before coordinate system update stage).
- *
- * @param {Object} opt {labelInside}
- * @return {Object} {
- *  position, rotation, labelDirection, labelOffset,
- *  tickDirection, labelRotate, z2
- * }
- */
-
-function layout$1(gridModel, axisModel, opt) {
-  opt = opt || {};
-  var grid = gridModel.coordinateSystem;
-  var axis = axisModel.axis;
-  var layout = {};
-  var otherAxisOnZeroOf = axis.getAxesOnZeroOf()[0];
-  var rawAxisPosition = axis.position;
-  var axisPosition = otherAxisOnZeroOf ? 'onZero' : rawAxisPosition;
-  var axisDim = axis.dim;
-  var rect = grid.getRect();
-  var rectBound = [rect.x, rect.x + rect.width, rect.y, rect.y + rect.height];
-  var idx = {
-    left: 0,
-    right: 1,
-    top: 0,
-    bottom: 1,
-    onZero: 2
-  };
-  var axisOffset = axisModel.get('offset') || 0;
-  var posBound = axisDim === 'x' ? [rectBound[2] - axisOffset, rectBound[3] + axisOffset] : [rectBound[0] - axisOffset, rectBound[1] + axisOffset];
-
-  if (otherAxisOnZeroOf) {
-    var onZeroCoord = otherAxisOnZeroOf.toGlobalCoord(otherAxisOnZeroOf.dataToCoord(0));
-    posBound[idx.onZero] = Math.max(Math.min(onZeroCoord, posBound[1]), posBound[0]);
-  } // Axis position
-
-
-  layout.position = [axisDim === 'y' ? posBound[idx[axisPosition]] : rectBound[0], axisDim === 'x' ? posBound[idx[axisPosition]] : rectBound[3]]; // Axis rotation
-
-  layout.rotation = Math.PI / 2 * (axisDim === 'x' ? 0 : 1); // Tick and label direction, x y is axisDim
-
-  var dirMap = {
-    top: -1,
-    bottom: 1,
-    left: -1,
-    right: 1
-  };
-  layout.labelDirection = layout.tickDirection = layout.nameDirection = dirMap[rawAxisPosition];
-  layout.labelOffset = otherAxisOnZeroOf ? posBound[idx[rawAxisPosition]] - posBound[idx.onZero] : 0;
-
-  if (axisModel.get('axisTick.inside')) {
-    layout.tickDirection = -layout.tickDirection;
-  }
-
-  if (retrieve(opt.labelInside, axisModel.get('axisLabel.inside'))) {
-    layout.labelDirection = -layout.labelDirection;
-  } // Special label rotation
-
-
-  var labelRotate = axisModel.get('axisLabel.rotate');
-  layout.labelRotate = axisPosition === 'top' ? -labelRotate : labelRotate; // Over splitLine and splitArea
-
-  layout.z2 = 1;
-  return layout;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var axisBuilderAttrs = ['axisLine', 'axisTickLabel', 'axisName'];
-var selfBuilderAttrs = ['splitArea', 'splitLine']; // function getAlignWithLabel(model, axisModel) {
-//     var alignWithLabel = model.get('alignWithLabel');
-//     if (alignWithLabel === 'auto') {
-//         alignWithLabel = axisModel.get('axisTick.alignWithLabel');
-//     }
-//     return alignWithLabel;
-// }
-
-var CartesianAxisView = AxisView.extend({
-  type: 'cartesianAxis',
-  axisPointerClass: 'CartesianAxisPointer',
-
-  /**
-   * @override
-   */
-  render: function (axisModel, ecModel, api, payload) {
-    this.group.removeAll();
-    var oldAxisGroup = this._axisGroup;
-    this._axisGroup = new Group();
-    this.group.add(this._axisGroup);
-
-    if (!axisModel.get('show')) {
-      return;
-    }
-
-    var gridModel = axisModel.getCoordSysModel();
-    var layout = layout$1(gridModel, axisModel);
-    var axisBuilder = new AxisBuilder(axisModel, layout);
-    each$1(axisBuilderAttrs, axisBuilder.add, axisBuilder);
-
-    this._axisGroup.add(axisBuilder.getGroup());
-
-    each$1(selfBuilderAttrs, function (name) {
-      if (axisModel.get(name + '.show')) {
-        this['_' + name](axisModel, gridModel);
-      }
-    }, this);
-    groupTransition(oldAxisGroup, this._axisGroup, axisModel);
-    CartesianAxisView.superCall(this, 'render', axisModel, ecModel, api, payload);
-  },
-  remove: function () {
-    this._splitAreaColors = null;
-  },
-
-  /**
-   * @param {module:echarts/coord/cartesian/AxisModel} axisModel
-   * @param {module:echarts/coord/cartesian/GridModel} gridModel
-   * @private
-   */
-  _splitLine: function (axisModel, gridModel) {
-    var axis = axisModel.axis;
-
-    if (axis.scale.isBlank()) {
-      return;
-    }
-
-    var splitLineModel = axisModel.getModel('splitLine');
-    var lineStyleModel = splitLineModel.getModel('lineStyle');
-    var lineColors = lineStyleModel.get('color');
-    lineColors = isArray(lineColors) ? lineColors : [lineColors];
-    var gridRect = gridModel.coordinateSystem.getRect();
-    var isHorizontal = axis.isHorizontal();
-    var lineCount = 0;
-    var ticksCoords = axis.getTicksCoords({
-      tickModel: splitLineModel
-    });
-    var p1 = [];
-    var p2 = []; // Simple optimization
-    // Batching the lines if color are the same
-
-    var lineStyle = lineStyleModel.getLineStyle();
-
-    for (var i = 0; i < ticksCoords.length; i++) {
-      var tickCoord = axis.toGlobalCoord(ticksCoords[i].coord);
-
-      if (isHorizontal) {
-        p1[0] = tickCoord;
-        p1[1] = gridRect.y;
-        p2[0] = tickCoord;
-        p2[1] = gridRect.y + gridRect.height;
-      } else {
-        p1[0] = gridRect.x;
-        p1[1] = tickCoord;
-        p2[0] = gridRect.x + gridRect.width;
-        p2[1] = tickCoord;
-      }
-
-      var colorIndex = lineCount++ % lineColors.length;
-      var tickValue = ticksCoords[i].tickValue;
-
-      this._axisGroup.add(new Line(subPixelOptimizeLine({
-        anid: tickValue != null ? 'line_' + ticksCoords[i].tickValue : null,
-        shape: {
-          x1: p1[0],
-          y1: p1[1],
-          x2: p2[0],
-          y2: p2[1]
-        },
-        style: defaults({
-          stroke: lineColors[colorIndex]
-        }, lineStyle),
-        silent: true
-      })));
-    }
-  },
-
-  /**
-   * @param {module:echarts/coord/cartesian/AxisModel} axisModel
-   * @param {module:echarts/coord/cartesian/GridModel} gridModel
-   * @private
-   */
-  _splitArea: function (axisModel, gridModel) {
-    var axis = axisModel.axis;
-
-    if (axis.scale.isBlank()) {
-      return;
-    }
-
-    var splitAreaModel = axisModel.getModel('splitArea');
-    var areaStyleModel = splitAreaModel.getModel('areaStyle');
-    var areaColors = areaStyleModel.get('color');
-    var gridRect = gridModel.coordinateSystem.getRect();
-    var ticksCoords = axis.getTicksCoords({
-      tickModel: splitAreaModel,
-      clamp: true
-    });
-
-    if (!ticksCoords.length) {
-      return;
-    } // For Making appropriate splitArea animation, the color and anid
-    // should be corresponding to previous one if possible.
-
-
-    var areaColorsLen = areaColors.length;
-    var lastSplitAreaColors = this._splitAreaColors;
-    var newSplitAreaColors = createHashMap();
-    var colorIndex = 0;
-
-    if (lastSplitAreaColors) {
-      for (var i = 0; i < ticksCoords.length; i++) {
-        var cIndex = lastSplitAreaColors.get(ticksCoords[i].tickValue);
-
-        if (cIndex != null) {
-          colorIndex = (cIndex + (areaColorsLen - 1) * i) % areaColorsLen;
-          break;
-        }
-      }
-    }
-
-    var prev = axis.toGlobalCoord(ticksCoords[0].coord);
-    var areaStyle = areaStyleModel.getAreaStyle();
-    areaColors = isArray(areaColors) ? areaColors : [areaColors];
-
-    for (var i = 1; i < ticksCoords.length; i++) {
-      var tickCoord = axis.toGlobalCoord(ticksCoords[i].coord);
-      var x;
-      var y;
-      var width;
-      var height;
-
-      if (axis.isHorizontal()) {
-        x = prev;
-        y = gridRect.y;
-        width = tickCoord - x;
-        height = gridRect.height;
-        prev = x + width;
-      } else {
-        x = gridRect.x;
-        y = prev;
-        width = gridRect.width;
-        height = tickCoord - y;
-        prev = y + height;
-      }
-
-      var tickValue = ticksCoords[i - 1].tickValue;
-      tickValue != null && newSplitAreaColors.set(tickValue, colorIndex);
-
-      this._axisGroup.add(new Rect({
-        anid: tickValue != null ? 'area_' + tickValue : null,
-        shape: {
-          x: x,
-          y: y,
-          width: width,
-          height: height
-        },
-        style: defaults({
-          fill: areaColors[colorIndex]
-        }, areaStyle),
-        silent: true
-      }));
-
-      colorIndex = (colorIndex + 1) % areaColorsLen;
-    }
-
-    this._splitAreaColors = newSplitAreaColors;
-  }
-});
-CartesianAxisView.extend({
-  type: 'xAxis'
-});
-CartesianAxisView.extend({
-  type: 'yAxis'
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-extendComponentView({
-  type: 'grid',
-  render: function (gridModel, ecModel) {
-    this.group.removeAll();
-
-    if (gridModel.get('show')) {
-      this.group.add(new Rect({
-        shape: gridModel.coordinateSystem.getRect(),
-        style: defaults({
-          fill: gridModel.get('backgroundColor')
-        }, gridModel.getItemStyle()),
-        silent: true,
-        z2: -1
-      }));
-    }
-  }
-});
-registerPreprocessor(function (option) {
-  // Only create grid when need
-  if (option.xAxis && option.yAxis && !option.grid) {
-    option.grid = {};
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerLayout(curry(layout, 'bar')); // Should after normal bar layout, otherwise it is blocked by normal bar layout.
-
-registerLayout(largeLayout);
-registerVisual({
-  seriesType: 'bar',
-  reset: function (seriesModel) {
-    // Visual coding for legend
-    seriesModel.getData().setVisual('legendSymbol', 'roundRect');
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-SeriesModel.extend({
-  type: 'series.line',
-  dependencies: ['grid', 'polar'],
-  getInitialData: function (option, ecModel) {
-    return createListFromArray(this.getSource(), this);
-  },
-  defaultOption: {
-    zlevel: 0,
-    z: 2,
-    coordinateSystem: 'cartesian2d',
-    legendHoverLink: true,
-    hoverAnimation: true,
-    // stack: null
-    // xAxisIndex: 0,
-    // yAxisIndex: 0,
-    // polarIndex: 0,
-    // If clip the overflow value
-    clipOverflow: true,
-    // cursor: null,
-    label: {
-      position: 'top'
-    },
-    // itemStyle: {
-    // },
-    lineStyle: {
-      width: 2,
-      type: 'solid'
-    },
-    // areaStyle: {
-    // origin of areaStyle. Valid values:
-    // `'auto'/null/undefined`: from axisLine to data
-    // `'start'`: from min to data
-    // `'end'`: from data to max
-    // origin: 'auto'
-    // },
-    // false, 'start', 'end', 'middle'
-    step: false,
-    // Disabled if step is true
-    smooth: false,
-    smoothMonotone: null,
-    symbol: 'emptyCircle',
-    symbolSize: 4,
-    symbolRotate: null,
-    showSymbol: true,
-    // `false`: follow the label interval strategy.
-    // `true`: show all symbols.
-    // `'auto'`: If possible, show all symbols, otherwise
-    //           follow the label interval strategy.
-    showAllSymbol: 'auto',
-    // Whether to connect break point.
-    connectNulls: false,
-    // Sampling for large data. Can be: 'average', 'max', 'min', 'sum'.
-    sampling: 'none',
-    animationEasing: 'linear',
-    // Disable progressive
-    progressive: 0,
-    hoverLayerThreshold: Infinity
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * @module echarts/chart/helper/Symbol
- */
-/**
- * @constructor
- * @alias {module:echarts/chart/helper/Symbol}
- * @param {module:echarts/data/List} data
- * @param {number} idx
- * @extends {module:zrender/graphic/Group}
- */
-
-function SymbolClz$1(data, idx, seriesScope) {
-  Group.call(this);
-  this.updateData(data, idx, seriesScope);
-}
-
-var symbolProto = SymbolClz$1.prototype;
-/**
- * @public
- * @static
- * @param {module:echarts/data/List} data
- * @param {number} dataIndex
- * @return {Array.<number>} [width, height]
- */
-
-var getSymbolSize = SymbolClz$1.getSymbolSize = function (data, idx) {
-  var symbolSize = data.getItemVisual(idx, 'symbolSize');
-  return symbolSize instanceof Array ? symbolSize.slice() : [+symbolSize, +symbolSize];
-};
-
-function getScale(symbolSize) {
-  return [symbolSize[0] / 2, symbolSize[1] / 2];
-}
-
-function driftSymbol(dx, dy) {
-  this.parent.drift(dx, dy);
-}
-
-symbolProto._createSymbol = function (symbolType, data, idx, symbolSize, keepAspect) {
-  // Remove paths created before
-  this.removeAll();
-  var color = data.getItemVisual(idx, 'color'); // var symbolPath = createSymbol(
-  //     symbolType, -0.5, -0.5, 1, 1, color
-  // );
-  // If width/height are set too small (e.g., set to 1) on ios10
-  // and macOS Sierra, a circle stroke become a rect, no matter what
-  // the scale is set. So we set width/height as 2. See #4150.
-
-  var symbolPath = createSymbol(symbolType, -1, -1, 2, 2, color, keepAspect);
-  symbolPath.attr({
-    z2: 100,
-    culling: true,
-    scale: getScale(symbolSize)
-  }); // Rewrite drift method
-
-  symbolPath.drift = driftSymbol;
-  this._symbolType = symbolType;
-  this.add(symbolPath);
-};
-/**
- * Stop animation
- * @param {boolean} toLastFrame
- */
-
-
-symbolProto.stopSymbolAnimation = function (toLastFrame) {
-  this.childAt(0).stopAnimation(toLastFrame);
-};
-/**
- * FIXME:
- * Caution: This method breaks the encapsulation of this module,
- * but it indeed brings convenience. So do not use the method
- * unless you detailedly know all the implements of `Symbol`,
- * especially animation.
- *
- * Get symbol path element.
- */
-
-
-symbolProto.getSymbolPath = function () {
-  return this.childAt(0);
-};
-/**
- * Get scale(aka, current symbol size).
- * Including the change caused by animation
- */
-
-
-symbolProto.getScale = function () {
-  return this.childAt(0).scale;
-};
-/**
- * Highlight symbol
- */
-
-
-symbolProto.highlight = function () {
-  this.childAt(0).trigger('emphasis');
-};
-/**
- * Downplay symbol
- */
-
-
-symbolProto.downplay = function () {
-  this.childAt(0).trigger('normal');
-};
-/**
- * @param {number} zlevel
- * @param {number} z
- */
-
-
-symbolProto.setZ = function (zlevel, z) {
-  var symbolPath = this.childAt(0);
-  symbolPath.zlevel = zlevel;
-  symbolPath.z = z;
-};
-
-symbolProto.setDraggable = function (draggable) {
-  var symbolPath = this.childAt(0);
-  symbolPath.draggable = draggable;
-  symbolPath.cursor = draggable ? 'move' : 'pointer';
-};
-/**
- * Update symbol properties
- * @param {module:echarts/data/List} data
- * @param {number} idx
- * @param {Object} [seriesScope]
- * @param {Object} [seriesScope.itemStyle]
- * @param {Object} [seriesScope.hoverItemStyle]
- * @param {Object} [seriesScope.symbolRotate]
- * @param {Object} [seriesScope.symbolOffset]
- * @param {module:echarts/model/Model} [seriesScope.labelModel]
- * @param {module:echarts/model/Model} [seriesScope.hoverLabelModel]
- * @param {boolean} [seriesScope.hoverAnimation]
- * @param {Object} [seriesScope.cursorStyle]
- * @param {module:echarts/model/Model} [seriesScope.itemModel]
- * @param {string} [seriesScope.symbolInnerColor]
- * @param {Object} [seriesScope.fadeIn=false]
- */
-
-
-symbolProto.updateData = function (data, idx, seriesScope) {
-  this.silent = false;
-  var symbolType = data.getItemVisual(idx, 'symbol') || 'circle';
-  var seriesModel = data.hostModel;
-  var symbolSize = getSymbolSize(data, idx);
-  var isInit = symbolType !== this._symbolType;
-
-  if (isInit) {
-    var keepAspect = data.getItemVisual(idx, 'symbolKeepAspect');
-
-    this._createSymbol(symbolType, data, idx, symbolSize, keepAspect);
-  } else {
-    var symbolPath = this.childAt(0);
-    symbolPath.silent = false;
-    updateProps(symbolPath, {
-      scale: getScale(symbolSize)
-    }, seriesModel, idx);
-  }
-
-  this._updateCommon(data, idx, symbolSize, seriesScope);
-
-  if (isInit) {
-    var symbolPath = this.childAt(0);
-    var fadeIn = seriesScope && seriesScope.fadeIn;
-    var target = {
-      scale: symbolPath.scale.slice()
-    };
-    fadeIn && (target.style = {
-      opacity: symbolPath.style.opacity
-    });
-    symbolPath.scale = [0, 0];
-    fadeIn && (symbolPath.style.opacity = 0);
-    initProps(symbolPath, target, seriesModel, idx);
-  }
-
-  this._seriesModel = seriesModel;
-}; // Update common properties
-
-
-var normalStyleAccessPath = ['itemStyle'];
-var emphasisStyleAccessPath = ['emphasis', 'itemStyle'];
-var normalLabelAccessPath = ['label'];
-var emphasisLabelAccessPath = ['emphasis', 'label'];
-/**
- * @param {module:echarts/data/List} data
- * @param {number} idx
- * @param {Array.<number>} symbolSize
- * @param {Object} [seriesScope]
- */
-
-symbolProto._updateCommon = function (data, idx, symbolSize, seriesScope) {
-  var symbolPath = this.childAt(0);
-  var seriesModel = data.hostModel;
-  var color = data.getItemVisual(idx, 'color'); // Reset style
-
-  if (symbolPath.type !== 'image') {
-    symbolPath.useStyle({
-      strokeNoScale: true
-    });
-  }
-
-  var itemStyle = seriesScope && seriesScope.itemStyle;
-  var hoverItemStyle = seriesScope && seriesScope.hoverItemStyle;
-  var symbolRotate = seriesScope && seriesScope.symbolRotate;
-  var symbolOffset = seriesScope && seriesScope.symbolOffset;
-  var labelModel = seriesScope && seriesScope.labelModel;
-  var hoverLabelModel = seriesScope && seriesScope.hoverLabelModel;
-  var hoverAnimation = seriesScope && seriesScope.hoverAnimation;
-  var cursorStyle = seriesScope && seriesScope.cursorStyle;
-
-  if (!seriesScope || data.hasItemOption) {
-    var itemModel = seriesScope && seriesScope.itemModel ? seriesScope.itemModel : data.getItemModel(idx); // Color must be excluded.
-    // Because symbol provide setColor individually to set fill and stroke
-
-    itemStyle = itemModel.getModel(normalStyleAccessPath).getItemStyle(['color']);
-    hoverItemStyle = itemModel.getModel(emphasisStyleAccessPath).getItemStyle();
-    symbolRotate = itemModel.getShallow('symbolRotate');
-    symbolOffset = itemModel.getShallow('symbolOffset');
-    labelModel = itemModel.getModel(normalLabelAccessPath);
-    hoverLabelModel = itemModel.getModel(emphasisLabelAccessPath);
-    hoverAnimation = itemModel.getShallow('hoverAnimation');
-    cursorStyle = itemModel.getShallow('cursor');
-  } else {
-    hoverItemStyle = extend({}, hoverItemStyle);
-  }
-
-  var elStyle = symbolPath.style;
-  symbolPath.attr('rotation', (symbolRotate || 0) * Math.PI / 180 || 0);
-
-  if (symbolOffset) {
-    symbolPath.attr('position', [parsePercent$1(symbolOffset[0], symbolSize[0]), parsePercent$1(symbolOffset[1], symbolSize[1])]);
-  }
-
-  cursorStyle && symbolPath.attr('cursor', cursorStyle); // PENDING setColor before setStyle!!!
-
-  symbolPath.setColor(color, seriesScope && seriesScope.symbolInnerColor);
-  symbolPath.setStyle(itemStyle);
-  var opacity = data.getItemVisual(idx, 'opacity');
-
-  if (opacity != null) {
-    elStyle.opacity = opacity;
-  }
-
-  var liftZ = data.getItemVisual(idx, 'liftZ');
-  var z2Origin = symbolPath.__z2Origin;
-
-  if (liftZ != null) {
-    if (z2Origin == null) {
-      symbolPath.__z2Origin = symbolPath.z2;
-      symbolPath.z2 += liftZ;
-    }
-  } else if (z2Origin != null) {
-    symbolPath.z2 = z2Origin;
-    symbolPath.__z2Origin = null;
-  }
-
-  var useNameLabel = seriesScope && seriesScope.useNameLabel;
-  setLabelStyle(elStyle, hoverItemStyle, labelModel, hoverLabelModel, {
-    labelFetcher: seriesModel,
-    labelDataIndex: idx,
-    defaultText: getLabelDefaultText,
-    isRectText: true,
-    autoColor: color
-  }); // Do not execute util needed.
-
-  function getLabelDefaultText(idx, opt) {
-    return useNameLabel ? data.getName(idx) : getDefaultLabel(data, idx);
-  }
-
-  symbolPath.off('mouseover').off('mouseout').off('emphasis').off('normal');
-  symbolPath.hoverStyle = hoverItemStyle; // FIXME
-  // Do not use symbol.trigger('emphasis'), but use symbol.highlight() instead.
-
-  setHoverStyle(symbolPath);
-  symbolPath.__symbolOriginalScale = getScale(symbolSize);
-
-  if (hoverAnimation && seriesModel.isAnimationEnabled()) {
-    // Note: consider `off`, should use static function here.
-    symbolPath.on('mouseover', onMouseOver).on('mouseout', onMouseOut).on('emphasis', onEmphasis).on('normal', onNormal);
-  }
-};
-
-function onMouseOver() {
-  // see comment in `graphic.isInEmphasis`
-  !isInEmphasis(this) && onEmphasis.call(this);
-}
-
-function onMouseOut() {
-  // see comment in `graphic.isInEmphasis`
-  !isInEmphasis(this) && onNormal.call(this);
-}
-
-function onEmphasis() {
-  // Do not support this hover animation util some scenario required.
-  // Animation can only be supported in hover layer when using `el.incremetal`.
-  if (this.incremental || this.useHoverLayer) {
-    return;
-  }
-
-  var scale = this.__symbolOriginalScale;
-  var ratio = scale[1] / scale[0];
-  this.animateTo({
-    scale: [Math.max(scale[0] * 1.1, scale[0] + 3), Math.max(scale[1] * 1.1, scale[1] + 3 * ratio)]
-  }, 400, 'elasticOut');
-}
-
-function onNormal() {
-  if (this.incremental || this.useHoverLayer) {
-    return;
-  }
-
-  this.animateTo({
-    scale: this.__symbolOriginalScale
-  }, 400, 'elasticOut');
-}
-/**
- * @param {Function} cb
- * @param {Object} [opt]
- * @param {Object} [opt.keepLabel=true]
- */
-
-
-symbolProto.fadeOut = function (cb, opt) {
-  var symbolPath = this.childAt(0); // Avoid mistaken hover when fading out
-
-  this.silent = symbolPath.silent = true; // Not show text when animating
-
-  !(opt && opt.keepLabel) && (symbolPath.style.text = null);
-  updateProps(symbolPath, {
-    style: {
-      opacity: 0
-    },
-    scale: [0, 0]
-  }, this._seriesModel, this.dataIndex, cb);
-};
-
-inherits(SymbolClz$1, Group);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * @module echarts/chart/helper/SymbolDraw
- */
-/**
- * @constructor
- * @alias module:echarts/chart/helper/SymbolDraw
- * @param {module:zrender/graphic/Group} [symbolCtor]
- */
-
-function SymbolDraw(symbolCtor) {
-  this.group = new Group();
-  this._symbolCtor = symbolCtor || SymbolClz$1;
-}
-
-var symbolDrawProto = SymbolDraw.prototype;
-
-function symbolNeedsDraw(data, point, idx, opt) {
-  return point && !isNaN(point[0]) && !isNaN(point[1]) && !(opt.isIgnore && opt.isIgnore(idx)) // We do not set clipShape on group, because it will cut part of
-  // the symbol element shape. We use the same clip shape here as
-  // the line clip.
-  && !(opt.clipShape && !opt.clipShape.contain(point[0], point[1])) && data.getItemVisual(idx, 'symbol') !== 'none';
-}
-/**
- * Update symbols draw by new data
- * @param {module:echarts/data/List} data
- * @param {Object} [opt] Or isIgnore
- * @param {Function} [opt.isIgnore]
- * @param {Object} [opt.clipShape]
- */
-
-
-symbolDrawProto.updateData = function (data, opt) {
-  opt = normalizeUpdateOpt(opt);
-  var group = this.group;
-  var seriesModel = data.hostModel;
-  var oldData = this._data;
-  var SymbolCtor = this._symbolCtor;
-  var seriesScope = makeSeriesScope(data); // There is no oldLineData only when first rendering or switching from
-  // stream mode to normal mode, where previous elements should be removed.
-
-  if (!oldData) {
-    group.removeAll();
-  }
-
-  data.diff(oldData).add(function (newIdx) {
-    var point = data.getItemLayout(newIdx);
-
-    if (symbolNeedsDraw(data, point, newIdx, opt)) {
-      var symbolEl = new SymbolCtor(data, newIdx, seriesScope);
-      symbolEl.attr('position', point);
-      data.setItemGraphicEl(newIdx, symbolEl);
-      group.add(symbolEl);
-    }
-  }).update(function (newIdx, oldIdx) {
-    var symbolEl = oldData.getItemGraphicEl(oldIdx);
-    var point = data.getItemLayout(newIdx);
-
-    if (!symbolNeedsDraw(data, point, newIdx, opt)) {
-      group.remove(symbolEl);
-      return;
-    }
-
-    if (!symbolEl) {
-      symbolEl = new SymbolCtor(data, newIdx);
-      symbolEl.attr('position', point);
-    } else {
-      symbolEl.updateData(data, newIdx, seriesScope);
-      updateProps(symbolEl, {
-        position: point
-      }, seriesModel);
-    } // Add back
-
-
-    group.add(symbolEl);
-    data.setItemGraphicEl(newIdx, symbolEl);
-  }).remove(function (oldIdx) {
-    var el = oldData.getItemGraphicEl(oldIdx);
-    el && el.fadeOut(function () {
-      group.remove(el);
-    });
-  }).execute();
-  this._data = data;
-};
-
-symbolDrawProto.isPersistent = function () {
-  return true;
-};
-
-symbolDrawProto.updateLayout = function () {
-  var data = this._data;
-
-  if (data) {
-    // Not use animation
-    data.eachItemGraphicEl(function (el, idx) {
-      var point = data.getItemLayout(idx);
-      el.attr('position', point);
-    });
-  }
-};
-
-symbolDrawProto.incrementalPrepareUpdate = function (data) {
-  this._seriesScope = makeSeriesScope(data);
-  this._data = null;
-  this.group.removeAll();
-};
-/**
- * Update symbols draw by new data
- * @param {module:echarts/data/List} data
- * @param {Object} [opt] Or isIgnore
- * @param {Function} [opt.isIgnore]
- * @param {Object} [opt.clipShape]
- */
-
-
-symbolDrawProto.incrementalUpdate = function (taskParams, data, opt) {
-  opt = normalizeUpdateOpt(opt);
-
-  function updateIncrementalAndHover(el) {
-    if (!el.isGroup) {
-      el.incremental = el.useHoverLayer = true;
-    }
-  }
-
-  for (var idx = taskParams.start; idx < taskParams.end; idx++) {
-    var point = data.getItemLayout(idx);
-
-    if (symbolNeedsDraw(data, point, idx, opt)) {
-      var el = new this._symbolCtor(data, idx, this._seriesScope);
-      el.traverse(updateIncrementalAndHover);
-      el.attr('position', point);
-      this.group.add(el);
-      data.setItemGraphicEl(idx, el);
-    }
-  }
-};
-
-function normalizeUpdateOpt(opt) {
-  if (opt != null && !isObject$1(opt)) {
-    opt = {
-      isIgnore: opt
-    };
-  }
-
-  return opt || {};
-}
-
-symbolDrawProto.remove = function (enableAnimation) {
-  var group = this.group;
-  var data = this._data; // Incremental model do not have this._data.
-
-  if (data && enableAnimation) {
-    data.eachItemGraphicEl(function (el) {
-      el.fadeOut(function () {
-        group.remove(el);
-      });
-    });
-  } else {
-    group.removeAll();
-  }
-};
-
-function makeSeriesScope(data) {
-  var seriesModel = data.hostModel;
-  return {
-    itemStyle: seriesModel.getModel('itemStyle').getItemStyle(['color']),
-    hoverItemStyle: seriesModel.getModel('emphasis.itemStyle').getItemStyle(),
-    symbolRotate: seriesModel.get('symbolRotate'),
-    symbolOffset: seriesModel.get('symbolOffset'),
-    hoverAnimation: seriesModel.get('hoverAnimation'),
-    labelModel: seriesModel.getModel('label'),
-    hoverLabelModel: seriesModel.getModel('emphasis.label'),
-    cursorStyle: seriesModel.get('cursor')
-  };
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * @param {Object} coordSys
- * @param {module:echarts/data/List} data
- * @param {string} valueOrigin lineSeries.option.areaStyle.origin
- */
-
-function prepareDataCoordInfo(coordSys, data, valueOrigin) {
-  var baseAxis = coordSys.getBaseAxis();
-  var valueAxis = coordSys.getOtherAxis(baseAxis);
-  var valueStart = getValueStart(valueAxis, valueOrigin);
-  var baseAxisDim = baseAxis.dim;
-  var valueAxisDim = valueAxis.dim;
-  var valueDim = data.mapDimension(valueAxisDim);
-  var baseDim = data.mapDimension(baseAxisDim);
-  var baseDataOffset = valueAxisDim === 'x' || valueAxisDim === 'radius' ? 1 : 0;
-  var dims = map(coordSys.dimensions, function (coordDim) {
-    return data.mapDimension(coordDim);
-  });
-  var stacked;
-  var stackResultDim = data.getCalculationInfo('stackResultDimension');
-
-  if (stacked |= isDimensionStacked(data, dims[0]
-  /*, dims[1]*/
-  )) {
-    // jshint ignore:line
-    dims[0] = stackResultDim;
-  }
-
-  if (stacked |= isDimensionStacked(data, dims[1]
-  /*, dims[0]*/
-  )) {
-    // jshint ignore:line
-    dims[1] = stackResultDim;
-  }
-
-  return {
-    dataDimsForPoint: dims,
-    valueStart: valueStart,
-    valueAxisDim: valueAxisDim,
-    baseAxisDim: baseAxisDim,
-    stacked: !!stacked,
-    valueDim: valueDim,
-    baseDim: baseDim,
-    baseDataOffset: baseDataOffset,
-    stackedOverDimension: data.getCalculationInfo('stackedOverDimension')
-  };
-}
-
-function getValueStart(valueAxis, valueOrigin) {
-  var valueStart = 0;
-  var extent = valueAxis.scale.getExtent();
-
-  if (valueOrigin === 'start') {
-    valueStart = extent[0];
-  } else if (valueOrigin === 'end') {
-    valueStart = extent[1];
-  } // auto
-  else {
-      // Both positive
-      if (extent[0] > 0) {
-        valueStart = extent[0];
-      } // Both negative
-      else if (extent[1] < 0) {
-          valueStart = extent[1];
-        } // If is one positive, and one negative, onZero shall be true
-
-    }
-
-  return valueStart;
-}
-
-function getStackedOnPoint(dataCoordInfo, coordSys, data, idx) {
-  var value = NaN;
-
-  if (dataCoordInfo.stacked) {
-    value = data.get(data.getCalculationInfo('stackedOverDimension'), idx);
-  }
-
-  if (isNaN(value)) {
-    value = dataCoordInfo.valueStart;
-  }
-
-  var baseDataOffset = dataCoordInfo.baseDataOffset;
-  var stackedData = [];
-  stackedData[baseDataOffset] = data.get(dataCoordInfo.baseDim, idx);
-  stackedData[1 - baseDataOffset] = value;
-  return coordSys.dataToPoint(stackedData);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// 'zrender/src/core/arrayDiff' has been used before, but it did
-// not do well in performance when roam with fixed dataZoom window.
-// function convertToIntId(newIdList, oldIdList) {
-//     // Generate int id instead of string id.
-//     // Compare string maybe slow in score function of arrDiff
-//     // Assume id in idList are all unique
-//     var idIndicesMap = {};
-//     var idx = 0;
-//     for (var i = 0; i < newIdList.length; i++) {
-//         idIndicesMap[newIdList[i]] = idx;
-//         newIdList[i] = idx++;
-//     }
-//     for (var i = 0; i < oldIdList.length; i++) {
-//         var oldId = oldIdList[i];
-//         // Same with newIdList
-//         if (idIndicesMap[oldId]) {
-//             oldIdList[i] = idIndicesMap[oldId];
-//         }
-//         else {
-//             oldIdList[i] = idx++;
-//         }
-//     }
-// }
-
-function diffData(oldData, newData) {
-  var diffResult = [];
-  newData.diff(oldData).add(function (idx) {
-    diffResult.push({
-      cmd: '+',
-      idx: idx
-    });
-  }).update(function (newIdx, oldIdx) {
-    diffResult.push({
-      cmd: '=',
-      idx: oldIdx,
-      idx1: newIdx
-    });
-  }).remove(function (idx) {
-    diffResult.push({
-      cmd: '-',
-      idx: idx
-    });
-  }).execute();
-  return diffResult;
-}
-
-var lineAnimationDiff = function (oldData, newData, oldStackedOnPoints, newStackedOnPoints, oldCoordSys, newCoordSys, oldValueOrigin, newValueOrigin) {
-  var diff = diffData(oldData, newData); // var newIdList = newData.mapArray(newData.getId);
-  // var oldIdList = oldData.mapArray(oldData.getId);
-  // convertToIntId(newIdList, oldIdList);
-  // // FIXME One data ?
-  // diff = arrayDiff(oldIdList, newIdList);
-
-  var currPoints = [];
-  var nextPoints = []; // Points for stacking base line
-
-  var currStackedPoints = [];
-  var nextStackedPoints = [];
-  var status = [];
-  var sortedIndices = [];
-  var rawIndices = [];
-  var newDataOldCoordInfo = prepareDataCoordInfo(oldCoordSys, newData, oldValueOrigin);
-  var oldDataNewCoordInfo = prepareDataCoordInfo(newCoordSys, oldData, newValueOrigin);
-
-  for (var i = 0; i < diff.length; i++) {
-    var diffItem = diff[i];
-    var pointAdded = true; // FIXME, animation is not so perfect when dataZoom window moves fast
-    // Which is in case remvoing or add more than one data in the tail or head
-
-    switch (diffItem.cmd) {
-      case '=':
-        var currentPt = oldData.getItemLayout(diffItem.idx);
-        var nextPt = newData.getItemLayout(diffItem.idx1); // If previous data is NaN, use next point directly
-
-        if (isNaN(currentPt[0]) || isNaN(currentPt[1])) {
-          currentPt = nextPt.slice();
-        }
-
-        currPoints.push(currentPt);
-        nextPoints.push(nextPt);
-        currStackedPoints.push(oldStackedOnPoints[diffItem.idx]);
-        nextStackedPoints.push(newStackedOnPoints[diffItem.idx1]);
-        rawIndices.push(newData.getRawIndex(diffItem.idx1));
-        break;
-
-      case '+':
-        var idx = diffItem.idx;
-        currPoints.push(oldCoordSys.dataToPoint([newData.get(newDataOldCoordInfo.dataDimsForPoint[0], idx), newData.get(newDataOldCoordInfo.dataDimsForPoint[1], idx)]));
-        nextPoints.push(newData.getItemLayout(idx).slice());
-        currStackedPoints.push(getStackedOnPoint(newDataOldCoordInfo, oldCoordSys, newData, idx));
-        nextStackedPoints.push(newStackedOnPoints[idx]);
-        rawIndices.push(newData.getRawIndex(idx));
-        break;
-
-      case '-':
-        var idx = diffItem.idx;
-        var rawIndex = oldData.getRawIndex(idx); // Data is replaced. In the case of dynamic data queue
-        // FIXME FIXME FIXME
-
-        if (rawIndex !== idx) {
-          currPoints.push(oldData.getItemLayout(idx));
-          nextPoints.push(newCoordSys.dataToPoint([oldData.get(oldDataNewCoordInfo.dataDimsForPoint[0], idx), oldData.get(oldDataNewCoordInfo.dataDimsForPoint[1], idx)]));
-          currStackedPoints.push(oldStackedOnPoints[idx]);
-          nextStackedPoints.push(getStackedOnPoint(oldDataNewCoordInfo, newCoordSys, oldData, idx));
-          rawIndices.push(rawIndex);
-        } else {
-          pointAdded = false;
-        }
-
-    } // Original indices
-
-
-    if (pointAdded) {
-      status.push(diffItem);
-      sortedIndices.push(sortedIndices.length);
-    }
-  } // Diff result may be crossed if all items are changed
-  // Sort by data index
-
-
-  sortedIndices.sort(function (a, b) {
-    return rawIndices[a] - rawIndices[b];
-  });
-  var sortedCurrPoints = [];
-  var sortedNextPoints = [];
-  var sortedCurrStackedPoints = [];
-  var sortedNextStackedPoints = [];
-  var sortedStatus = [];
-
-  for (var i = 0; i < sortedIndices.length; i++) {
-    var idx = sortedIndices[i];
-    sortedCurrPoints[i] = currPoints[idx];
-    sortedNextPoints[i] = nextPoints[idx];
-    sortedCurrStackedPoints[i] = currStackedPoints[idx];
-    sortedNextStackedPoints[i] = nextStackedPoints[idx];
-    sortedStatus[i] = status[idx];
-  }
-
-  return {
-    current: sortedCurrPoints,
-    next: sortedNextPoints,
-    stackedOnCurrent: sortedCurrStackedPoints,
-    stackedOnNext: sortedNextStackedPoints,
-    status: sortedStatus
-  };
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Poly path support NaN point
-var vec2Min = min;
-var vec2Max = max;
-var scaleAndAdd$1 = scaleAndAdd;
-var v2Copy = copy; // Temporary variable
-
-var v = [];
-var cp0 = [];
-var cp1 = [];
-
-function isPointNull(p) {
-  return isNaN(p[0]) || isNaN(p[1]);
-}
-
-function drawSegment(ctx, points, start, segLen, allLen, dir, smoothMin, smoothMax, smooth, smoothMonotone, connectNulls) {
-  // if (smoothMonotone == null) {
-  //     if (isMono(points, 'x')) {
-  //         return drawMono(ctx, points, start, segLen, allLen,
-  //             dir, smoothMin, smoothMax, smooth, 'x', connectNulls);
-  //     }
-  //     else if (isMono(points, 'y')) {
-  //         return drawMono(ctx, points, start, segLen, allLen,
-  //             dir, smoothMin, smoothMax, smooth, 'y', connectNulls);
-  //     }
-  //     else {
-  //         return drawNonMono.apply(this, arguments);
-  //     }
-  // }
-  // else if (smoothMonotone !== 'none' && isMono(points, smoothMonotone)) {
-  //     return drawMono.apply(this, arguments);
-  // }
-  // else {
-  //     return drawNonMono.apply(this, arguments);
-  // }
-  if (smoothMonotone === 'none' || !smoothMonotone) {
-    return drawNonMono.apply(this, arguments);
-  } else {
-    return drawMono.apply(this, arguments);
-  }
-}
-/**
- * Check if points is in monotone.
- *
- * @param {number[][]} points         Array of points which is in [x, y] form
- * @param {string}     smoothMonotone 'x', 'y', or 'none', stating for which
- *                                    dimension that is checking.
- *                                    If is 'none', `drawNonMono` should be
- *                                    called.
- *                                    If is undefined, either being monotone
- *                                    in 'x' or 'y' will call `drawMono`.
- */
-// function isMono(points, smoothMonotone) {
-//     if (points.length <= 1) {
-//         return true;
-//     }
-//     var dim = smoothMonotone === 'x' ? 0 : 1;
-//     var last = points[0][dim];
-//     var lastDiff = 0;
-//     for (var i = 1; i < points.length; ++i) {
-//         var diff = points[i][dim] - last;
-//         if (!isNaN(diff) && !isNaN(lastDiff)
-//             && diff !== 0 && lastDiff !== 0
-//             && ((diff >= 0) !== (lastDiff >= 0))
-//         ) {
-//             return false;
-//         }
-//         if (!isNaN(diff) && diff !== 0) {
-//             lastDiff = diff;
-//             last = points[i][dim];
-//         }
-//     }
-//     return true;
-// }
-
-/**
- * Draw smoothed line in monotone, in which only vertical or horizontal bezier
- * control points will be used. This should be used when points are monotone
- * either in x or y dimension.
- */
-
-
-function drawMono(ctx, points, start, segLen, allLen, dir, smoothMin, smoothMax, smooth, smoothMonotone, connectNulls) {
-  var prevIdx = 0;
-  var idx = start;
-
-  for (var k = 0; k < segLen; k++) {
-    var p = points[idx];
-
-    if (idx >= allLen || idx < 0) {
-      break;
-    }
-
-    if (isPointNull(p)) {
-      if (connectNulls) {
-        idx += dir;
-        continue;
-      }
-
-      break;
-    }
-
-    if (idx === start) {
-      ctx[dir > 0 ? 'moveTo' : 'lineTo'](p[0], p[1]);
-    } else {
-      if (smooth > 0) {
-        var prevP = points[prevIdx];
-        var dim = smoothMonotone === 'y' ? 1 : 0; // Length of control point to p, either in x or y, but not both
-
-        var ctrlLen = (p[dim] - prevP[dim]) * smooth;
-        v2Copy(cp0, prevP);
-        cp0[dim] = prevP[dim] + ctrlLen;
-        v2Copy(cp1, p);
-        cp1[dim] = p[dim] - ctrlLen;
-        ctx.bezierCurveTo(cp0[0], cp0[1], cp1[0], cp1[1], p[0], p[1]);
-      } else {
-        ctx.lineTo(p[0], p[1]);
-      }
-    }
-
-    prevIdx = idx;
-    idx += dir;
-  }
-
-  return k;
-}
-/**
- * Draw smoothed line in non-monotone, in may cause undesired curve in extreme
- * situations. This should be used when points are non-monotone neither in x or
- * y dimension.
- */
-
-
-function drawNonMono(ctx, points, start, segLen, allLen, dir, smoothMin, smoothMax, smooth, smoothMonotone, connectNulls) {
-  var prevIdx = 0;
-  var idx = start;
-
-  for (var k = 0; k < segLen; k++) {
-    var p = points[idx];
-
-    if (idx >= allLen || idx < 0) {
-      break;
-    }
-
-    if (isPointNull(p)) {
-      if (connectNulls) {
-        idx += dir;
-        continue;
-      }
-
-      break;
-    }
-
-    if (idx === start) {
-      ctx[dir > 0 ? 'moveTo' : 'lineTo'](p[0], p[1]);
-      v2Copy(cp0, p);
-    } else {
-      if (smooth > 0) {
-        var nextIdx = idx + dir;
-        var nextP = points[nextIdx];
-
-        if (connectNulls) {
-          // Find next point not null
-          while (nextP && isPointNull(points[nextIdx])) {
-            nextIdx += dir;
-            nextP = points[nextIdx];
-          }
-        }
-
-        var ratioNextSeg = 0.5;
-        var prevP = points[prevIdx];
-        var nextP = points[nextIdx]; // Last point
-
-        if (!nextP || isPointNull(nextP)) {
-          v2Copy(cp1, p);
-        } else {
-          // If next data is null in not connect case
-          if (isPointNull(nextP) && !connectNulls) {
-            nextP = p;
-          }
-
-          sub(v, nextP, prevP);
-          var lenPrevSeg;
-          var lenNextSeg;
-
-          if (smoothMonotone === 'x' || smoothMonotone === 'y') {
-            var dim = smoothMonotone === 'x' ? 0 : 1;
-            lenPrevSeg = Math.abs(p[dim] - prevP[dim]);
-            lenNextSeg = Math.abs(p[dim] - nextP[dim]);
-          } else {
-            lenPrevSeg = dist(p, prevP);
-            lenNextSeg = dist(p, nextP);
-          } // Use ratio of seg length
-
-
-          ratioNextSeg = lenNextSeg / (lenNextSeg + lenPrevSeg);
-          scaleAndAdd$1(cp1, p, v, -smooth * (1 - ratioNextSeg));
-        } // Smooth constraint
-
-
-        vec2Min(cp0, cp0, smoothMax);
-        vec2Max(cp0, cp0, smoothMin);
-        vec2Min(cp1, cp1, smoothMax);
-        vec2Max(cp1, cp1, smoothMin);
-        ctx.bezierCurveTo(cp0[0], cp0[1], cp1[0], cp1[1], p[0], p[1]); // cp0 of next segment
-
-        scaleAndAdd$1(cp0, p, v, smooth * ratioNextSeg);
-      } else {
-        ctx.lineTo(p[0], p[1]);
-      }
-    }
-
-    prevIdx = idx;
-    idx += dir;
-  }
-
-  return k;
-}
-
-function getBoundingBox(points, smoothConstraint) {
-  var ptMin = [Infinity, Infinity];
-  var ptMax = [-Infinity, -Infinity];
-
-  if (smoothConstraint) {
-    for (var i = 0; i < points.length; i++) {
-      var pt = points[i];
-
-      if (pt[0] < ptMin[0]) {
-        ptMin[0] = pt[0];
-      }
-
-      if (pt[1] < ptMin[1]) {
-        ptMin[1] = pt[1];
-      }
-
-      if (pt[0] > ptMax[0]) {
-        ptMax[0] = pt[0];
-      }
-
-      if (pt[1] > ptMax[1]) {
-        ptMax[1] = pt[1];
-      }
-    }
-  }
-
-  return {
-    min: smoothConstraint ? ptMin : ptMax,
-    max: smoothConstraint ? ptMax : ptMin
-  };
-}
-
-var Polyline$1 = Path.extend({
-  type: 'ec-polyline',
-  shape: {
-    points: [],
-    smooth: 0,
-    smoothConstraint: true,
-    smoothMonotone: null,
-    connectNulls: false
-  },
-  style: {
-    fill: null,
-    stroke: '#000'
-  },
-  brush: fixClipWithShadow(Path.prototype.brush),
-  buildPath: function (ctx, shape) {
-    var points = shape.points;
-    var i = 0;
-    var len$$1 = points.length;
-    var result = getBoundingBox(points, shape.smoothConstraint);
-
-    if (shape.connectNulls) {
-      // Must remove first and last null values avoid draw error in polygon
-      for (; len$$1 > 0; len$$1--) {
-        if (!isPointNull(points[len$$1 - 1])) {
-          break;
-        }
-      }
-
-      for (; i < len$$1; i++) {
-        if (!isPointNull(points[i])) {
-          break;
-        }
-      }
-    }
-
-    while (i < len$$1) {
-      i += drawSegment(ctx, points, i, len$$1, len$$1, 1, result.min, result.max, shape.smooth, shape.smoothMonotone, shape.connectNulls) + 1;
-    }
-  }
-});
-var Polygon$1 = Path.extend({
-  type: 'ec-polygon',
-  shape: {
-    points: [],
-    // Offset between stacked base points and points
-    stackedOnPoints: [],
-    smooth: 0,
-    stackedOnSmooth: 0,
-    smoothConstraint: true,
-    smoothMonotone: null,
-    connectNulls: false
-  },
-  brush: fixClipWithShadow(Path.prototype.brush),
-  buildPath: function (ctx, shape) {
-    var points = shape.points;
-    var stackedOnPoints = shape.stackedOnPoints;
-    var i = 0;
-    var len$$1 = points.length;
-    var smoothMonotone = shape.smoothMonotone;
-    var bbox = getBoundingBox(points, shape.smoothConstraint);
-    var stackedOnBBox = getBoundingBox(stackedOnPoints, shape.smoothConstraint);
-
-    if (shape.connectNulls) {
-      // Must remove first and last null values avoid draw error in polygon
-      for (; len$$1 > 0; len$$1--) {
-        if (!isPointNull(points[len$$1 - 1])) {
-          break;
-        }
-      }
-
-      for (; i < len$$1; i++) {
-        if (!isPointNull(points[i])) {
-          break;
-        }
-      }
-    }
-
-    while (i < len$$1) {
-      var k = drawSegment(ctx, points, i, len$$1, len$$1, 1, bbox.min, bbox.max, shape.smooth, smoothMonotone, shape.connectNulls);
-      drawSegment(ctx, stackedOnPoints, i + k - 1, k, len$$1, -1, stackedOnBBox.min, stackedOnBBox.max, shape.stackedOnSmooth, smoothMonotone, shape.connectNulls);
-      i += k + 1;
-      ctx.closePath();
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// FIXME step not support polar
-function isPointsSame(points1, points2) {
-  if (points1.length !== points2.length) {
-    return;
-  }
-
-  for (var i = 0; i < points1.length; i++) {
-    var p1 = points1[i];
-    var p2 = points2[i];
-
-    if (p1[0] !== p2[0] || p1[1] !== p2[1]) {
-      return;
-    }
-  }
-
-  return true;
-}
-
-function getSmooth(smooth) {
-  return typeof smooth === 'number' ? smooth : smooth ? 0.5 : 0;
-}
-
-function getAxisExtentWithGap(axis) {
-  var extent = axis.getGlobalExtent();
-
-  if (axis.onBand) {
-    // Remove extra 1px to avoid line miter in clipped edge
-    var halfBandWidth = axis.getBandWidth() / 2 - 1;
-    var dir = extent[1] > extent[0] ? 1 : -1;
-    extent[0] += dir * halfBandWidth;
-    extent[1] -= dir * halfBandWidth;
-  }
-
-  return extent;
-}
-/**
- * @param {module:echarts/coord/cartesian/Cartesian2D|module:echarts/coord/polar/Polar} coordSys
- * @param {module:echarts/data/List} data
- * @param {Object} dataCoordInfo
- * @param {Array.<Array.<number>>} points
- */
-
-
-function getStackedOnPoints(coordSys, data, dataCoordInfo) {
-  if (!dataCoordInfo.valueDim) {
-    return [];
-  }
-
-  var points = [];
-
-  for (var idx = 0, len = data.count(); idx < len; idx++) {
-    points.push(getStackedOnPoint(dataCoordInfo, coordSys, data, idx));
-  }
-
-  return points;
-}
-
-function createGridClipShape(cartesian, hasAnimation, forSymbol, seriesModel) {
-  var xExtent = getAxisExtentWithGap(cartesian.getAxis('x'));
-  var yExtent = getAxisExtentWithGap(cartesian.getAxis('y'));
-  var isHorizontal = cartesian.getBaseAxis().isHorizontal();
-  var x = Math.min(xExtent[0], xExtent[1]);
-  var y = Math.min(yExtent[0], yExtent[1]);
-  var width = Math.max(xExtent[0], xExtent[1]) - x;
-  var height = Math.max(yExtent[0], yExtent[1]) - y; // Avoid float number rounding error for symbol on the edge of axis extent.
-  // See #7913 and `test/dataZoom-clip.html`.
-
-  if (forSymbol) {
-    x -= 0.5;
-    width += 0.5;
-    y -= 0.5;
-    height += 0.5;
-  } else {
-    var lineWidth = seriesModel.get('lineStyle.width') || 2; // Expand clip shape to avoid clipping when line value exceeds axis
-
-    var expandSize = seriesModel.get('clipOverflow') ? lineWidth / 2 : Math.max(width, height);
-
-    if (isHorizontal) {
-      y -= expandSize;
-      height += expandSize * 2;
-    } else {
-      x -= expandSize;
-      width += expandSize * 2;
-    }
-  }
-
-  var clipPath = new Rect({
-    shape: {
-      x: x,
-      y: y,
-      width: width,
-      height: height
-    }
-  });
-
-  if (hasAnimation) {
-    clipPath.shape[isHorizontal ? 'width' : 'height'] = 0;
-    initProps(clipPath, {
-      shape: {
-        width: width,
-        height: height
-      }
-    }, seriesModel);
-  }
-
-  return clipPath;
-}
-
-function createPolarClipShape(polar, hasAnimation, forSymbol, seriesModel) {
-  var angleAxis = polar.getAngleAxis();
-  var radiusAxis = polar.getRadiusAxis();
-  var radiusExtent = radiusAxis.getExtent().slice();
-  radiusExtent[0] > radiusExtent[1] && radiusExtent.reverse();
-  var angleExtent = angleAxis.getExtent();
-  var RADIAN = Math.PI / 180; // Avoid float number rounding error for symbol on the edge of axis extent.
-
-  if (forSymbol) {
-    radiusExtent[0] -= 0.5;
-    radiusExtent[1] += 0.5;
-  }
-
-  var clipPath = new Sector({
-    shape: {
-      cx: round$2(polar.cx, 1),
-      cy: round$2(polar.cy, 1),
-      r0: round$2(radiusExtent[0], 1),
-      r: round$2(radiusExtent[1], 1),
-      startAngle: -angleExtent[0] * RADIAN,
-      endAngle: -angleExtent[1] * RADIAN,
-      clockwise: angleAxis.inverse
-    }
-  });
-
-  if (hasAnimation) {
-    clipPath.shape.endAngle = -angleExtent[0] * RADIAN;
-    initProps(clipPath, {
-      shape: {
-        endAngle: -angleExtent[1] * RADIAN
-      }
-    }, seriesModel);
-  }
-
-  return clipPath;
-}
-
-function createClipShape(coordSys, hasAnimation, forSymbol, seriesModel) {
-  return coordSys.type === 'polar' ? createPolarClipShape(coordSys, hasAnimation, forSymbol, seriesModel) : createGridClipShape(coordSys, hasAnimation, forSymbol, seriesModel);
-}
-
-function turnPointsIntoStep(points, coordSys, stepTurnAt) {
-  var baseAxis = coordSys.getBaseAxis();
-  var baseIndex = baseAxis.dim === 'x' || baseAxis.dim === 'radius' ? 0 : 1;
-  var stepPoints = [];
-
-  for (var i = 0; i < points.length - 1; i++) {
-    var nextPt = points[i + 1];
-    var pt = points[i];
-    stepPoints.push(pt);
-    var stepPt = [];
-
-    switch (stepTurnAt) {
-      case 'end':
-        stepPt[baseIndex] = nextPt[baseIndex];
-        stepPt[1 - baseIndex] = pt[1 - baseIndex]; // default is start
-
-        stepPoints.push(stepPt);
-        break;
-
-      case 'middle':
-        // default is start
-        var middle = (pt[baseIndex] + nextPt[baseIndex]) / 2;
-        var stepPt2 = [];
-        stepPt[baseIndex] = stepPt2[baseIndex] = middle;
-        stepPt[1 - baseIndex] = pt[1 - baseIndex];
-        stepPt2[1 - baseIndex] = nextPt[1 - baseIndex];
-        stepPoints.push(stepPt);
-        stepPoints.push(stepPt2);
-        break;
-
-      default:
-        stepPt[baseIndex] = pt[baseIndex];
-        stepPt[1 - baseIndex] = nextPt[1 - baseIndex]; // default is start
-
-        stepPoints.push(stepPt);
-    }
-  } // Last points
-
-
-  points[i] && stepPoints.push(points[i]);
-  return stepPoints;
-}
-
-function getVisualGradient(data, coordSys) {
-  var visualMetaList = data.getVisual('visualMeta');
-
-  if (!visualMetaList || !visualMetaList.length || !data.count()) {
-    // When data.count() is 0, gradient range can not be calculated.
-    return;
-  }
-
-  if (coordSys.type !== 'cartesian2d') {
-    return;
-  }
-
-  var coordDim;
-  var visualMeta;
-
-  for (var i = visualMetaList.length - 1; i >= 0; i--) {
-    var dimIndex = visualMetaList[i].dimension;
-    var dimName = data.dimensions[dimIndex];
-    var dimInfo = data.getDimensionInfo(dimName);
-    coordDim = dimInfo && dimInfo.coordDim; // Can only be x or y
-
-    if (coordDim === 'x' || coordDim === 'y') {
-      visualMeta = visualMetaList[i];
-      break;
-    }
-  }
-
-  if (!visualMeta) {
-    return;
-  } // If the area to be rendered is bigger than area defined by LinearGradient,
-  // the canvas spec prescribes that the color of the first stop and the last
-  // stop should be used. But if two stops are added at offset 0, in effect
-  // browsers use the color of the second stop to render area outside
-  // LinearGradient. So we can only infinitesimally extend area defined in
-  // LinearGradient to render `outerColors`.
-
-
-  var axis = coordSys.getAxis(coordDim); // dataToCoor mapping may not be linear, but must be monotonic.
-
-  var colorStops = map(visualMeta.stops, function (stop) {
-    return {
-      coord: axis.toGlobalCoord(axis.dataToCoord(stop.value)),
-      color: stop.color
-    };
-  });
-  var stopLen = colorStops.length;
-  var outerColors = visualMeta.outerColors.slice();
-
-  if (stopLen && colorStops[0].coord > colorStops[stopLen - 1].coord) {
-    colorStops.reverse();
-    outerColors.reverse();
-  }
-
-  var tinyExtent = 10; // Arbitrary value: 10px
-
-  var minCoord = colorStops[0].coord - tinyExtent;
-  var maxCoord = colorStops[stopLen - 1].coord + tinyExtent;
-  var coordSpan = maxCoord - minCoord;
-
-  if (coordSpan < 1e-3) {
-    return 'transparent';
-  }
-
-  each$1(colorStops, function (stop) {
-    stop.offset = (stop.coord - minCoord) / coordSpan;
-  });
-  colorStops.push({
-    offset: stopLen ? colorStops[stopLen - 1].offset : 0.5,
-    color: outerColors[1] || 'transparent'
-  });
-  colorStops.unshift({
-    // notice colorStops.length have been changed.
-    offset: stopLen ? colorStops[0].offset : 0.5,
-    color: outerColors[0] || 'transparent'
-  }); // zrUtil.each(colorStops, function (colorStop) {
-  //     // Make sure each offset has rounded px to avoid not sharp edge
-  //     colorStop.offset = (Math.round(colorStop.offset * (end - start) + start) - start) / (end - start);
-  // });
-
-  var gradient = new LinearGradient(0, 0, 0, 0, colorStops, true);
-  gradient[coordDim] = minCoord;
-  gradient[coordDim + '2'] = maxCoord;
-  return gradient;
-}
-
-function getIsIgnoreFunc(seriesModel, data, coordSys) {
-  var showAllSymbol = seriesModel.get('showAllSymbol');
-  var isAuto = showAllSymbol === 'auto';
-
-  if (showAllSymbol && !isAuto) {
-    return;
-  }
-
-  var categoryAxis = coordSys.getAxesByScale('ordinal')[0];
-
-  if (!categoryAxis) {
-    return;
-  } // Note that category label interval strategy might bring some weird effect
-  // in some scenario: users may wonder why some of the symbols are not
-  // displayed. So we show all symbols as possible as we can.
-
-
-  if (isAuto // Simplify the logic, do not determine label overlap here.
-  && canShowAllSymbolForCategory(categoryAxis, data)) {
-    return;
-  } // Otherwise follow the label interval strategy on category axis.
-
-
-  var categoryDataDim = data.mapDimension(categoryAxis.dim);
-  var labelMap = {};
-  each$1(categoryAxis.getViewLabels(), function (labelItem) {
-    labelMap[labelItem.tickValue] = 1;
-  });
-  return function (dataIndex) {
-    return !labelMap.hasOwnProperty(data.get(categoryDataDim, dataIndex));
-  };
-}
-
-function canShowAllSymbolForCategory(categoryAxis, data) {
-  // In mose cases, line is monotonous on category axis, and the label size
-  // is close with each other. So we check the symbol size and some of the
-  // label size alone with the category axis to estimate whether all symbol
-  // can be shown without overlap.
-  var axisExtent = categoryAxis.getExtent();
-  var availSize = Math.abs(axisExtent[1] - axisExtent[0]) / categoryAxis.scale.count();
-  isNaN(availSize) && (availSize = 0); // 0/0 is NaN.
-  // Sampling some points, max 5.
-
-  var dataLen = data.count();
-  var step = Math.max(1, Math.round(dataLen / 5));
-
-  for (var dataIndex = 0; dataIndex < dataLen; dataIndex += step) {
-    if (SymbolClz$1.getSymbolSize(data, dataIndex // Only for cartesian, where `isHorizontal` exists.
-    )[categoryAxis.isHorizontal() ? 1 : 0] // Empirical number
-    * 1.5 > availSize) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-Chart.extend({
-  type: 'line',
-  init: function () {
-    var lineGroup = new Group();
-    var symbolDraw = new SymbolDraw();
-    this.group.add(symbolDraw.group);
-    this._symbolDraw = symbolDraw;
-    this._lineGroup = lineGroup;
-  },
-  render: function (seriesModel, ecModel, api) {
-    var coordSys = seriesModel.coordinateSystem;
-    var group = this.group;
-    var data = seriesModel.getData();
-    var lineStyleModel = seriesModel.getModel('lineStyle');
-    var areaStyleModel = seriesModel.getModel('areaStyle');
-    var points = data.mapArray(data.getItemLayout);
-    var isCoordSysPolar = coordSys.type === 'polar';
-    var prevCoordSys = this._coordSys;
-    var symbolDraw = this._symbolDraw;
-    var polyline = this._polyline;
-    var polygon = this._polygon;
-    var lineGroup = this._lineGroup;
-    var hasAnimation = seriesModel.get('animation');
-    var isAreaChart = !areaStyleModel.isEmpty();
-    var valueOrigin = areaStyleModel.get('origin');
-    var dataCoordInfo = prepareDataCoordInfo(coordSys, data, valueOrigin);
-    var stackedOnPoints = getStackedOnPoints(coordSys, data, dataCoordInfo);
-    var showSymbol = seriesModel.get('showSymbol');
-    var isIgnoreFunc = showSymbol && !isCoordSysPolar && getIsIgnoreFunc(seriesModel, data, coordSys); // Remove temporary symbols
-
-    var oldData = this._data;
-    oldData && oldData.eachItemGraphicEl(function (el, idx) {
-      if (el.__temp) {
-        group.remove(el);
-        oldData.setItemGraphicEl(idx, null);
-      }
-    }); // Remove previous created symbols if showSymbol changed to false
-
-    if (!showSymbol) {
-      symbolDraw.remove();
-    }
-
-    group.add(lineGroup); // FIXME step not support polar
-
-    var step = !isCoordSysPolar && seriesModel.get('step'); // Initialization animation or coordinate system changed
-
-    if (!(polyline && prevCoordSys.type === coordSys.type && step === this._step)) {
-      showSymbol && symbolDraw.updateData(data, {
-        isIgnore: isIgnoreFunc,
-        clipShape: createClipShape(coordSys, false, true, seriesModel)
-      });
-
-      if (step) {
-        // TODO If stacked series is not step
-        points = turnPointsIntoStep(points, coordSys, step);
-        stackedOnPoints = turnPointsIntoStep(stackedOnPoints, coordSys, step);
-      }
-
-      polyline = this._newPolyline(points, coordSys, hasAnimation);
-
-      if (isAreaChart) {
-        polygon = this._newPolygon(points, stackedOnPoints, coordSys, hasAnimation);
-      }
-
-      lineGroup.setClipPath(createClipShape(coordSys, true, false, seriesModel));
-    } else {
-      if (isAreaChart && !polygon) {
-        // If areaStyle is added
-        polygon = this._newPolygon(points, stackedOnPoints, coordSys, hasAnimation);
-      } else if (polygon && !isAreaChart) {
-        // If areaStyle is removed
-        lineGroup.remove(polygon);
-        polygon = this._polygon = null;
-      } // Update clipPath
-
-
-      lineGroup.setClipPath(createClipShape(coordSys, false, false, seriesModel)); // Always update, or it is wrong in the case turning on legend
-      // because points are not changed
-
-      showSymbol && symbolDraw.updateData(data, {
-        isIgnore: isIgnoreFunc,
-        clipShape: createClipShape(coordSys, false, true, seriesModel)
-      }); // Stop symbol animation and sync with line points
-      // FIXME performance?
-
-      data.eachItemGraphicEl(function (el) {
-        el.stopAnimation(true);
-      }); // In the case data zoom triggerred refreshing frequently
-      // Data may not change if line has a category axis. So it should animate nothing
-
-      if (!isPointsSame(this._stackedOnPoints, stackedOnPoints) || !isPointsSame(this._points, points)) {
-        if (hasAnimation) {
-          this._updateAnimation(data, stackedOnPoints, coordSys, api, step, valueOrigin);
-        } else {
-          // Not do it in update with animation
-          if (step) {
-            // TODO If stacked series is not step
-            points = turnPointsIntoStep(points, coordSys, step);
-            stackedOnPoints = turnPointsIntoStep(stackedOnPoints, coordSys, step);
-          }
-
-          polyline.setShape({
-            points: points
-          });
-          polygon && polygon.setShape({
-            points: points,
-            stackedOnPoints: stackedOnPoints
-          });
-        }
-      }
-    }
-
-    var visualColor = getVisualGradient(data, coordSys) || data.getVisual('color');
-    polyline.useStyle(defaults( // Use color in lineStyle first
-    lineStyleModel.getLineStyle(), {
-      fill: 'none',
-      stroke: visualColor,
-      lineJoin: 'bevel'
-    }));
-    var smooth = seriesModel.get('smooth');
-    smooth = getSmooth(seriesModel.get('smooth'));
-    polyline.setShape({
-      smooth: smooth,
-      smoothMonotone: seriesModel.get('smoothMonotone'),
-      connectNulls: seriesModel.get('connectNulls')
-    });
-
-    if (polygon) {
-      var stackedOnSeries = data.getCalculationInfo('stackedOnSeries');
-      var stackedOnSmooth = 0;
-      polygon.useStyle(defaults(areaStyleModel.getAreaStyle(), {
-        fill: visualColor,
-        opacity: 0.7,
-        lineJoin: 'bevel'
-      }));
-
-      if (stackedOnSeries) {
-        stackedOnSmooth = getSmooth(stackedOnSeries.get('smooth'));
-      }
-
-      polygon.setShape({
-        smooth: smooth,
-        stackedOnSmooth: stackedOnSmooth,
-        smoothMonotone: seriesModel.get('smoothMonotone'),
-        connectNulls: seriesModel.get('connectNulls')
-      });
-    }
-
-    this._data = data; // Save the coordinate system for transition animation when data changed
-
-    this._coordSys = coordSys;
-    this._stackedOnPoints = stackedOnPoints;
-    this._points = points;
-    this._step = step;
-    this._valueOrigin = valueOrigin;
-  },
-  dispose: function () {},
-  highlight: function (seriesModel, ecModel, api, payload) {
-    var data = seriesModel.getData();
-    var dataIndex = queryDataIndex(data, payload);
-
-    if (!(dataIndex instanceof Array) && dataIndex != null && dataIndex >= 0) {
-      var symbol = data.getItemGraphicEl(dataIndex);
-
-      if (!symbol) {
-        // Create a temporary symbol if it is not exists
-        var pt = data.getItemLayout(dataIndex);
-
-        if (!pt) {
-          // Null data
-          return;
-        }
-
-        symbol = new SymbolClz$1(data, dataIndex);
-        symbol.position = pt;
-        symbol.setZ(seriesModel.get('zlevel'), seriesModel.get('z'));
-        symbol.ignore = isNaN(pt[0]) || isNaN(pt[1]);
-        symbol.__temp = true;
-        data.setItemGraphicEl(dataIndex, symbol); // Stop scale animation
-
-        symbol.stopSymbolAnimation(true);
-        this.group.add(symbol);
-      }
-
-      symbol.highlight();
-    } else {
-      // Highlight whole series
-      Chart.prototype.highlight.call(this, seriesModel, ecModel, api, payload);
-    }
-  },
-  downplay: function (seriesModel, ecModel, api, payload) {
-    var data = seriesModel.getData();
-    var dataIndex = queryDataIndex(data, payload);
-
-    if (dataIndex != null && dataIndex >= 0) {
-      var symbol = data.getItemGraphicEl(dataIndex);
-
-      if (symbol) {
-        if (symbol.__temp) {
-          data.setItemGraphicEl(dataIndex, null);
-          this.group.remove(symbol);
-        } else {
-          symbol.downplay();
-        }
-      }
-    } else {
-      // FIXME
-      // can not downplay completely.
-      // Downplay whole series
-      Chart.prototype.downplay.call(this, seriesModel, ecModel, api, payload);
-    }
-  },
-
-  /**
-   * @param {module:zrender/container/Group} group
-   * @param {Array.<Array.<number>>} points
-   * @private
-   */
-  _newPolyline: function (points) {
-    var polyline = this._polyline; // Remove previous created polyline
-
-    if (polyline) {
-      this._lineGroup.remove(polyline);
-    }
-
-    polyline = new Polyline$1({
-      shape: {
-        points: points
-      },
-      silent: true,
-      z2: 10
-    });
-
-    this._lineGroup.add(polyline);
-
-    this._polyline = polyline;
-    return polyline;
-  },
-
-  /**
-   * @param {module:zrender/container/Group} group
-   * @param {Array.<Array.<number>>} stackedOnPoints
-   * @param {Array.<Array.<number>>} points
-   * @private
-   */
-  _newPolygon: function (points, stackedOnPoints) {
-    var polygon = this._polygon; // Remove previous created polygon
-
-    if (polygon) {
-      this._lineGroup.remove(polygon);
-    }
-
-    polygon = new Polygon$1({
-      shape: {
-        points: points,
-        stackedOnPoints: stackedOnPoints
-      },
-      silent: true
-    });
-
-    this._lineGroup.add(polygon);
-
-    this._polygon = polygon;
-    return polygon;
-  },
-
-  /**
-   * @private
-   */
-  // FIXME Two value axis
-  _updateAnimation: function (data, stackedOnPoints, coordSys, api, step, valueOrigin) {
-    var polyline = this._polyline;
-    var polygon = this._polygon;
-    var seriesModel = data.hostModel;
-    var diff = lineAnimationDiff(this._data, data, this._stackedOnPoints, stackedOnPoints, this._coordSys, coordSys, this._valueOrigin, valueOrigin);
-    var current = diff.current;
-    var stackedOnCurrent = diff.stackedOnCurrent;
-    var next = diff.next;
-    var stackedOnNext = diff.stackedOnNext;
-
-    if (step) {
-      // TODO If stacked series is not step
-      current = turnPointsIntoStep(diff.current, coordSys, step);
-      stackedOnCurrent = turnPointsIntoStep(diff.stackedOnCurrent, coordSys, step);
-      next = turnPointsIntoStep(diff.next, coordSys, step);
-      stackedOnNext = turnPointsIntoStep(diff.stackedOnNext, coordSys, step);
-    } // `diff.current` is subset of `current` (which should be ensured by
-    // turnPointsIntoStep), so points in `__points` can be updated when
-    // points in `current` are update during animation.
-
-
-    polyline.shape.__points = diff.current;
-    polyline.shape.points = current;
-    updateProps(polyline, {
-      shape: {
-        points: next
-      }
-    }, seriesModel);
-
-    if (polygon) {
-      polygon.setShape({
-        points: current,
-        stackedOnPoints: stackedOnCurrent
-      });
-      updateProps(polygon, {
-        shape: {
-          points: next,
-          stackedOnPoints: stackedOnNext
-        }
-      }, seriesModel);
-    }
-
-    var updatedDataInfo = [];
-    var diffStatus = diff.status;
-
-    for (var i = 0; i < diffStatus.length; i++) {
-      var cmd = diffStatus[i].cmd;
-
-      if (cmd === '=') {
-        var el = data.getItemGraphicEl(diffStatus[i].idx1);
-
-        if (el) {
-          updatedDataInfo.push({
-            el: el,
-            ptIdx: i // Index of points
-
-          });
-        }
-      }
-    }
-
-    if (polyline.animators && polyline.animators.length) {
-      polyline.animators[0].during(function () {
-        for (var i = 0; i < updatedDataInfo.length; i++) {
-          var el = updatedDataInfo[i].el;
-          el.attr('position', polyline.shape.__points[updatedDataInfo[i].ptIdx]);
-        }
-      });
-    }
-  },
-  remove: function (ecModel) {
-    var group = this.group;
-    var oldData = this._data;
-
-    this._lineGroup.removeAll();
-
-    this._symbolDraw.remove(true); // Remove temporary created elements when highlighting
-
-
-    oldData && oldData.eachItemGraphicEl(function (el, idx) {
-      if (el.__temp) {
-        group.remove(el);
-        oldData.setItemGraphicEl(idx, null);
-      }
-    });
-    this._polyline = this._polygon = this._coordSys = this._points = this._stackedOnPoints = this._data = null;
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var visualSymbol = function (seriesType, defaultSymbolType, legendSymbol) {
-  // Encoding visual for all series include which is filtered for legend drawing
-  return {
-    seriesType: seriesType,
-    // For legend.
-    performRawSeries: true,
-    reset: function (seriesModel, ecModel, api) {
-      var data = seriesModel.getData();
-      var symbolType = seriesModel.get('symbol') || defaultSymbolType;
-      var symbolSize = seriesModel.get('symbolSize');
-      var keepAspect = seriesModel.get('symbolKeepAspect');
-      data.setVisual({
-        legendSymbol: legendSymbol || symbolType,
-        symbol: symbolType,
-        symbolSize: symbolSize,
-        symbolKeepAspect: keepAspect
-      }); // Only visible series has each data be visual encoded
-
-      if (ecModel.isSeriesFiltered(seriesModel)) {
-        return;
-      }
-
-      var hasCallback = typeof symbolSize === 'function';
-
-      function dataEach(data, idx) {
-        if (typeof symbolSize === 'function') {
-          var rawValue = seriesModel.getRawValue(idx); // FIXME
-
-          var params = seriesModel.getDataParams(idx);
-          data.setItemVisual(idx, 'symbolSize', symbolSize(rawValue, params));
-        }
-
-        if (data.hasItemOption) {
-          var itemModel = data.getItemModel(idx);
-          var itemSymbolType = itemModel.getShallow('symbol', true);
-          var itemSymbolSize = itemModel.getShallow('symbolSize', true);
-          var itemSymbolKeepAspect = itemModel.getShallow('symbolKeepAspect', true); // If has item symbol
-
-          if (itemSymbolType != null) {
-            data.setItemVisual(idx, 'symbol', itemSymbolType);
-          }
-
-          if (itemSymbolSize != null) {
-            // PENDING Transform symbolSize ?
-            data.setItemVisual(idx, 'symbolSize', itemSymbolSize);
-          }
-
-          if (itemSymbolKeepAspect != null) {
-            data.setItemVisual(idx, 'symbolKeepAspect', itemSymbolKeepAspect);
-          }
-        }
-      }
-
-      return {
-        dataEach: data.hasItemOption || hasCallback ? dataEach : null
-      };
-    }
-  };
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/* global Float32Array */
-var layoutPoints = function (seriesType) {
-  return {
-    seriesType: seriesType,
-    plan: createRenderPlanner(),
-    reset: function (seriesModel) {
-      var data = seriesModel.getData();
-      var coordSys = seriesModel.coordinateSystem;
-      var pipelineContext = seriesModel.pipelineContext;
-      var isLargeRender = pipelineContext.large;
-
-      if (!coordSys) {
-        return;
-      }
-
-      var dims = map(coordSys.dimensions, function (dim) {
-        return data.mapDimension(dim);
-      }).slice(0, 2);
-      var dimLen = dims.length;
-      var stackResultDim = data.getCalculationInfo('stackResultDimension');
-
-      if (isDimensionStacked(data, dims[0]
-      /*, dims[1]*/
-      )) {
-        dims[0] = stackResultDim;
-      }
-
-      if (isDimensionStacked(data, dims[1]
-      /*, dims[0]*/
-      )) {
-        dims[1] = stackResultDim;
-      }
-
-      function progress(params, data) {
-        var segCount = params.end - params.start;
-        var points = isLargeRender && new Float32Array(segCount * dimLen);
-
-        for (var i = params.start, offset = 0, tmpIn = [], tmpOut = []; i < params.end; i++) {
-          var point;
-
-          if (dimLen === 1) {
-            var x = data.get(dims[0], i);
-            point = !isNaN(x) && coordSys.dataToPoint(x, null, tmpOut);
-          } else {
-            var x = tmpIn[0] = data.get(dims[0], i);
-            var y = tmpIn[1] = data.get(dims[1], i); // Also {Array.<number>}, not undefined to avoid if...else... statement
-
-            point = !isNaN(x) && !isNaN(y) && coordSys.dataToPoint(tmpIn, null, tmpOut);
-          }
-
-          if (isLargeRender) {
-            points[offset++] = point ? point[0] : NaN;
-            points[offset++] = point ? point[1] : NaN;
-          } else {
-            data.setItemLayout(i, point && point.slice() || [NaN, NaN]);
-          }
-        }
-
-        isLargeRender && data.setLayout('symbolPoints', points);
-      }
-
-      return dimLen && {
-        progress: progress
-      };
-    }
-  };
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var samplers = {
-  average: function (frame) {
-    var sum = 0;
-    var count = 0;
-
-    for (var i = 0; i < frame.length; i++) {
-      if (!isNaN(frame[i])) {
-        sum += frame[i];
-        count++;
-      }
-    } // Return NaN if count is 0
-
-
-    return count === 0 ? NaN : sum / count;
-  },
-  sum: function (frame) {
-    var sum = 0;
-
-    for (var i = 0; i < frame.length; i++) {
-      // Ignore NaN
-      sum += frame[i] || 0;
-    }
-
-    return sum;
-  },
-  max: function (frame) {
-    var max = -Infinity;
-
-    for (var i = 0; i < frame.length; i++) {
-      frame[i] > max && (max = frame[i]);
-    } // NaN will cause illegal axis extent.
-
-
-    return isFinite(max) ? max : NaN;
-  },
-  min: function (frame) {
-    var min = Infinity;
-
-    for (var i = 0; i < frame.length; i++) {
-      frame[i] < min && (min = frame[i]);
-    } // NaN will cause illegal axis extent.
-
-
-    return isFinite(min) ? min : NaN;
-  },
-  // TODO
-  // Median
-  nearest: function (frame) {
-    return frame[0];
-  }
-};
-
-var indexSampler = function (frame, value) {
-  return Math.round(frame.length / 2);
-};
-
-var dataSample = function (seriesType) {
-  return {
-    seriesType: seriesType,
-    modifyOutputEnd: true,
-    reset: function (seriesModel, ecModel, api) {
-      var data = seriesModel.getData();
-      var sampling = seriesModel.get('sampling');
-      var coordSys = seriesModel.coordinateSystem; // Only cartesian2d support down sampling
-
-      if (coordSys.type === 'cartesian2d' && sampling) {
-        var baseAxis = coordSys.getBaseAxis();
-        var valueAxis = coordSys.getOtherAxis(baseAxis);
-        var extent = baseAxis.getExtent(); // Coordinste system has been resized
-
-        var size = extent[1] - extent[0];
-        var rate = Math.round(data.count() / size);
-
-        if (rate > 1) {
-          var sampler;
-
-          if (typeof sampling === 'string') {
-            sampler = samplers[sampling];
-          } else if (typeof sampling === 'function') {
-            sampler = sampling;
-          }
-
-          if (sampler) {
-            // Only support sample the first dim mapped from value axis.
-            seriesModel.setData(data.downSample(data.mapDimension(valueAxis.dim), 1 / rate, sampler, indexSampler));
-          }
-        }
-      }
-    }
-  };
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerVisual(visualSymbol('line', 'circle', 'line'));
-registerLayout(layoutPoints('line')); // Down sample after filter
-
-registerProcessor(PRIORITY.PROCESSOR.STATISTIC, dataSample('line'));
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * [Usage]:
- * (1)
- * createListSimply(seriesModel, ['value']);
- * (2)
- * createListSimply(seriesModel, {
- *     coordDimensions: ['value'],
- *     dimensionsCount: 5
- * });
- *
- * @param {module:echarts/model/Series} seriesModel
- * @param {Object|Array.<string|Object>} opt opt or coordDimensions
- *        The options in opt, see `echarts/data/helper/createDimensions`
- * @param {Array.<string>} [nameList]
- * @return {module:echarts/data/List}
- */
-
-var createListSimply = function (seriesModel, opt, nameList) {
-  opt = isArray(opt) && {
-    coordDimensions: opt
-  } || extend({}, opt);
-  var source = seriesModel.getSource();
-  var dimensionsInfo = createDimensions(source, opt);
-  var list = new List(dimensionsInfo, seriesModel);
-  list.initData(source, nameList);
-  return list;
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * Data selectable mixin for chart series.
- * To eanble data select, option of series must have `selectedMode`.
- * And each data item will use `selected` to toggle itself selected status
- */
-var dataSelectableMixin = {
-  /**
-   * @param {Array.<Object>} targetList [{name, value, selected}, ...]
-   *        If targetList is an array, it should like [{name: ..., value: ...}, ...].
-   *        If targetList is a "List", it must have coordDim: 'value' dimension and name.
-   */
-  updateSelectedMap: function (targetList) {
-    this._targetList = isArray(targetList) ? targetList.slice() : [];
-    this._selectTargetMap = reduce(targetList || [], function (targetMap, target) {
-      targetMap.set(target.name, target);
-      return targetMap;
-    }, createHashMap());
-  },
-
-  /**
-   * Either name or id should be passed as input here.
-   * If both of them are defined, id is used.
-   *
-   * @param {string|undefined} name name of data
-   * @param {number|undefined} id dataIndex of data
-   */
-  // PENGING If selectedMode is null ?
-  select: function (name, id) {
-    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name);
-    var selectedMode = this.get('selectedMode');
-
-    if (selectedMode === 'single') {
-      this._selectTargetMap.each(function (target) {
-        target.selected = false;
-      });
-    }
-
-    target && (target.selected = true);
-  },
-
-  /**
-   * Either name or id should be passed as input here.
-   * If both of them are defined, id is used.
-   *
-   * @param {string|undefined} name name of data
-   * @param {number|undefined} id dataIndex of data
-   */
-  unSelect: function (name, id) {
-    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name); // var selectedMode = this.get('selectedMode');
-    // selectedMode !== 'single' && target && (target.selected = false);
-
-    target && (target.selected = false);
-  },
-
-  /**
-   * Either name or id should be passed as input here.
-   * If both of them are defined, id is used.
-   *
-   * @param {string|undefined} name name of data
-   * @param {number|undefined} id dataIndex of data
-   */
-  toggleSelected: function (name, id) {
-    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name);
-
-    if (target != null) {
-      this[target.selected ? 'unSelect' : 'select'](name, id);
-      return target.selected;
-    }
-  },
-
-  /**
-   * Either name or id should be passed as input here.
-   * If both of them are defined, id is used.
-   *
-   * @param {string|undefined} name name of data
-   * @param {number|undefined} id dataIndex of data
-   */
-  isSelected: function (name, id) {
-    var target = id != null ? this._targetList[id] : this._selectTargetMap.get(name);
-    return target && target.selected;
-  }
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var PieSeries = extendSeriesModel({
-  type: 'series.pie',
-  // Overwrite
-  init: function (option) {
-    PieSeries.superApply(this, 'init', arguments); // Enable legend selection for each data item
-    // Use a function instead of direct access because data reference may changed
-
-    this.legendDataProvider = function () {
-      return this.getRawData();
-    };
-
-    this.updateSelectedMap(this._createSelectableList());
-
-    this._defaultLabelLine(option);
-  },
-  // Overwrite
-  mergeOption: function (newOption) {
-    PieSeries.superCall(this, 'mergeOption', newOption);
-    this.updateSelectedMap(this._createSelectableList());
-  },
-  getInitialData: function (option, ecModel) {
-    return createListSimply(this, ['value']);
-  },
-  _createSelectableList: function () {
-    var data = this.getRawData();
-    var valueDim = data.mapDimension('value');
-    var targetList = [];
-
-    for (var i = 0, len = data.count(); i < len; i++) {
-      targetList.push({
-        name: data.getName(i),
-        value: data.get(valueDim, i),
-        selected: retrieveRawAttr(data, i, 'selected')
-      });
-    }
-
-    return targetList;
-  },
-  // Overwrite
-  getDataParams: function (dataIndex) {
-    var data = this.getData();
-    var params = PieSeries.superCall(this, 'getDataParams', dataIndex); // FIXME toFixed?
-
-    var valueList = [];
-    data.each(data.mapDimension('value'), function (value) {
-      valueList.push(value);
-    });
-    params.percent = getPercentWithPrecision(valueList, dataIndex, data.hostModel.get('percentPrecision'));
-    params.$vars.push('percent');
-    return params;
-  },
-  _defaultLabelLine: function (option) {
-    // Extend labelLine emphasis
-    defaultEmphasis(option, 'labelLine', ['show']);
-    var labelLineNormalOpt = option.labelLine;
-    var labelLineEmphasisOpt = option.emphasis.labelLine; // Not show label line if `label.normal.show = false`
-
-    labelLineNormalOpt.show = labelLineNormalOpt.show && option.label.show;
-    labelLineEmphasisOpt.show = labelLineEmphasisOpt.show && option.emphasis.label.show;
-  },
-  defaultOption: {
-    zlevel: 0,
-    z: 2,
-    legendHoverLink: true,
-    hoverAnimation: true,
-    // 默认全局居中
-    center: ['50%', '50%'],
-    radius: [0, '75%'],
-    // 默认顺时针
-    clockwise: true,
-    startAngle: 90,
-    // 最小角度改为0
-    minAngle: 0,
-    // 选中时扇区偏移量
-    selectedOffset: 10,
-    // 高亮扇区偏移量
-    hoverOffset: 10,
-    // If use strategy to avoid label overlapping
-    avoidLabelOverlap: true,
-    // 选择模式，默认关闭，可选single，multiple
-    // selectedMode: false,
-    // 南丁格尔玫瑰图模式，'radius'（半径） | 'area'（面积）
-    // roseType: null,
-    percentPrecision: 2,
-    // If still show when all data zero.
-    stillShowZeroSum: true,
-    // cursor: null,
-    label: {
-      // If rotate around circle
-      rotate: false,
-      show: true,
-      // 'outer', 'inside', 'center'
-      position: 'outer' // formatter: 标签文本格式器，同Tooltip.formatter，不支持异步回调
-      // 默认使用全局文本样式，详见TEXTSTYLE
-      // distance: 当position为inner时有效，为label位置到圆心的距离与圆半径(环状图为内外半径和)的比例系数
-
-    },
-    // Enabled when label.normal.position is 'outer'
-    labelLine: {
-      show: true,
-      // 引导线两段中的第一段长度
-      length: 15,
-      // 引导线两段中的第二段长度
-      length2: 15,
-      smooth: false,
-      lineStyle: {
-        // color: 各异,
-        width: 1,
-        type: 'solid'
-      }
-    },
-    itemStyle: {
-      borderWidth: 1
-    },
-    // Animation type canbe expansion, scale
-    animationType: 'expansion',
-    animationEasing: 'cubicOut'
-  }
-});
-mixin(PieSeries, dataSelectableMixin);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * @param {module:echarts/model/Series} seriesModel
- * @param {boolean} hasAnimation
- * @inner
- */
-
-function updateDataSelected(uid, seriesModel, hasAnimation, api) {
-  var data = seriesModel.getData();
-  var dataIndex = this.dataIndex;
-  var name = data.getName(dataIndex);
-  var selectedOffset = seriesModel.get('selectedOffset');
-  api.dispatchAction({
-    type: 'pieToggleSelect',
-    from: uid,
-    name: name,
-    seriesId: seriesModel.id
-  });
-  data.each(function (idx) {
-    toggleItemSelected(data.getItemGraphicEl(idx), data.getItemLayout(idx), seriesModel.isSelected(data.getName(idx)), selectedOffset, hasAnimation);
-  });
-}
-/**
- * @param {module:zrender/graphic/Sector} el
- * @param {Object} layout
- * @param {boolean} isSelected
- * @param {number} selectedOffset
- * @param {boolean} hasAnimation
- * @inner
- */
-
-
-function toggleItemSelected(el, layout, isSelected, selectedOffset, hasAnimation) {
-  var midAngle = (layout.startAngle + layout.endAngle) / 2;
-  var dx = Math.cos(midAngle);
-  var dy = Math.sin(midAngle);
-  var offset = isSelected ? selectedOffset : 0;
-  var position = [dx * offset, dy * offset];
-  hasAnimation // animateTo will stop revious animation like update transition
-  ? el.animate().when(200, {
-    position: position
-  }).start('bounceOut') : el.attr('position', position);
-}
-/**
- * Piece of pie including Sector, Label, LabelLine
- * @constructor
- * @extends {module:zrender/graphic/Group}
- */
-
-
-function PiePiece(data, idx) {
-  Group.call(this);
-  var sector = new Sector({
-    z2: 2
-  });
-  var polyline = new Polyline();
-  var text = new Text();
-  this.add(sector);
-  this.add(polyline);
-  this.add(text);
-  this.updateData(data, idx, true); // Hover to change label and labelLine
-
-  function onEmphasis() {
-    polyline.ignore = polyline.hoverIgnore;
-    text.ignore = text.hoverIgnore;
-  }
-
-  function onNormal() {
-    polyline.ignore = polyline.normalIgnore;
-    text.ignore = text.normalIgnore;
-  }
-
-  this.on('emphasis', onEmphasis).on('normal', onNormal).on('mouseover', onEmphasis).on('mouseout', onNormal);
-}
-
-var piePieceProto = PiePiece.prototype;
-
-piePieceProto.updateData = function (data, idx, firstCreate) {
-  var sector = this.childAt(0);
-  var seriesModel = data.hostModel;
-  var itemModel = data.getItemModel(idx);
-  var layout = data.getItemLayout(idx);
-  var sectorShape = extend({}, layout);
-  sectorShape.label = null;
-
-  if (firstCreate) {
-    sector.setShape(sectorShape);
-    var animationType = seriesModel.getShallow('animationType');
-
-    if (animationType === 'scale') {
-      sector.shape.r = layout.r0;
-      initProps(sector, {
-        shape: {
-          r: layout.r
-        }
-      }, seriesModel, idx);
-    } // Expansion
-    else {
-        sector.shape.endAngle = layout.startAngle;
-        updateProps(sector, {
-          shape: {
-            endAngle: layout.endAngle
-          }
-        }, seriesModel, idx);
-      }
-  } else {
-    updateProps(sector, {
-      shape: sectorShape
-    }, seriesModel, idx);
-  } // Update common style
-
-
-  var visualColor = data.getItemVisual(idx, 'color');
-  sector.useStyle(defaults({
-    lineJoin: 'bevel',
-    fill: visualColor
-  }, itemModel.getModel('itemStyle').getItemStyle()));
-  sector.hoverStyle = itemModel.getModel('emphasis.itemStyle').getItemStyle();
-  var cursorStyle = itemModel.getShallow('cursor');
-  cursorStyle && sector.attr('cursor', cursorStyle); // Toggle selected
-
-  toggleItemSelected(this, data.getItemLayout(idx), seriesModel.isSelected(null, idx), seriesModel.get('selectedOffset'), seriesModel.get('animation'));
-
-  function onEmphasis() {
-    // Sector may has animation of updating data. Force to move to the last frame
-    // Or it may stopped on the wrong shape
-    sector.stopAnimation(true);
-    sector.animateTo({
-      shape: {
-        r: layout.r + seriesModel.get('hoverOffset')
-      }
-    }, 300, 'elasticOut');
-  }
-
-  function onNormal() {
-    sector.stopAnimation(true);
-    sector.animateTo({
-      shape: {
-        r: layout.r
-      }
-    }, 300, 'elasticOut');
-  }
-
-  sector.off('mouseover').off('mouseout').off('emphasis').off('normal');
-
-  if (itemModel.get('hoverAnimation') && seriesModel.isAnimationEnabled()) {
-    sector.on('mouseover', onEmphasis).on('mouseout', onNormal).on('emphasis', onEmphasis).on('normal', onNormal);
-  }
-
-  this._updateLabel(data, idx);
-
-  setHoverStyle(this);
-};
-
-piePieceProto._updateLabel = function (data, idx) {
-  var labelLine = this.childAt(1);
-  var labelText = this.childAt(2);
-  var seriesModel = data.hostModel;
-  var itemModel = data.getItemModel(idx);
-  var layout = data.getItemLayout(idx);
-  var labelLayout = layout.label;
-  var visualColor = data.getItemVisual(idx, 'color');
-  updateProps(labelLine, {
-    shape: {
-      points: labelLayout.linePoints || [[labelLayout.x, labelLayout.y], [labelLayout.x, labelLayout.y], [labelLayout.x, labelLayout.y]]
-    }
-  }, seriesModel, idx);
-  updateProps(labelText, {
-    style: {
-      x: labelLayout.x,
-      y: labelLayout.y
-    }
-  }, seriesModel, idx);
-  labelText.attr({
-    rotation: labelLayout.rotation,
-    origin: [labelLayout.x, labelLayout.y],
-    z2: 10
-  });
-  var labelModel = itemModel.getModel('label');
-  var labelHoverModel = itemModel.getModel('emphasis.label');
-  var labelLineModel = itemModel.getModel('labelLine');
-  var labelLineHoverModel = itemModel.getModel('emphasis.labelLine');
-  var visualColor = data.getItemVisual(idx, 'color');
-  setLabelStyle(labelText.style, labelText.hoverStyle = {}, labelModel, labelHoverModel, {
-    labelFetcher: data.hostModel,
-    labelDataIndex: idx,
-    defaultText: data.getName(idx),
-    autoColor: visualColor,
-    useInsideStyle: !!labelLayout.inside
-  }, {
-    textAlign: labelLayout.textAlign,
-    textVerticalAlign: labelLayout.verticalAlign,
-    opacity: data.getItemVisual(idx, 'opacity')
-  });
-  labelText.ignore = labelText.normalIgnore = !labelModel.get('show');
-  labelText.hoverIgnore = !labelHoverModel.get('show');
-  labelLine.ignore = labelLine.normalIgnore = !labelLineModel.get('show');
-  labelLine.hoverIgnore = !labelLineHoverModel.get('show'); // Default use item visual color
-
-  labelLine.setStyle({
-    stroke: visualColor,
-    opacity: data.getItemVisual(idx, 'opacity')
-  });
-  labelLine.setStyle(labelLineModel.getModel('lineStyle').getLineStyle());
-  labelLine.hoverStyle = labelLineHoverModel.getModel('lineStyle').getLineStyle();
-  var smooth = labelLineModel.get('smooth');
-
-  if (smooth && smooth === true) {
-    smooth = 0.4;
-  }
-
-  labelLine.setShape({
-    smooth: smooth
-  });
-};
-
-inherits(PiePiece, Group); // Pie view
-
-var PieView = Chart.extend({
-  type: 'pie',
-  init: function () {
-    var sectorGroup = new Group();
-    this._sectorGroup = sectorGroup;
-  },
-  render: function (seriesModel, ecModel, api, payload) {
-    if (payload && payload.from === this.uid) {
-      return;
-    }
-
-    var data = seriesModel.getData();
-    var oldData = this._data;
-    var group = this.group;
-    var hasAnimation = ecModel.get('animation');
-    var isFirstRender = !oldData;
-    var animationType = seriesModel.get('animationType');
-    var onSectorClick = curry(updateDataSelected, this.uid, seriesModel, hasAnimation, api);
-    var selectedMode = seriesModel.get('selectedMode');
-    data.diff(oldData).add(function (idx) {
-      var piePiece = new PiePiece(data, idx); // Default expansion animation
-
-      if (isFirstRender && animationType !== 'scale') {
-        piePiece.eachChild(function (child) {
-          child.stopAnimation(true);
-        });
-      }
-
-      selectedMode && piePiece.on('click', onSectorClick);
-      data.setItemGraphicEl(idx, piePiece);
-      group.add(piePiece);
-    }).update(function (newIdx, oldIdx) {
-      var piePiece = oldData.getItemGraphicEl(oldIdx);
-      piePiece.updateData(data, newIdx);
-      piePiece.off('click');
-      selectedMode && piePiece.on('click', onSectorClick);
-      group.add(piePiece);
-      data.setItemGraphicEl(newIdx, piePiece);
-    }).remove(function (idx) {
-      var piePiece = oldData.getItemGraphicEl(idx);
-      group.remove(piePiece);
-    }).execute();
-
-    if (hasAnimation && isFirstRender && data.count() > 0 // Default expansion animation
-    && animationType !== 'scale') {
-      var shape = data.getItemLayout(0);
-      var r = Math.max(api.getWidth(), api.getHeight()) / 2;
-      var removeClipPath = bind(group.removeClipPath, group);
-      group.setClipPath(this._createClipPath(shape.cx, shape.cy, r, shape.startAngle, shape.clockwise, removeClipPath, seriesModel));
-    } else {
-      // clipPath is used in first-time animation, so remove it when otherwise. See: #8994
-      group.removeClipPath();
-    }
-
-    this._data = data;
-  },
-  dispose: function () {},
-  _createClipPath: function (cx, cy, r, startAngle, clockwise, cb, seriesModel) {
-    var clipPath = new Sector({
-      shape: {
-        cx: cx,
-        cy: cy,
-        r0: 0,
-        r: r,
-        startAngle: startAngle,
-        endAngle: startAngle,
-        clockwise: clockwise
-      }
-    });
-    initProps(clipPath, {
-      shape: {
-        endAngle: startAngle + (clockwise ? 1 : -1) * Math.PI * 2
-      }
-    }, seriesModel, cb);
-    return clipPath;
-  },
-
-  /**
-   * @implement
-   */
-  containPoint: function (point, seriesModel) {
-    var data = seriesModel.getData();
-    var itemLayout = data.getItemLayout(0);
-
-    if (itemLayout) {
-      var dx = point[0] - itemLayout.cx;
-      var dy = point[1] - itemLayout.cy;
-      var radius = Math.sqrt(dx * dx + dy * dy);
-      return radius <= itemLayout.r && radius >= itemLayout.r0;
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var createDataSelectAction = function (seriesType, actionInfos) {
-  each$1(actionInfos, function (actionInfo) {
-    actionInfo.update = 'updateView';
-    /**
-     * @payload
-     * @property {string} seriesName
-     * @property {string} name
-     */
-
-    registerAction(actionInfo, function (payload, ecModel) {
-      var selected = {};
-      ecModel.eachComponent({
-        mainType: 'series',
-        subType: seriesType,
-        query: payload
-      }, function (seriesModel) {
-        if (seriesModel[actionInfo.method]) {
-          seriesModel[actionInfo.method](payload.name, payload.dataIndex);
-        }
-
-        var data = seriesModel.getData(); // Create selected map
-
-        data.each(function (idx) {
-          var name = data.getName(idx);
-          selected[name] = seriesModel.isSelected(name) || false;
-        });
-      });
-      return {
-        name: payload.name,
-        selected: selected
-      };
-    });
-  });
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Pick color from palette for each data item.
-// Applicable for charts that require applying color palette
-// in data level (like pie, funnel, chord).
-var dataColor = function (seriesType) {
-  return {
-    getTargetSeries: function (ecModel) {
-      // Pie and funnel may use diferrent scope
-      var paletteScope = {};
-      var seiresModelMap = createHashMap();
-      ecModel.eachSeriesByType(seriesType, function (seriesModel) {
-        seriesModel.__paletteScope = paletteScope;
-        seiresModelMap.set(seriesModel.uid, seriesModel);
-      });
-      return seiresModelMap;
-    },
-    reset: function (seriesModel, ecModel) {
-      var dataAll = seriesModel.getRawData();
-      var idxMap = {};
-      var data = seriesModel.getData();
-      data.each(function (idx) {
-        var rawIdx = data.getRawIndex(idx);
-        idxMap[rawIdx] = idx;
-      });
-      dataAll.each(function (rawIdx) {
-        var filteredIdx = idxMap[rawIdx]; // If series.itemStyle.normal.color is a function. itemVisual may be encoded
-
-        var singleDataColor = filteredIdx != null && data.getItemVisual(filteredIdx, 'color', true);
-
-        if (!singleDataColor) {
-          // FIXME Performance
-          var itemModel = dataAll.getItemModel(rawIdx);
-          var color = itemModel.get('itemStyle.color') || seriesModel.getColorFromPalette(dataAll.getName(rawIdx) || rawIdx + '', seriesModel.__paletteScope, dataAll.count()); // Legend may use the visual info in data before processed
-
-          dataAll.setItemVisual(rawIdx, 'color', color); // Data is not filtered
-
-          if (filteredIdx != null) {
-            data.setItemVisual(filteredIdx, 'color', color);
-          }
-        } else {
-          // Set data all color for legend
-          dataAll.setItemVisual(rawIdx, 'color', singleDataColor);
-        }
-      });
-    }
-  };
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// FIXME emphasis label position is not same with normal label position
-function adjustSingleSide(list, cx, cy, r, dir, viewWidth, viewHeight) {
-  list.sort(function (a, b) {
-    return a.y - b.y;
-  });
-
-  function shiftDown(start, end, delta, dir) {
-    for (var j = start; j < end; j++) {
-      list[j].y += delta;
-
-      if (j > start && j + 1 < end && list[j + 1].y > list[j].y + list[j].height) {
-        shiftUp(j, delta / 2);
-        return;
-      }
-    }
-
-    shiftUp(end - 1, delta / 2);
-  }
-
-  function shiftUp(end, delta) {
-    for (var j = end; j >= 0; j--) {
-      list[j].y -= delta;
-
-      if (j > 0 && list[j].y > list[j - 1].y + list[j - 1].height) {
-        break;
-      }
-    }
-  }
-
-  function changeX(list, isDownList, cx, cy, r, dir) {
-    var lastDeltaX = dir > 0 ? isDownList // right-side
-    ? Number.MAX_VALUE // down
-    : 0 // up
-    : isDownList // left-side
-    ? Number.MAX_VALUE // down
-    : 0; // up
-
-    for (var i = 0, l = list.length; i < l; i++) {
-      var deltaY = Math.abs(list[i].y - cy);
-      var length = list[i].len;
-      var length2 = list[i].len2;
-      var deltaX = deltaY < r + length ? Math.sqrt((r + length + length2) * (r + length + length2) - deltaY * deltaY) : Math.abs(list[i].x - cx);
-
-      if (isDownList && deltaX >= lastDeltaX) {
-        // right-down, left-down
-        deltaX = lastDeltaX - 10;
-      }
-
-      if (!isDownList && deltaX <= lastDeltaX) {
-        // right-up, left-up
-        deltaX = lastDeltaX + 10;
-      }
-
-      list[i].x = cx + deltaX * dir;
-      lastDeltaX = deltaX;
-    }
-  }
-
-  var lastY = 0;
-  var delta;
-  var len = list.length;
-  var upList = [];
-  var downList = [];
-
-  for (var i = 0; i < len; i++) {
-    delta = list[i].y - lastY;
-
-    if (delta < 0) {
-      shiftDown(i, len, -delta, dir);
-    }
-
-    lastY = list[i].y + list[i].height;
-  }
-
-  if (viewHeight - lastY < 0) {
-    shiftUp(len - 1, lastY - viewHeight);
-  }
-
-  for (var i = 0; i < len; i++) {
-    if (list[i].y >= cy) {
-      downList.push(list[i]);
-    } else {
-      upList.push(list[i]);
-    }
-  }
-
-  changeX(upList, false, cx, cy, r, dir);
-  changeX(downList, true, cx, cy, r, dir);
-}
-
-function avoidOverlap(labelLayoutList, cx, cy, r, viewWidth, viewHeight) {
-  var leftList = [];
-  var rightList = [];
-
-  for (var i = 0; i < labelLayoutList.length; i++) {
-    if (isPositionCenter(labelLayoutList[i])) {
-      continue;
-    }
-
-    if (labelLayoutList[i].x < cx) {
-      leftList.push(labelLayoutList[i]);
-    } else {
-      rightList.push(labelLayoutList[i]);
-    }
-  }
-
-  adjustSingleSide(rightList, cx, cy, r, 1, viewWidth, viewHeight);
-  adjustSingleSide(leftList, cx, cy, r, -1, viewWidth, viewHeight);
-
-  for (var i = 0; i < labelLayoutList.length; i++) {
-    if (isPositionCenter(labelLayoutList[i])) {
-      continue;
-    }
-
-    var linePoints = labelLayoutList[i].linePoints;
-
-    if (linePoints) {
-      var dist = linePoints[1][0] - linePoints[2][0];
-
-      if (labelLayoutList[i].x < cx) {
-        linePoints[2][0] = labelLayoutList[i].x + 3;
-      } else {
-        linePoints[2][0] = labelLayoutList[i].x - 3;
-      }
-
-      linePoints[1][1] = linePoints[2][1] = labelLayoutList[i].y;
-      linePoints[1][0] = linePoints[2][0] + dist;
-    }
-  }
-}
-
-function isPositionCenter(layout) {
-  // Not change x for center label
-  return layout.position === 'center';
-}
-
-var labelLayout = function (seriesModel, r, viewWidth, viewHeight) {
-  var data = seriesModel.getData();
-  var labelLayoutList = [];
-  var cx;
-  var cy;
-  var hasLabelRotate = false;
-  data.each(function (idx) {
-    var layout = data.getItemLayout(idx);
-    var itemModel = data.getItemModel(idx);
-    var labelModel = itemModel.getModel('label'); // Use position in normal or emphasis
-
-    var labelPosition = labelModel.get('position') || itemModel.get('emphasis.label.position');
-    var labelLineModel = itemModel.getModel('labelLine');
-    var labelLineLen = labelLineModel.get('length');
-    var labelLineLen2 = labelLineModel.get('length2');
-    var midAngle = (layout.startAngle + layout.endAngle) / 2;
-    var dx = Math.cos(midAngle);
-    var dy = Math.sin(midAngle);
-    var textX;
-    var textY;
-    var linePoints;
-    var textAlign;
-    cx = layout.cx;
-    cy = layout.cy;
-    var isLabelInside = labelPosition === 'inside' || labelPosition === 'inner';
-
-    if (labelPosition === 'center') {
-      textX = layout.cx;
-      textY = layout.cy;
-      textAlign = 'center';
-    } else {
-      var x1 = (isLabelInside ? (layout.r + layout.r0) / 2 * dx : layout.r * dx) + cx;
-      var y1 = (isLabelInside ? (layout.r + layout.r0) / 2 * dy : layout.r * dy) + cy;
-      textX = x1 + dx * 3;
-      textY = y1 + dy * 3;
-
-      if (!isLabelInside) {
-        // For roseType
-        var x2 = x1 + dx * (labelLineLen + r - layout.r);
-        var y2 = y1 + dy * (labelLineLen + r - layout.r);
-        var x3 = x2 + (dx < 0 ? -1 : 1) * labelLineLen2;
-        var y3 = y2;
-        textX = x3 + (dx < 0 ? -5 : 5);
-        textY = y3;
-        linePoints = [[x1, y1], [x2, y2], [x3, y3]];
-      }
-
-      textAlign = isLabelInside ? 'center' : dx > 0 ? 'left' : 'right';
-    }
-
-    var font = labelModel.getFont();
-    var labelRotate = labelModel.get('rotate') ? dx < 0 ? -midAngle + Math.PI : -midAngle : 0;
-    var text = seriesModel.getFormattedLabel(idx, 'normal') || data.getName(idx);
-    var textRect = getBoundingRect(text, font, textAlign, 'top');
-    hasLabelRotate = !!labelRotate;
-    layout.label = {
-      x: textX,
-      y: textY,
-      position: labelPosition,
-      height: textRect.height,
-      len: labelLineLen,
-      len2: labelLineLen2,
-      linePoints: linePoints,
-      textAlign: textAlign,
-      verticalAlign: 'middle',
-      rotation: labelRotate,
-      inside: isLabelInside
-    }; // Not layout the inside label
-
-    if (!isLabelInside) {
-      labelLayoutList.push(layout.label);
-    }
-  });
-
-  if (!hasLabelRotate && seriesModel.get('avoidLabelOverlap')) {
-    avoidOverlap(labelLayoutList, cx, cy, r, viewWidth, viewHeight);
-  }
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var PI2$4 = Math.PI * 2;
-var RADIAN = Math.PI / 180;
-var pieLayout = function (seriesType, ecModel, api, payload) {
-  ecModel.eachSeriesByType(seriesType, function (seriesModel) {
-    var data = seriesModel.getData();
-    var valueDim = data.mapDimension('value');
-    var center = seriesModel.get('center');
-    var radius = seriesModel.get('radius');
-
-    if (!isArray(radius)) {
-      radius = [0, radius];
-    }
-
-    if (!isArray(center)) {
-      center = [center, center];
-    }
-
-    var width = api.getWidth();
-    var height = api.getHeight();
-    var size = Math.min(width, height);
-    var cx = parsePercent$1(center[0], width);
-    var cy = parsePercent$1(center[1], height);
-    var r0 = parsePercent$1(radius[0], size / 2);
-    var r = parsePercent$1(radius[1], size / 2);
-    var startAngle = -seriesModel.get('startAngle') * RADIAN;
-    var minAngle = seriesModel.get('minAngle') * RADIAN;
-    var validDataCount = 0;
-    data.each(valueDim, function (value) {
-      !isNaN(value) && validDataCount++;
-    });
-    var sum = data.getSum(valueDim); // Sum may be 0
-
-    var unitRadian = Math.PI / (sum || validDataCount) * 2;
-    var clockwise = seriesModel.get('clockwise');
-    var roseType = seriesModel.get('roseType');
-    var stillShowZeroSum = seriesModel.get('stillShowZeroSum'); // [0...max]
-
-    var extent = data.getDataExtent(valueDim);
-    extent[0] = 0; // In the case some sector angle is smaller than minAngle
-
-    var restAngle = PI2$4;
-    var valueSumLargerThanMinAngle = 0;
-    var currentAngle = startAngle;
-    var dir = clockwise ? 1 : -1;
-    data.each(valueDim, function (value, idx) {
-      var angle;
-
-      if (isNaN(value)) {
-        data.setItemLayout(idx, {
-          angle: NaN,
-          startAngle: NaN,
-          endAngle: NaN,
-          clockwise: clockwise,
-          cx: cx,
-          cy: cy,
-          r0: r0,
-          r: roseType ? NaN : r
-        });
-        return;
-      } // FIXME 兼容 2.0 但是 roseType 是 area 的时候才是这样？
-
-
-      if (roseType !== 'area') {
-        angle = sum === 0 && stillShowZeroSum ? unitRadian : value * unitRadian;
-      } else {
-        angle = PI2$4 / validDataCount;
-      }
-
-      if (angle < minAngle) {
-        angle = minAngle;
-        restAngle -= minAngle;
-      } else {
-        valueSumLargerThanMinAngle += value;
-      }
-
-      var endAngle = currentAngle + dir * angle;
-      data.setItemLayout(idx, {
-        angle: angle,
-        startAngle: currentAngle,
-        endAngle: endAngle,
-        clockwise: clockwise,
-        cx: cx,
-        cy: cy,
-        r0: r0,
-        r: roseType ? linearMap(value, extent, [r0, r]) : r
-      });
-      currentAngle = endAngle;
-    }); // Some sector is constrained by minAngle
-    // Rest sectors needs recalculate angle
-
-    if (restAngle < PI2$4 && validDataCount) {
-      // Average the angle if rest angle is not enough after all angles is
-      // Constrained by minAngle
-      if (restAngle <= 1e-3) {
-        var angle = PI2$4 / validDataCount;
-        data.each(valueDim, function (value, idx) {
-          if (!isNaN(value)) {
-            var layout = data.getItemLayout(idx);
-            layout.angle = angle;
-            layout.startAngle = startAngle + dir * idx * angle;
-            layout.endAngle = startAngle + dir * (idx + 1) * angle;
-          }
-        });
-      } else {
-        unitRadian = restAngle / valueSumLargerThanMinAngle;
-        currentAngle = startAngle;
-        data.each(valueDim, function (value, idx) {
-          if (!isNaN(value)) {
-            var layout = data.getItemLayout(idx);
-            var angle = layout.angle === minAngle ? minAngle : value * unitRadian;
-            layout.startAngle = currentAngle;
-            layout.endAngle = currentAngle + dir * angle;
-            currentAngle += dir * angle;
-          }
-        });
-      }
-    }
-
-    labelLayout(seriesModel, r, width, height);
-  });
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var dataFilter = function (seriesType) {
-  return {
-    seriesType: seriesType,
-    reset: function (seriesModel, ecModel) {
-      var legendModels = ecModel.findComponents({
-        mainType: 'legend'
-      });
-
-      if (!legendModels || !legendModels.length) {
-        return;
-      }
-
-      var data = seriesModel.getData();
-      data.filterSelf(function (idx) {
-        var name = data.getName(idx); // If in any legend component the status is not selected.
-
-        for (var i = 0; i < legendModels.length; i++) {
-          if (!legendModels[i].isSelected(name)) {
-            return false;
-          }
-        }
-
-        return true;
-      });
-    }
-  };
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-createDataSelectAction('pie', [{
-  type: 'pieToggleSelect',
-  event: 'pieselectchanged',
-  method: 'toggleSelected'
-}, {
-  type: 'pieSelect',
-  event: 'pieselected',
-  method: 'select'
-}, {
-  type: 'pieUnSelect',
-  event: 'pieunselected',
-  method: 'unSelect'
-}]);
-registerVisual(dataColor('pie'));
-registerLayout(curry(pieLayout, 'pie'));
-registerProcessor(dataFilter('pie'));
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-extendComponentModel({
-  type: 'title',
-  layoutMode: {
-    type: 'box',
-    ignoreSize: true
-  },
-  defaultOption: {
-    // 一级层叠
-    zlevel: 0,
-    // 二级层叠
-    z: 6,
-    show: true,
-    text: '',
-    // 超链接跳转
-    // link: null,
-    // 仅支持self | blank
-    target: 'blank',
-    subtext: '',
-    // 超链接跳转
-    // sublink: null,
-    // 仅支持self | blank
-    subtarget: 'blank',
-    // 'center' ¦ 'left' ¦ 'right'
-    // ¦ {number}（x坐标，单位px）
-    left: 0,
-    // 'top' ¦ 'bottom' ¦ 'center'
-    // ¦ {number}（y坐标，单位px）
-    top: 0,
-    // 水平对齐
-    // 'auto' | 'left' | 'right' | 'center'
-    // 默认根据 left 的位置判断是左对齐还是右对齐
-    // textAlign: null
-    //
-    // 垂直对齐
-    // 'auto' | 'top' | 'bottom' | 'middle'
-    // 默认根据 top 位置判断是上对齐还是下对齐
-    // textBaseline: null
-    backgroundColor: 'rgba(0,0,0,0)',
-    // 标题边框颜色
-    borderColor: '#ccc',
-    // 标题边框线宽，单位px，默认为0（无边框）
-    borderWidth: 0,
-    // 标题内边距，单位px，默认各方向内边距为5，
-    // 接受数组分别设定上右下左边距，同css
-    padding: 5,
-    // 主副标题纵向间隔，单位px，默认为10，
-    itemGap: 10,
-    textStyle: {
-      fontSize: 18,
-      fontWeight: 'bolder',
-      color: '#333'
-    },
-    subtextStyle: {
-      color: '#aaa'
-    }
-  }
-}); // View
-
-extendComponentView({
-  type: 'title',
-  render: function (titleModel, ecModel, api) {
-    this.group.removeAll();
-
-    if (!titleModel.get('show')) {
-      return;
-    }
-
-    var group = this.group;
-    var textStyleModel = titleModel.getModel('textStyle');
-    var subtextStyleModel = titleModel.getModel('subtextStyle');
-    var textAlign = titleModel.get('textAlign');
-    var textBaseline = titleModel.get('textBaseline');
-    var textEl = new Text({
-      style: setTextStyle({}, textStyleModel, {
-        text: titleModel.get('text'),
-        textFill: textStyleModel.getTextColor()
-      }, {
-        disableBox: true
-      }),
-      z2: 10
-    });
-    var textRect = textEl.getBoundingRect();
-    var subText = titleModel.get('subtext');
-    var subTextEl = new Text({
-      style: setTextStyle({}, subtextStyleModel, {
-        text: subText,
-        textFill: subtextStyleModel.getTextColor(),
-        y: textRect.height + titleModel.get('itemGap'),
-        textVerticalAlign: 'top'
-      }, {
-        disableBox: true
-      }),
-      z2: 10
-    });
-    var link = titleModel.get('link');
-    var sublink = titleModel.get('sublink');
-    var triggerEvent = titleModel.get('triggerEvent', true);
-    textEl.silent = !link && !triggerEvent;
-    subTextEl.silent = !sublink && !triggerEvent;
-
-    if (link) {
-      textEl.on('click', function () {
-        window.open(link, '_' + titleModel.get('target'));
-      });
-    }
-
-    if (sublink) {
-      subTextEl.on('click', function () {
-        window.open(sublink, '_' + titleModel.get('subtarget'));
-      });
-    }
-
-    textEl.eventData = subTextEl.eventData = triggerEvent ? {
-      componentType: 'title',
-      componentIndex: titleModel.componentIndex
-    } : null;
-    group.add(textEl);
-    subText && group.add(subTextEl); // If no subText, but add subTextEl, there will be an empty line.
-
-    var groupRect = group.getBoundingRect();
-    var layoutOption = titleModel.getBoxLayoutParams();
-    layoutOption.width = groupRect.width;
-    layoutOption.height = groupRect.height;
-    var layoutRect = getLayoutRect(layoutOption, {
-      width: api.getWidth(),
-      height: api.getHeight()
-    }, titleModel.get('padding')); // Adjust text align based on position
-
-    if (!textAlign) {
-      // Align left if title is on the left. center and right is same
-      textAlign = titleModel.get('left') || titleModel.get('right');
-
-      if (textAlign === 'middle') {
-        textAlign = 'center';
-      } // Adjust layout by text align
-
-
-      if (textAlign === 'right') {
-        layoutRect.x += layoutRect.width;
-      } else if (textAlign === 'center') {
-        layoutRect.x += layoutRect.width / 2;
-      }
-    }
-
-    if (!textBaseline) {
-      textBaseline = titleModel.get('top') || titleModel.get('bottom');
-
-      if (textBaseline === 'center') {
-        textBaseline = 'middle';
-      }
-
-      if (textBaseline === 'bottom') {
-        layoutRect.y += layoutRect.height;
-      } else if (textBaseline === 'middle') {
-        layoutRect.y += layoutRect.height / 2;
-      }
-
-      textBaseline = textBaseline || 'top';
-    }
-
-    group.attr('position', [layoutRect.x, layoutRect.y]);
-    var alignStyle = {
-      textAlign: textAlign,
-      textVerticalAlign: textBaseline
-    };
-    textEl.setStyle(alignStyle);
-    subTextEl.setStyle(alignStyle); // Render background
-    // Get groupRect again because textAlign has been changed
-
-    groupRect = group.getBoundingRect();
-    var padding = layoutRect.margin;
-    var style = titleModel.getItemStyle(['color', 'opacity']);
-    style.fill = titleModel.get('backgroundColor');
-    var rect = new Rect({
-      shape: {
-        x: groupRect.x - padding[3],
-        y: groupRect.y - padding[0],
-        width: groupRect.width + padding[1] + padding[3],
-        height: groupRect.height + padding[0] + padding[2],
-        r: titleModel.get('borderRadius')
-      },
-      style: style,
-      silent: true
-    });
-    subPixelOptimizeRect(rect);
-    group.add(rect);
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var LegendModel = extendComponentModel({
-  type: 'legend.plain',
-  dependencies: ['series'],
-  layoutMode: {
-    type: 'box',
-    // legend.width/height are maxWidth/maxHeight actually,
-    // whereas realy width/height is calculated by its content.
-    // (Setting {left: 10, right: 10} does not make sense).
-    // So consider the case:
-    // `setOption({legend: {left: 10});`
-    // then `setOption({legend: {right: 10});`
-    // The previous `left` should be cleared by setting `ignoreSize`.
-    ignoreSize: true
-  },
-  init: function (option, parentModel, ecModel) {
-    this.mergeDefaultAndTheme(option, ecModel);
-    option.selected = option.selected || {};
-  },
-  mergeOption: function (option) {
-    LegendModel.superCall(this, 'mergeOption', option);
-  },
-  optionUpdated: function () {
-    this._updateData(this.ecModel);
-
-    var legendData = this._data; // If selectedMode is single, try to select one
-
-    if (legendData[0] && this.get('selectedMode') === 'single') {
-      var hasSelected = false; // If has any selected in option.selected
-
-      for (var i = 0; i < legendData.length; i++) {
-        var name = legendData[i].get('name');
-
-        if (this.isSelected(name)) {
-          // Force to unselect others
-          this.select(name);
-          hasSelected = true;
-          break;
-        }
-      } // Try select the first if selectedMode is single
-
-
-      !hasSelected && this.select(legendData[0].get('name'));
-    }
-  },
-  _updateData: function (ecModel) {
-    var potentialData = [];
-    var availableNames = [];
-    ecModel.eachRawSeries(function (seriesModel) {
-      var seriesName = seriesModel.name;
-      availableNames.push(seriesName);
-      var isPotential;
-
-      if (seriesModel.legendDataProvider) {
-        var data = seriesModel.legendDataProvider();
-        var names = data.mapArray(data.getName);
-
-        if (!ecModel.isSeriesFiltered(seriesModel)) {
-          availableNames = availableNames.concat(names);
-        }
-
-        if (names.length) {
-          potentialData = potentialData.concat(names);
-        } else {
-          isPotential = true;
-        }
-      } else {
-        isPotential = true;
-      }
-
-      if (isPotential && isNameSpecified(seriesModel)) {
-        potentialData.push(seriesModel.name);
-      }
-    });
-    /**
-     * @type {Array.<string>}
-     * @private
-     */
-
-    this._availableNames = availableNames; // If legend.data not specified in option, use availableNames as data,
-    // which is convinient for user preparing option.
-
-    var rawData = this.get('data') || potentialData;
-    var legendData = map(rawData, function (dataItem) {
-      // Can be string or number
-      if (typeof dataItem === 'string' || typeof dataItem === 'number') {
-        dataItem = {
-          name: dataItem
-        };
-      }
-
-      return new Model(dataItem, this, this.ecModel);
-    }, this);
-    /**
-     * @type {Array.<module:echarts/model/Model>}
-     * @private
-     */
-
-    this._data = legendData;
-  },
-
-  /**
-   * @return {Array.<module:echarts/model/Model>}
-   */
-  getData: function () {
-    return this._data;
-  },
-
-  /**
-   * @param {string} name
-   */
-  select: function (name) {
-    var selected = this.option.selected;
-    var selectedMode = this.get('selectedMode');
-
-    if (selectedMode === 'single') {
-      var data = this._data;
-      each$1(data, function (dataItem) {
-        selected[dataItem.get('name')] = false;
-      });
-    }
-
-    selected[name] = true;
-  },
-
-  /**
-   * @param {string} name
-   */
-  unSelect: function (name) {
-    if (this.get('selectedMode') !== 'single') {
-      this.option.selected[name] = false;
-    }
-  },
-
-  /**
-   * @param {string} name
-   */
-  toggleSelected: function (name) {
-    var selected = this.option.selected; // Default is true
-
-    if (!selected.hasOwnProperty(name)) {
-      selected[name] = true;
-    }
-
-    this[selected[name] ? 'unSelect' : 'select'](name);
-  },
-
-  /**
-   * @param {string} name
-   */
-  isSelected: function (name) {
-    var selected = this.option.selected;
-    return !(selected.hasOwnProperty(name) && !selected[name]) && indexOf(this._availableNames, name) >= 0;
-  },
-  defaultOption: {
-    // 一级层叠
-    zlevel: 0,
-    // 二级层叠
-    z: 4,
-    show: true,
-    // 布局方式，默认为水平布局，可选为：
-    // 'horizontal' | 'vertical'
-    orient: 'horizontal',
-    left: 'center',
-    // right: 'center',
-    top: 0,
-    // bottom: null,
-    // 水平对齐
-    // 'auto' | 'left' | 'right'
-    // 默认为 'auto', 根据 x 的位置判断是左对齐还是右对齐
-    align: 'auto',
-    backgroundColor: 'rgba(0,0,0,0)',
-    // 图例边框颜色
-    borderColor: '#ccc',
-    borderRadius: 0,
-    // 图例边框线宽，单位px，默认为0（无边框）
-    borderWidth: 0,
-    // 图例内边距，单位px，默认各方向内边距为5，
-    // 接受数组分别设定上右下左边距，同css
-    padding: 5,
-    // 各个item之间的间隔，单位px，默认为10，
-    // 横向布局时为水平间隔，纵向布局时为纵向间隔
-    itemGap: 10,
-    // 图例图形宽度
-    itemWidth: 25,
-    // 图例图形高度
-    itemHeight: 14,
-    // 图例关闭时候的颜色
-    inactiveColor: '#ccc',
-    textStyle: {
-      // 图例文字颜色
-      color: '#333'
-    },
-    // formatter: '',
-    // 选择模式，默认开启图例开关
-    selectedMode: true,
-    // 配置默认选中状态，可配合LEGEND.SELECTED事件做动态数据载入
-    // selected: null,
-    // 图例内容（详见legend.data，数组中每一项代表一个item
-    // data: [],
-    // Tooltip 相关配置
-    tooltip: {
-      show: false
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-function legendSelectActionHandler(methodName, payload, ecModel) {
-  var selectedMap = {};
-  var isToggleSelect = methodName === 'toggleSelected';
-  var isSelected; // Update all legend components
-
-  ecModel.eachComponent('legend', function (legendModel) {
-    if (isToggleSelect && isSelected != null) {
-      // Force other legend has same selected status
-      // Or the first is toggled to true and other are toggled to false
-      // In the case one legend has some item unSelected in option. And if other legend
-      // doesn't has the item, they will assume it is selected.
-      legendModel[isSelected ? 'select' : 'unSelect'](payload.name);
-    } else {
-      legendModel[methodName](payload.name);
-      isSelected = legendModel.isSelected(payload.name);
-    }
-
-    var legendData = legendModel.getData();
-    each$1(legendData, function (model) {
-      var name = model.get('name'); // Wrap element
-
-      if (name === '\n' || name === '') {
-        return;
-      }
-
-      var isItemSelected = legendModel.isSelected(name);
-
-      if (selectedMap.hasOwnProperty(name)) {
-        // Unselected if any legend is unselected
-        selectedMap[name] = selectedMap[name] && isItemSelected;
-      } else {
-        selectedMap[name] = isItemSelected;
-      }
-    });
-  }); // Return the event explicitly
-
-  return {
-    name: payload.name,
-    selected: selectedMap
-  };
-}
-/**
- * @event legendToggleSelect
- * @type {Object}
- * @property {string} type 'legendToggleSelect'
- * @property {string} [from]
- * @property {string} name Series name or data item name
- */
-
-
-registerAction('legendToggleSelect', 'legendselectchanged', curry(legendSelectActionHandler, 'toggleSelected'));
-/**
- * @event legendSelect
- * @type {Object}
- * @property {string} type 'legendSelect'
- * @property {string} name Series name or data item name
- */
-
-registerAction('legendSelect', 'legendselected', curry(legendSelectActionHandler, 'select'));
-/**
- * @event legendUnSelect
- * @type {Object}
- * @property {string} type 'legendUnSelect'
- * @property {string} name Series name or data item name
- */
-
-registerAction('legendUnSelect', 'legendunselected', curry(legendSelectActionHandler, 'unSelect'));
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * Layout list like component.
- * It will box layout each items in group of component and then position the whole group in the viewport
- * @param {module:zrender/group/Group} group
- * @param {module:echarts/model/Component} componentModel
- * @param {module:echarts/ExtensionAPI}
- */
-
-function layout$2(group, componentModel, api) {
-  var boxLayoutParams = componentModel.getBoxLayoutParams();
-  var padding = componentModel.get('padding');
-  var viewportSize = {
-    width: api.getWidth(),
-    height: api.getHeight()
-  };
-  var rect = getLayoutRect(boxLayoutParams, viewportSize, padding);
-  box(componentModel.get('orient'), group, componentModel.get('itemGap'), rect.width, rect.height);
-  positionElement(group, boxLayoutParams, viewportSize, padding);
-}
-function makeBackground(rect, componentModel) {
-  var padding = normalizeCssArray$1(componentModel.get('padding'));
-  var style = componentModel.getItemStyle(['color', 'opacity']);
-  style.fill = componentModel.get('backgroundColor');
-  var rect = new Rect({
-    shape: {
-      x: rect.x - padding[3],
-      y: rect.y - padding[0],
-      width: rect.width + padding[1] + padding[3],
-      height: rect.height + padding[0] + padding[2],
-      r: componentModel.get('borderRadius')
-    },
-    style: style,
-    silent: true,
-    z2: -1
-  }); // FIXME
-  // `subPixelOptimizeRect` may bring some gap between edge of viewpart
-  // and background rect when setting like `left: 0`, `top: 0`.
-  // graphic.subPixelOptimizeRect(rect);
-
-  return rect;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var curry$2 = curry;
-var each$7 = each$1;
-var Group$2 = Group;
-var LegendView = extendComponentView({
-  type: 'legend.plain',
-  newlineDisabled: false,
-
-  /**
-   * @override
-   */
-  init: function () {
-    /**
-     * @private
-     * @type {module:zrender/container/Group}
-     */
-    this.group.add(this._contentGroup = new Group$2());
-    /**
-     * @private
-     * @type {module:zrender/Element}
-     */
-
-    this._backgroundEl;
-    /**
-     * If first rendering, `contentGroup.position` is [0, 0], which
-     * does not make sense and may cause unexepcted animation if adopted.
-     * @private
-     * @type {boolean}
-     */
-
-    this._isFirstRender = true;
-  },
-
-  /**
-   * @protected
-   */
-  getContentGroup: function () {
-    return this._contentGroup;
-  },
-
-  /**
-   * @override
-   */
-  render: function (legendModel, ecModel, api) {
-    var isFirstRender = this._isFirstRender;
-    this._isFirstRender = false;
-    this.resetInner();
-
-    if (!legendModel.get('show', true)) {
-      return;
-    }
-
-    var itemAlign = legendModel.get('align');
-
-    if (!itemAlign || itemAlign === 'auto') {
-      itemAlign = legendModel.get('left') === 'right' && legendModel.get('orient') === 'vertical' ? 'right' : 'left';
-    }
-
-    this.renderInner(itemAlign, legendModel, ecModel, api); // Perform layout.
-
-    var positionInfo = legendModel.getBoxLayoutParams();
-    var viewportSize = {
-      width: api.getWidth(),
-      height: api.getHeight()
-    };
-    var padding = legendModel.get('padding');
-    var maxSize = getLayoutRect(positionInfo, viewportSize, padding);
-    var mainRect = this.layoutInner(legendModel, itemAlign, maxSize, isFirstRender); // Place mainGroup, based on the calculated `mainRect`.
-
-    var layoutRect = getLayoutRect(defaults({
-      width: mainRect.width,
-      height: mainRect.height
-    }, positionInfo), viewportSize, padding);
-    this.group.attr('position', [layoutRect.x - mainRect.x, layoutRect.y - mainRect.y]); // Render background after group is layout.
-
-    this.group.add(this._backgroundEl = makeBackground(mainRect, legendModel));
-  },
-
-  /**
-   * @protected
-   */
-  resetInner: function () {
-    this.getContentGroup().removeAll();
-    this._backgroundEl && this.group.remove(this._backgroundEl);
-  },
-
-  /**
-   * @protected
-   */
-  renderInner: function (itemAlign, legendModel, ecModel, api) {
-    var contentGroup = this.getContentGroup();
-    var legendDrawnMap = createHashMap();
-    var selectMode = legendModel.get('selectedMode');
-    var excludeSeriesId = [];
-    ecModel.eachRawSeries(function (seriesModel) {
-      !seriesModel.get('legendHoverLink') && excludeSeriesId.push(seriesModel.id);
-    });
-    each$7(legendModel.getData(), function (itemModel, dataIndex) {
-      var name = itemModel.get('name'); // Use empty string or \n as a newline string
-
-      if (!this.newlineDisabled && (name === '' || name === '\n')) {
-        contentGroup.add(new Group$2({
-          newline: true
-        }));
-        return;
-      } // Representitive series.
-
-
-      var seriesModel = ecModel.getSeriesByName(name)[0];
-
-      if (legendDrawnMap.get(name)) {
-        // Have been drawed
-        return;
-      } // Series legend
-
-
-      if (seriesModel) {
-        var data = seriesModel.getData();
-        var color = data.getVisual('color'); // If color is a callback function
-
-        if (typeof color === 'function') {
-          // Use the first data
-          color = color(seriesModel.getDataParams(0));
-        } // Using rect symbol defaultly
-
-
-        var legendSymbolType = data.getVisual('legendSymbol') || 'roundRect';
-        var symbolType = data.getVisual('symbol');
-
-        var itemGroup = this._createItem(name, dataIndex, itemModel, legendModel, legendSymbolType, symbolType, itemAlign, color, selectMode);
-
-        itemGroup.on('click', curry$2(dispatchSelectAction, name, api)).on('mouseover', curry$2(dispatchHighlightAction, seriesModel.name, null, api, excludeSeriesId)).on('mouseout', curry$2(dispatchDownplayAction, seriesModel.name, null, api, excludeSeriesId));
-        legendDrawnMap.set(name, true);
-      } else {
-        // Data legend of pie, funnel
-        ecModel.eachRawSeries(function (seriesModel) {
-          // In case multiple series has same data name
-          if (legendDrawnMap.get(name)) {
-            return;
-          }
-
-          if (seriesModel.legendDataProvider) {
-            var data = seriesModel.legendDataProvider();
-            var idx = data.indexOfName(name);
-
-            if (idx < 0) {
-              return;
-            }
-
-            var color = data.getItemVisual(idx, 'color');
-            var legendSymbolType = 'roundRect';
-
-            var itemGroup = this._createItem(name, dataIndex, itemModel, legendModel, legendSymbolType, null, itemAlign, color, selectMode); // FIXME: consider different series has items with the same name.
-
-
-            itemGroup.on('click', curry$2(dispatchSelectAction, name, api)) // Should not specify the series name, consider legend controls
-            // more than one pie series.
-            .on('mouseover', curry$2(dispatchHighlightAction, null, name, api, excludeSeriesId)).on('mouseout', curry$2(dispatchDownplayAction, null, name, api, excludeSeriesId));
-            legendDrawnMap.set(name, true);
-          }
-        }, this);
-      }
-    }, this);
-  },
-  _createItem: function (name, dataIndex, itemModel, legendModel, legendSymbolType, symbolType, itemAlign, color, selectMode) {
-    var itemWidth = legendModel.get('itemWidth');
-    var itemHeight = legendModel.get('itemHeight');
-    var inactiveColor = legendModel.get('inactiveColor');
-    var symbolKeepAspect = legendModel.get('symbolKeepAspect');
-    var isSelected = legendModel.isSelected(name);
-    var itemGroup = new Group$2();
-    var textStyleModel = itemModel.getModel('textStyle');
-    var itemIcon = itemModel.get('icon');
-    var tooltipModel = itemModel.getModel('tooltip');
-    var legendGlobalTooltipModel = tooltipModel.parentModel; // Use user given icon first
-
-    legendSymbolType = itemIcon || legendSymbolType;
-    itemGroup.add(createSymbol(legendSymbolType, 0, 0, itemWidth, itemHeight, isSelected ? color : inactiveColor, // symbolKeepAspect default true for legend
-    symbolKeepAspect == null ? true : symbolKeepAspect)); // Compose symbols
-    // PENDING
-
-    if (!itemIcon && symbolType // At least show one symbol, can't be all none
-    && (symbolType !== legendSymbolType || symbolType === 'none')) {
-      var size = itemHeight * 0.8;
-
-      if (symbolType === 'none') {
-        symbolType = 'circle';
-      } // Put symbol in the center
-
-
-      itemGroup.add(createSymbol(symbolType, (itemWidth - size) / 2, (itemHeight - size) / 2, size, size, isSelected ? color : inactiveColor, // symbolKeepAspect default true for legend
-      symbolKeepAspect == null ? true : symbolKeepAspect));
-    }
-
-    var textX = itemAlign === 'left' ? itemWidth + 5 : -5;
-    var textAlign = itemAlign;
-    var formatter = legendModel.get('formatter');
-    var content = name;
-
-    if (typeof formatter === 'string' && formatter) {
-      content = formatter.replace('{name}', name != null ? name : '');
-    } else if (typeof formatter === 'function') {
-      content = formatter(name);
-    }
-
-    itemGroup.add(new Text({
-      style: setTextStyle({}, textStyleModel, {
-        text: content,
-        x: textX,
-        y: itemHeight / 2,
-        textFill: isSelected ? textStyleModel.getTextColor() : inactiveColor,
-        textAlign: textAlign,
-        textVerticalAlign: 'middle'
-      })
-    })); // Add a invisible rect to increase the area of mouse hover
-
-    var hitRect = new Rect({
-      shape: itemGroup.getBoundingRect(),
-      invisible: true,
-      tooltip: tooltipModel.get('show') ? extend({
-        content: name,
-        // Defaul formatter
-        formatter: legendGlobalTooltipModel.get('formatter', true) || function () {
-          return name;
-        },
-        formatterParams: {
-          componentType: 'legend',
-          legendIndex: legendModel.componentIndex,
-          name: name,
-          $vars: ['name']
-        }
-      }, tooltipModel.option) : null
-    });
-    itemGroup.add(hitRect);
-    itemGroup.eachChild(function (child) {
-      child.silent = true;
-    });
-    hitRect.silent = !selectMode;
-    this.getContentGroup().add(itemGroup);
-    setHoverStyle(itemGroup);
-    itemGroup.__legendDataIndex = dataIndex;
-    return itemGroup;
-  },
-
-  /**
-   * @protected
-   */
-  layoutInner: function (legendModel, itemAlign, maxSize) {
-    var contentGroup = this.getContentGroup(); // Place items in contentGroup.
-
-    box(legendModel.get('orient'), contentGroup, legendModel.get('itemGap'), maxSize.width, maxSize.height);
-    var contentRect = contentGroup.getBoundingRect();
-    contentGroup.attr('position', [-contentRect.x, -contentRect.y]);
-    return this.group.getBoundingRect();
-  },
-
-  /**
-   * @protected
-   */
-  remove: function () {
-    this.getContentGroup().removeAll();
-    this._isFirstRender = true;
-  }
-});
-
-function dispatchSelectAction(name, api) {
-  api.dispatchAction({
-    type: 'legendToggleSelect',
-    name: name
-  });
-}
-
-function dispatchHighlightAction(seriesName, dataName, api, excludeSeriesId) {
-  // If element hover will move to a hoverLayer.
-  var el = api.getZr().storage.getDisplayList()[0];
-
-  if (!(el && el.useHoverLayer)) {
-    api.dispatchAction({
-      type: 'highlight',
-      seriesName: seriesName,
-      name: dataName,
-      excludeSeriesId: excludeSeriesId
-    });
-  }
-}
-
-function dispatchDownplayAction(seriesName, dataName, api, excludeSeriesId) {
-  // If element hover will move to a hoverLayer.
-  var el = api.getZr().storage.getDisplayList()[0];
-
-  if (!(el && el.useHoverLayer)) {
-    api.dispatchAction({
-      type: 'downplay',
-      seriesName: seriesName,
-      name: dataName,
-      excludeSeriesId: excludeSeriesId
-    });
-  }
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var legendFilter = function (ecModel) {
-  var legendModels = ecModel.findComponents({
-    mainType: 'legend'
-  });
-
-  if (legendModels && legendModels.length) {
-    ecModel.filterSeries(function (series) {
-      // If in any legend component the status is not selected.
-      // Because in legend series is assumed selected when it is not in the legend data.
-      for (var i = 0; i < legendModels.length; i++) {
-        if (!legendModels[i].isSelected(series.name)) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Do not contain scrollable legend, for sake of file size.
-registerProcessor(legendFilter);
-ComponentModel.registerSubTypeDefaulter('legend', function () {
-  // Default 'plain' when no type specified.
-  return 'plain';
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var ScrollableLegendModel = LegendModel.extend({
-  type: 'legend.scroll',
-
-  /**
-   * @param {number} scrollDataIndex
-   */
-  setScrollDataIndex: function (scrollDataIndex) {
-    this.option.scrollDataIndex = scrollDataIndex;
-  },
-  defaultOption: {
-    scrollDataIndex: 0,
-    pageButtonItemGap: 5,
-    pageButtonGap: null,
-    pageButtonPosition: 'end',
-    // 'start' or 'end'
-    pageFormatter: '{current}/{total}',
-    // If null/undefined, do not show page.
-    pageIcons: {
-      horizontal: ['M0,0L12,-10L12,10z', 'M0,0L-12,-10L-12,10z'],
-      vertical: ['M0,0L20,0L10,-20z', 'M0,0L20,0L10,20z']
-    },
-    pageIconColor: '#2f4554',
-    pageIconInactiveColor: '#aaa',
-    pageIconSize: 15,
-    // Can be [10, 3], which represents [width, height]
-    pageTextStyle: {
-      color: '#333'
-    },
-    animationDurationUpdate: 800
-  },
-
-  /**
-   * @override
-   */
-  init: function (option, parentModel, ecModel, extraOpt) {
-    var inputPositionParams = getLayoutParams(option);
-    ScrollableLegendModel.superCall(this, 'init', option, parentModel, ecModel, extraOpt);
-    mergeAndNormalizeLayoutParams(this, option, inputPositionParams);
-  },
-
-  /**
-   * @override
-   */
-  mergeOption: function (option, extraOpt) {
-    ScrollableLegendModel.superCall(this, 'mergeOption', option, extraOpt);
-    mergeAndNormalizeLayoutParams(this, this.option, option);
-  },
-  getOrient: function () {
-    return this.get('orient') === 'vertical' ? {
-      index: 1,
-      name: 'vertical'
-    } : {
-      index: 0,
-      name: 'horizontal'
-    };
-  }
-}); // Do not `ignoreSize` to enable setting {left: 10, right: 10}.
-
-function mergeAndNormalizeLayoutParams(legendModel, target, raw) {
-  var orient = legendModel.getOrient();
-  var ignoreSize = [1, 1];
-  ignoreSize[orient.index] = 0;
-  mergeLayoutParam(target, raw, {
-    type: 'box',
-    ignoreSize: ignoreSize
-  });
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * Separate legend and scrollable legend to reduce package size.
- */
-var Group$3 = Group;
-var WH = ['width', 'height'];
-var XY = ['x', 'y'];
-var ScrollableLegendView = LegendView.extend({
-  type: 'legend.scroll',
-  newlineDisabled: true,
-  init: function () {
-    ScrollableLegendView.superCall(this, 'init');
-    /**
-     * @private
-     * @type {number} For `scroll`.
-     */
-
-    this._currentIndex = 0;
-    /**
-     * @private
-     * @type {module:zrender/container/Group}
-     */
-
-    this.group.add(this._containerGroup = new Group$3());
-
-    this._containerGroup.add(this.getContentGroup());
-    /**
-     * @private
-     * @type {module:zrender/container/Group}
-     */
-
-
-    this.group.add(this._controllerGroup = new Group$3());
-    /**
-     *
-     * @private
-     */
-
-    this._showController;
-  },
-
-  /**
-   * @override
-   */
-  resetInner: function () {
-    ScrollableLegendView.superCall(this, 'resetInner');
-
-    this._controllerGroup.removeAll();
-
-    this._containerGroup.removeClipPath();
-
-    this._containerGroup.__rectSize = null;
-  },
-
-  /**
-   * @override
-   */
-  renderInner: function (itemAlign, legendModel, ecModel, api) {
-    var me = this; // Render content items.
-
-    ScrollableLegendView.superCall(this, 'renderInner', itemAlign, legendModel, ecModel, api);
-    var controllerGroup = this._controllerGroup; // FIXME: support be 'auto' adapt to size number text length,
-    // e.g., '3/12345' should not overlap with the control arrow button.
-
-    var pageIconSize = legendModel.get('pageIconSize', true);
-
-    if (!isArray(pageIconSize)) {
-      pageIconSize = [pageIconSize, pageIconSize];
-    }
-
-    createPageButton('pagePrev', 0);
-    var pageTextStyleModel = legendModel.getModel('pageTextStyle');
-    controllerGroup.add(new Text({
-      name: 'pageText',
-      style: {
-        textFill: pageTextStyleModel.getTextColor(),
-        font: pageTextStyleModel.getFont(),
-        textVerticalAlign: 'middle',
-        textAlign: 'center'
-      },
-      silent: true
-    }));
-    createPageButton('pageNext', 1);
-
-    function createPageButton(name, iconIdx) {
-      var pageDataIndexName = name + 'DataIndex';
-      var icon = createIcon(legendModel.get('pageIcons', true)[legendModel.getOrient().name][iconIdx], {
-        // Buttons will be created in each render, so we do not need
-        // to worry about avoiding using legendModel kept in scope.
-        onclick: bind(me._pageGo, me, pageDataIndexName, legendModel, api)
-      }, {
-        x: -pageIconSize[0] / 2,
-        y: -pageIconSize[1] / 2,
-        width: pageIconSize[0],
-        height: pageIconSize[1]
-      });
-      icon.name = name;
-      controllerGroup.add(icon);
-    }
-  },
-
-  /**
-   * @override
-   */
-  layoutInner: function (legendModel, itemAlign, maxSize, isFirstRender) {
-    var contentGroup = this.getContentGroup();
-    var containerGroup = this._containerGroup;
-    var controllerGroup = this._controllerGroup;
-    var orientIdx = legendModel.getOrient().index;
-    var wh = WH[orientIdx];
-    var hw = WH[1 - orientIdx];
-    var yx = XY[1 - orientIdx]; // Place items in contentGroup.
-
-    box(legendModel.get('orient'), contentGroup, legendModel.get('itemGap'), !orientIdx ? null : maxSize.width, orientIdx ? null : maxSize.height);
-    box( // Buttons in controller are layout always horizontally.
-    'horizontal', controllerGroup, legendModel.get('pageButtonItemGap', true));
-    var contentRect = contentGroup.getBoundingRect();
-    var controllerRect = controllerGroup.getBoundingRect();
-    var showController = this._showController = contentRect[wh] > maxSize[wh];
-    var contentPos = [-contentRect.x, -contentRect.y]; // Remain contentPos when scroll animation perfroming.
-    // If first rendering, `contentGroup.position` is [0, 0], which
-    // does not make sense and may cause unexepcted animation if adopted.
-
-    if (!isFirstRender) {
-      contentPos[orientIdx] = contentGroup.position[orientIdx];
-    } // Layout container group based on 0.
-
-
-    var containerPos = [0, 0];
-    var controllerPos = [-controllerRect.x, -controllerRect.y];
-    var pageButtonGap = retrieve2(legendModel.get('pageButtonGap', true), legendModel.get('itemGap', true)); // Place containerGroup and controllerGroup and contentGroup.
-
-    if (showController) {
-      var pageButtonPosition = legendModel.get('pageButtonPosition', true); // controller is on the right / bottom.
-
-      if (pageButtonPosition === 'end') {
-        controllerPos[orientIdx] += maxSize[wh] - controllerRect[wh];
-      } // controller is on the left / top.
-      else {
-          containerPos[orientIdx] += controllerRect[wh] + pageButtonGap;
-        }
-    } // Always align controller to content as 'middle'.
-
-
-    controllerPos[1 - orientIdx] += contentRect[hw] / 2 - controllerRect[hw] / 2;
-    contentGroup.attr('position', contentPos);
-    containerGroup.attr('position', containerPos);
-    controllerGroup.attr('position', controllerPos); // Calculate `mainRect` and set `clipPath`.
-    // mainRect should not be calculated by `this.group.getBoundingRect()`
-    // for sake of the overflow.
-
-    var mainRect = this.group.getBoundingRect();
-    var mainRect = {
-      x: 0,
-      y: 0
-    }; // Consider content may be overflow (should be clipped).
-
-    mainRect[wh] = showController ? maxSize[wh] : contentRect[wh];
-    mainRect[hw] = Math.max(contentRect[hw], controllerRect[hw]); // `containerRect[yx] + containerPos[1 - orientIdx]` is 0.
-
-    mainRect[yx] = Math.min(0, controllerRect[yx] + controllerPos[1 - orientIdx]);
-    containerGroup.__rectSize = maxSize[wh];
-
-    if (showController) {
-      var clipShape = {
-        x: 0,
-        y: 0
-      };
-      clipShape[wh] = Math.max(maxSize[wh] - controllerRect[wh] - pageButtonGap, 0);
-      clipShape[hw] = mainRect[hw];
-      containerGroup.setClipPath(new Rect({
-        shape: clipShape
-      })); // Consider content may be larger than container, container rect
-      // can not be obtained from `containerGroup.getBoundingRect()`.
-
-      containerGroup.__rectSize = clipShape[wh];
-    } else {
-      // Do not remove or ignore controller. Keep them set as place holders.
-      controllerGroup.eachChild(function (child) {
-        child.attr({
-          invisible: true,
-          silent: true
-        });
-      });
-    } // Content translate animation.
-
-
-    var pageInfo = this._getPageInfo(legendModel);
-
-    pageInfo.pageIndex != null && updateProps(contentGroup, {
-      position: pageInfo.contentPosition
-    }, // When switch from "show controller" to "not show controller", view should be
-    // updated immediately without animation, otherwise causes weird efffect.
-    showController ? legendModel : false);
-
-    this._updatePageInfoView(legendModel, pageInfo);
-
-    return mainRect;
-  },
-  _pageGo: function (to, legendModel, api) {
-    var scrollDataIndex = this._getPageInfo(legendModel)[to];
-
-    scrollDataIndex != null && api.dispatchAction({
-      type: 'legendScroll',
-      scrollDataIndex: scrollDataIndex,
-      legendId: legendModel.id
-    });
-  },
-  _updatePageInfoView: function (legendModel, pageInfo) {
-    var controllerGroup = this._controllerGroup;
-    each$1(['pagePrev', 'pageNext'], function (name) {
-      var canJump = pageInfo[name + 'DataIndex'] != null;
-      var icon = controllerGroup.childOfName(name);
-
-      if (icon) {
-        icon.setStyle('fill', canJump ? legendModel.get('pageIconColor', true) : legendModel.get('pageIconInactiveColor', true));
-        icon.cursor = canJump ? 'pointer' : 'default';
-      }
-    });
-    var pageText = controllerGroup.childOfName('pageText');
-    var pageFormatter = legendModel.get('pageFormatter');
-    var pageIndex = pageInfo.pageIndex;
-    var current = pageIndex != null ? pageIndex + 1 : 0;
-    var total = pageInfo.pageCount;
-    pageText && pageFormatter && pageText.setStyle('text', isString(pageFormatter) ? pageFormatter.replace('{current}', current).replace('{total}', total) : pageFormatter({
-      current: current,
-      total: total
-    }));
-  },
-
-  /**
-   * @param {module:echarts/model/Model} legendModel
-   * @return {Object} {
-   *  contentPosition: Array.<number>, null when data item not found.
-   *  pageIndex: number, null when data item not found.
-   *  pageCount: number, always be a number, can be 0.
-   *  pagePrevDataIndex: number, null when no next page.
-   *  pageNextDataIndex: number, null when no previous page.
-   * }
-   */
-  _getPageInfo: function (legendModel) {
-    var scrollDataIndex = legendModel.get('scrollDataIndex', true);
-    var contentGroup = this.getContentGroup();
-    var containerRectSize = this._containerGroup.__rectSize;
-    var orientIdx = legendModel.getOrient().index;
-    var wh = WH[orientIdx];
-    var xy = XY[orientIdx];
-
-    var targetItemIndex = this._findTargetItemIndex(scrollDataIndex);
-
-    var children = contentGroup.children();
-    var targetItem = children[targetItemIndex];
-    var itemCount = children.length;
-    var pCount = !itemCount ? 0 : 1;
-    var result = {
-      contentPosition: contentGroup.position.slice(),
-      pageCount: pCount,
-      pageIndex: pCount - 1,
-      pagePrevDataIndex: null,
-      pageNextDataIndex: null
-    };
-
-    if (!targetItem) {
-      return result;
-    }
-
-    var targetItemInfo = getItemInfo(targetItem);
-    result.contentPosition[orientIdx] = -targetItemInfo.s; // Strategy:
-    // (1) Always align based on the left/top most item.
-    // (2) It is user-friendly that the last item shown in the
-    // current window is shown at the begining of next window.
-    // Otherwise if half of the last item is cut by the window,
-    // it will have no chance to display entirely.
-    // (3) Consider that item size probably be different, we
-    // have calculate pageIndex by size rather than item index,
-    // and we can not get page index directly by division.
-    // (4) The window is to narrow to contain more than
-    // one item, we should make sure that the page can be fliped.
-
-    for (var i = targetItemIndex + 1, winStartItemInfo = targetItemInfo, winEndItemInfo = targetItemInfo, currItemInfo = null; i <= itemCount; ++i) {
-      currItemInfo = getItemInfo(children[i]);
-
-      if ( // Half of the last item is out of the window.
-      !currItemInfo && winEndItemInfo.e > winStartItemInfo.s + containerRectSize || // If the current item does not intersect with the window, the new page
-      // can be started at the current item or the last item.
-      currItemInfo && !intersect(currItemInfo, winStartItemInfo.s)) {
-        if (winEndItemInfo.i > winStartItemInfo.i) {
-          winStartItemInfo = winEndItemInfo;
-        } else {
-          // e.g., when page size is smaller than item size.
-          winStartItemInfo = currItemInfo;
-        }
-
-        if (winStartItemInfo) {
-          if (result.pageNextDataIndex == null) {
-            result.pageNextDataIndex = winStartItemInfo.i;
-          }
-
-          ++result.pageCount;
-        }
-      }
-
-      winEndItemInfo = currItemInfo;
-    }
-
-    for (var i = targetItemIndex - 1, winStartItemInfo = targetItemInfo, winEndItemInfo = targetItemInfo, currItemInfo = null; i >= -1; --i) {
-      currItemInfo = getItemInfo(children[i]);
-
-      if ( // If the the end item does not intersect with the window started
-      // from the current item, a page can be settled.
-      (!currItemInfo || !intersect(winEndItemInfo, currItemInfo.s)) && // e.g., when page size is smaller than item size.
-      winStartItemInfo.i < winEndItemInfo.i) {
-        winEndItemInfo = winStartItemInfo;
-
-        if (result.pagePrevDataIndex == null) {
-          result.pagePrevDataIndex = winStartItemInfo.i;
-        }
-
-        ++result.pageCount;
-        ++result.pageIndex;
-      }
-
-      winStartItemInfo = currItemInfo;
-    }
-
-    return result;
-
-    function getItemInfo(el) {
-      if (el) {
-        var itemRect = el.getBoundingRect();
-        var start = itemRect[xy] + el.position[orientIdx];
-        return {
-          s: start,
-          e: start + itemRect[wh],
-          i: el.__legendDataIndex
-        };
-      }
-    }
-
-    function intersect(itemInfo, winStart) {
-      return itemInfo.e >= winStart && itemInfo.s <= winStart + containerRectSize;
-    }
-  },
-  _findTargetItemIndex: function (targetDataIndex) {
-    var index;
-    var contentGroup = this.getContentGroup();
-
-    if (this._showController) {
-      contentGroup.eachChild(function (child, idx) {
-        if (child.__legendDataIndex === targetDataIndex) {
-          index = idx;
-        }
-      });
-    } else {
-      index = 0;
-    }
-
-    return index;
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * @event legendScroll
- * @type {Object}
- * @property {string} type 'legendScroll'
- * @property {string} scrollDataIndex
- */
-
-registerAction('legendScroll', 'legendscroll', function (payload, ecModel) {
-  var scrollDataIndex = payload.scrollDataIndex;
-  scrollDataIndex != null && ecModel.eachComponent({
-    mainType: 'legend',
-    subType: 'scroll',
-    query: payload
-  }, function (legendModel) {
-    legendModel.setScrollDataIndex(scrollDataIndex);
-  });
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * Legend component entry file8
- */
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
  * @param {Object} finder contains {seriesIndex, dataIndex, dataIndexInside}
  * @param {module:echarts/model/Global} ecModel
  * @return {Object} {point: [x, y], el: ...} point Will not be null.
@@ -41734,8 +35598,8 @@ var findPointFromSeries = function (finder, ecModel) {
 * specific language governing permissions and limitations
 * under the License.
 */
-var each$8 = each$1;
-var curry$3 = curry;
+var each$7 = each$1;
+var curry$2 = curry;
 var inner$7 = makeInner();
 /**
  * Basic logic: check all axis, if they do not demand show/highlight,
@@ -41803,14 +35667,14 @@ var axisTrigger = function (payload, ecModel, api) {
     map: {}
   };
   var updaters = {
-    showPointer: curry$3(showPointer, showValueMap),
-    showTooltip: curry$3(showTooltip, dataByCoordSys)
+    showPointer: curry$2(showPointer, showValueMap),
+    showTooltip: curry$2(showTooltip, dataByCoordSys)
   }; // Process for triggered axes.
 
-  each$8(coordSysAxesInfo.coordSysMap, function (coordSys, coordSysKey) {
+  each$7(coordSysAxesInfo.coordSysMap, function (coordSys, coordSysKey) {
     // If a point given, it must be contained by the coordinate system.
     var coordSysContainsPoint = isIllegalPoint || coordSys.containPoint(point);
-    each$8(coordSysAxesInfo.coordSysAxesInfo[coordSysKey], function (axisInfo, key) {
+    each$7(coordSysAxesInfo.coordSysAxesInfo[coordSysKey], function (axisInfo, key) {
       var axis = axisInfo.axis;
       var inputAxisInfo = findInputAxisInfo(inputAxesInfo, axisInfo); // If no inputAxesInfo, no axis is restricted.
 
@@ -41827,11 +35691,11 @@ var axisTrigger = function (payload, ecModel, api) {
   }); // Process for linked axes.
 
   var linkTriggers = {};
-  each$8(axesInfo, function (tarAxisInfo, tarKey) {
+  each$7(axesInfo, function (tarAxisInfo, tarKey) {
     var linkGroup = tarAxisInfo.linkGroup; // If axis has been triggered in the previous stage, it should not be triggered by link.
 
     if (linkGroup && !showValueMap[tarKey]) {
-      each$8(linkGroup.axesInfo, function (srcAxisInfo, srcKey) {
+      each$7(linkGroup.axesInfo, function (srcAxisInfo, srcKey) {
         var srcValItem = showValueMap[srcKey]; // If srcValItem exist, source axis is triggered, so link to target axis.
 
         if (srcAxisInfo !== tarAxisInfo && srcValItem) {
@@ -41842,7 +35706,7 @@ var axisTrigger = function (payload, ecModel, api) {
       });
     }
   });
-  each$8(linkTriggers, function (val, tarKey) {
+  each$7(linkTriggers, function (val, tarKey) {
     processOnAxis(axesInfo[tarKey], val, updaters, true, outputFinder);
   });
   updateModelActually(showValueMap, axesInfo, outputFinder);
@@ -41894,7 +35758,7 @@ function buildPayloadsBySeries(value, axisInfo) {
   var payloadBatch = [];
   var minDist = Number.MAX_VALUE;
   var minDiff = -1;
-  each$8(axisInfo.seriesModels, function (series, idx) {
+  each$7(axisInfo.seriesModels, function (series, idx) {
     var dataDim = series.getData().mapDimension(dim, true);
     var seriesNestestValue;
     var dataIndices;
@@ -41931,7 +35795,7 @@ function buildPayloadsBySeries(value, axisInfo) {
         payloadBatch.length = 0;
       }
 
-      each$8(dataIndices, function (dataIndex) {
+      each$7(dataIndices, function (dataIndex) {
         payloadBatch.push({
           seriesIndex: series.seriesIndex,
           dataIndexInside: dataIndex,
@@ -42000,7 +35864,7 @@ function showTooltip(dataByCoordSys, axisInfo, payloadInfo, value) {
 function updateModelActually(showValueMap, axesInfo, outputFinder) {
   var outputAxesInfo = outputFinder.axesInfo = []; // Basic logic: If no 'show' required, 'hide' this axisPointer.
 
-  each$8(axesInfo, function (axisInfo, key) {
+  each$7(axesInfo, function (axisInfo, key) {
     var option = axisInfo.axisPointerModel.option;
     var valItem = showValueMap[key];
 
@@ -42064,9 +35928,9 @@ function dispatchHighDownActually(axesInfo, dispatchAction, api) {
   var newHighlights = inner$7(zr)[highDownKey] = {}; // Update highlight/downplay status according to axisPointer model.
   // Build hash map and remove duplicate incidentally.
 
-  each$8(axesInfo, function (axisInfo, key) {
+  each$7(axesInfo, function (axisInfo, key) {
     var option = axisInfo.axisPointerModel.option;
-    option.status === 'show' && each$8(option.seriesDataIndices, function (batchItem) {
+    option.status === 'show' && each$7(option.seriesDataIndices, function (batchItem) {
       var key = batchItem.seriesIndex + ' | ' + batchItem.dataIndex;
       newHighlights[key] = batchItem;
     });
@@ -42241,7 +36105,7 @@ var AxisPointerModel = extendComponentModel({
 * under the License.
 */
 var inner$8 = makeInner();
-var each$9 = each$1;
+var each$8 = each$1;
 /**
  * @param {string} key
  * @param {module:echarts/ExtensionAPI} api
@@ -42276,7 +36140,7 @@ function initGlobalListeners(zr, api) {
   function useHandler(eventType, cb) {
     zr.on(eventType, function (e) {
       var dis = makeDispatchAction(api);
-      each$9(inner$8(zr).records, function (record) {
+      each$8(inner$8(zr).records, function (record) {
         record && cb(record, e, dis.dispatchAction);
       });
       dispatchTooltipFinally(dis.pendings, api);
@@ -42605,7 +36469,7 @@ BaseAxisPointer.prototype = {
     var pointerOption = elOption.pointer;
 
     if (pointerOption) {
-      var pointerEl = inner$9(group).pointerEl = new graphicUtil[pointerOption.type](clone$4(elOption.pointer));
+      var pointerEl = inner$9(group).pointerEl = new graphic[pointerOption.type](clone$4(elOption.pointer));
       group.add(pointerEl);
     }
   },
@@ -42627,7 +36491,7 @@ BaseAxisPointer.prototype = {
   updatePointerEl: function (group, elOption, updateProps$$1) {
     var pointerEl = inner$9(group).pointerEl;
 
-    if (pointerEl) {
+    if (pointerEl && elOption.pointer) {
       pointerEl.setStyle(elOption.pointer.style);
       updateProps$$1(pointerEl, {
         shape: elOption.pointer.shape
@@ -42917,6 +36781,597 @@ enableClassExtend(BaseAxisPointer);
 * specific language governing permissions and limitations
 * under the License.
 */
+var PI$2 = Math.PI;
+/**
+ * A final axis is translated and rotated from a "standard axis".
+ * So opt.position and opt.rotation is required.
+ *
+ * A standard axis is and axis from [0, 0] to [0, axisExtent[1]],
+ * for example: (0, 0) ------------> (0, 50)
+ *
+ * nameDirection or tickDirection or labelDirection is 1 means tick
+ * or label is below the standard axis, whereas is -1 means above
+ * the standard axis. labelOffset means offset between label and axis,
+ * which is useful when 'onZero', where axisLabel is in the grid and
+ * label in outside grid.
+ *
+ * Tips: like always,
+ * positive rotation represents anticlockwise, and negative rotation
+ * represents clockwise.
+ * The direction of position coordinate is the same as the direction
+ * of screen coordinate.
+ *
+ * Do not need to consider axis 'inverse', which is auto processed by
+ * axis extent.
+ *
+ * @param {module:zrender/container/Group} group
+ * @param {Object} axisModel
+ * @param {Object} opt Standard axis parameters.
+ * @param {Array.<number>} opt.position [x, y]
+ * @param {number} opt.rotation by radian
+ * @param {number} [opt.nameDirection=1] 1 or -1 Used when nameLocation is 'middle' or 'center'.
+ * @param {number} [opt.tickDirection=1] 1 or -1
+ * @param {number} [opt.labelDirection=1] 1 or -1
+ * @param {number} [opt.labelOffset=0] Usefull when onZero.
+ * @param {string} [opt.axisLabelShow] default get from axisModel.
+ * @param {string} [opt.axisName] default get from axisModel.
+ * @param {number} [opt.axisNameAvailableWidth]
+ * @param {number} [opt.labelRotate] by degree, default get from axisModel.
+ * @param {number} [opt.strokeContainThreshold] Default label interval when label
+ * @param {number} [opt.nameTruncateMaxWidth]
+ */
+
+var AxisBuilder = function (axisModel, opt) {
+  /**
+   * @readOnly
+   */
+  this.opt = opt;
+  /**
+   * @readOnly
+   */
+
+  this.axisModel = axisModel; // Default value
+
+  defaults(opt, {
+    labelOffset: 0,
+    nameDirection: 1,
+    tickDirection: 1,
+    labelDirection: 1,
+    silent: true
+  });
+  /**
+   * @readOnly
+   */
+
+  this.group = new Group(); // FIXME Not use a seperate text group?
+
+  var dumbGroup = new Group({
+    position: opt.position.slice(),
+    rotation: opt.rotation
+  }); // this.group.add(dumbGroup);
+  // this._dumbGroup = dumbGroup;
+
+  dumbGroup.updateTransform();
+  this._transform = dumbGroup.transform;
+  this._dumbGroup = dumbGroup;
+};
+
+AxisBuilder.prototype = {
+  constructor: AxisBuilder,
+  hasBuilder: function (name) {
+    return !!builders[name];
+  },
+  add: function (name) {
+    builders[name].call(this);
+  },
+  getGroup: function () {
+    return this.group;
+  }
+};
+var builders = {
+  /**
+   * @private
+   */
+  axisLine: function () {
+    var opt = this.opt;
+    var axisModel = this.axisModel;
+
+    if (!axisModel.get('axisLine.show')) {
+      return;
+    }
+
+    var extent = this.axisModel.axis.getExtent();
+    var matrix = this._transform;
+    var pt1 = [extent[0], 0];
+    var pt2 = [extent[1], 0];
+
+    if (matrix) {
+      applyTransform(pt1, pt1, matrix);
+      applyTransform(pt2, pt2, matrix);
+    }
+
+    var lineStyle = extend({
+      lineCap: 'round'
+    }, axisModel.getModel('axisLine.lineStyle').getLineStyle());
+    this.group.add(new Line({
+      // Id for animation
+      anid: 'line',
+      subPixelOptimize: true,
+      shape: {
+        x1: pt1[0],
+        y1: pt1[1],
+        x2: pt2[0],
+        y2: pt2[1]
+      },
+      style: lineStyle,
+      strokeContainThreshold: opt.strokeContainThreshold || 5,
+      silent: true,
+      z2: 1
+    }));
+    var arrows = axisModel.get('axisLine.symbol');
+    var arrowSize = axisModel.get('axisLine.symbolSize');
+    var arrowOffset = axisModel.get('axisLine.symbolOffset') || 0;
+
+    if (typeof arrowOffset === 'number') {
+      arrowOffset = [arrowOffset, arrowOffset];
+    }
+
+    if (arrows != null) {
+      if (typeof arrows === 'string') {
+        // Use the same arrow for start and end point
+        arrows = [arrows, arrows];
+      }
+
+      if (typeof arrowSize === 'string' || typeof arrowSize === 'number') {
+        // Use the same size for width and height
+        arrowSize = [arrowSize, arrowSize];
+      }
+
+      var symbolWidth = arrowSize[0];
+      var symbolHeight = arrowSize[1];
+      each$1([{
+        rotate: opt.rotation + Math.PI / 2,
+        offset: arrowOffset[0],
+        r: 0
+      }, {
+        rotate: opt.rotation - Math.PI / 2,
+        offset: arrowOffset[1],
+        r: Math.sqrt((pt1[0] - pt2[0]) * (pt1[0] - pt2[0]) + (pt1[1] - pt2[1]) * (pt1[1] - pt2[1]))
+      }], function (point, index) {
+        if (arrows[index] !== 'none' && arrows[index] != null) {
+          var symbol = createSymbol(arrows[index], -symbolWidth / 2, -symbolHeight / 2, symbolWidth, symbolHeight, lineStyle.stroke, true); // Calculate arrow position with offset
+
+          var r = point.r + point.offset;
+          var pos = [pt1[0] + r * Math.cos(opt.rotation), pt1[1] - r * Math.sin(opt.rotation)];
+          symbol.attr({
+            rotation: point.rotate,
+            position: pos,
+            silent: true,
+            z2: 11
+          });
+          this.group.add(symbol);
+        }
+      }, this);
+    }
+  },
+
+  /**
+   * @private
+   */
+  axisTickLabel: function () {
+    var axisModel = this.axisModel;
+    var opt = this.opt;
+    var tickEls = buildAxisTick(this, axisModel, opt);
+    var labelEls = buildAxisLabel(this, axisModel, opt);
+    fixMinMaxLabelShow(axisModel, labelEls, tickEls);
+  },
+
+  /**
+   * @private
+   */
+  axisName: function () {
+    var opt = this.opt;
+    var axisModel = this.axisModel;
+    var name = retrieve(opt.axisName, axisModel.get('name'));
+
+    if (!name) {
+      return;
+    }
+
+    var nameLocation = axisModel.get('nameLocation');
+    var nameDirection = opt.nameDirection;
+    var textStyleModel = axisModel.getModel('nameTextStyle');
+    var gap = axisModel.get('nameGap') || 0;
+    var extent = this.axisModel.axis.getExtent();
+    var gapSignal = extent[0] > extent[1] ? -1 : 1;
+    var pos = [nameLocation === 'start' ? extent[0] - gapSignal * gap : nameLocation === 'end' ? extent[1] + gapSignal * gap : (extent[0] + extent[1]) / 2, // 'middle'
+    // Reuse labelOffset.
+    isNameLocationCenter(nameLocation) ? opt.labelOffset + nameDirection * gap : 0];
+    var labelLayout;
+    var nameRotation = axisModel.get('nameRotate');
+
+    if (nameRotation != null) {
+      nameRotation = nameRotation * PI$2 / 180; // To radian.
+    }
+
+    var axisNameAvailableWidth;
+
+    if (isNameLocationCenter(nameLocation)) {
+      labelLayout = innerTextLayout(opt.rotation, nameRotation != null ? nameRotation : opt.rotation, // Adapt to axis.
+      nameDirection);
+    } else {
+      labelLayout = endTextLayout(opt, nameLocation, nameRotation || 0, extent);
+      axisNameAvailableWidth = opt.axisNameAvailableWidth;
+
+      if (axisNameAvailableWidth != null) {
+        axisNameAvailableWidth = Math.abs(axisNameAvailableWidth / Math.sin(labelLayout.rotation));
+        !isFinite(axisNameAvailableWidth) && (axisNameAvailableWidth = null);
+      }
+    }
+
+    var textFont = textStyleModel.getFont();
+    var truncateOpt = axisModel.get('nameTruncate', true) || {};
+    var ellipsis = truncateOpt.ellipsis;
+    var maxWidth = retrieve(opt.nameTruncateMaxWidth, truncateOpt.maxWidth, axisNameAvailableWidth); // FIXME
+    // truncate rich text? (consider performance)
+
+    var truncatedText = ellipsis != null && maxWidth != null ? truncateText$1(name, maxWidth, textFont, ellipsis, {
+      minChar: 2,
+      placeholder: truncateOpt.placeholder
+    }) : name;
+    var tooltipOpt = axisModel.get('tooltip', true);
+    var mainType = axisModel.mainType;
+    var formatterParams = {
+      componentType: mainType,
+      name: name,
+      $vars: ['name']
+    };
+    formatterParams[mainType + 'Index'] = axisModel.componentIndex;
+    var textEl = new Text({
+      // Id for animation
+      anid: 'name',
+      __fullText: name,
+      __truncatedText: truncatedText,
+      position: pos,
+      rotation: labelLayout.rotation,
+      silent: isLabelSilent(axisModel),
+      z2: 1,
+      tooltip: tooltipOpt && tooltipOpt.show ? extend({
+        content: name,
+        formatter: function () {
+          return name;
+        },
+        formatterParams: formatterParams
+      }, tooltipOpt) : null
+    });
+    setTextStyle(textEl.style, textStyleModel, {
+      text: truncatedText,
+      textFont: textFont,
+      textFill: textStyleModel.getTextColor() || axisModel.get('axisLine.lineStyle.color'),
+      textAlign: textStyleModel.get('align') || labelLayout.textAlign,
+      textVerticalAlign: textStyleModel.get('verticalAlign') || labelLayout.textVerticalAlign
+    });
+
+    if (axisModel.get('triggerEvent')) {
+      textEl.eventData = makeAxisEventDataBase(axisModel);
+      textEl.eventData.targetType = 'axisName';
+      textEl.eventData.name = name;
+    } // FIXME
+
+
+    this._dumbGroup.add(textEl);
+
+    textEl.updateTransform();
+    this.group.add(textEl);
+    textEl.decomposeTransform();
+  }
+};
+
+var makeAxisEventDataBase = AxisBuilder.makeAxisEventDataBase = function (axisModel) {
+  var eventData = {
+    componentType: axisModel.mainType,
+    componentIndex: axisModel.componentIndex
+  };
+  eventData[axisModel.mainType + 'Index'] = axisModel.componentIndex;
+  return eventData;
+};
+/**
+ * @public
+ * @static
+ * @param {Object} opt
+ * @param {number} axisRotation in radian
+ * @param {number} textRotation in radian
+ * @param {number} direction
+ * @return {Object} {
+ *  rotation, // according to axis
+ *  textAlign,
+ *  textVerticalAlign
+ * }
+ */
+
+
+var innerTextLayout = AxisBuilder.innerTextLayout = function (axisRotation, textRotation, direction) {
+  var rotationDiff = remRadian(textRotation - axisRotation);
+  var textAlign;
+  var textVerticalAlign;
+
+  if (isRadianAroundZero(rotationDiff)) {
+    // Label is parallel with axis line.
+    textVerticalAlign = direction > 0 ? 'top' : 'bottom';
+    textAlign = 'center';
+  } else if (isRadianAroundZero(rotationDiff - PI$2)) {
+    // Label is inverse parallel with axis line.
+    textVerticalAlign = direction > 0 ? 'bottom' : 'top';
+    textAlign = 'center';
+  } else {
+    textVerticalAlign = 'middle';
+
+    if (rotationDiff > 0 && rotationDiff < PI$2) {
+      textAlign = direction > 0 ? 'right' : 'left';
+    } else {
+      textAlign = direction > 0 ? 'left' : 'right';
+    }
+  }
+
+  return {
+    rotation: rotationDiff,
+    textAlign: textAlign,
+    textVerticalAlign: textVerticalAlign
+  };
+};
+
+function endTextLayout(opt, textPosition, textRotate, extent) {
+  var rotationDiff = remRadian(textRotate - opt.rotation);
+  var textAlign;
+  var textVerticalAlign;
+  var inverse = extent[0] > extent[1];
+  var onLeft = textPosition === 'start' && !inverse || textPosition !== 'start' && inverse;
+
+  if (isRadianAroundZero(rotationDiff - PI$2 / 2)) {
+    textVerticalAlign = onLeft ? 'bottom' : 'top';
+    textAlign = 'center';
+  } else if (isRadianAroundZero(rotationDiff - PI$2 * 1.5)) {
+    textVerticalAlign = onLeft ? 'top' : 'bottom';
+    textAlign = 'center';
+  } else {
+    textVerticalAlign = 'middle';
+
+    if (rotationDiff < PI$2 * 1.5 && rotationDiff > PI$2 / 2) {
+      textAlign = onLeft ? 'left' : 'right';
+    } else {
+      textAlign = onLeft ? 'right' : 'left';
+    }
+  }
+
+  return {
+    rotation: rotationDiff,
+    textAlign: textAlign,
+    textVerticalAlign: textVerticalAlign
+  };
+}
+
+var isLabelSilent = AxisBuilder.isLabelSilent = function (axisModel) {
+  var tooltipOpt = axisModel.get('tooltip');
+  return axisModel.get('silent') // Consider mouse cursor, add these restrictions.
+  || !(axisModel.get('triggerEvent') || tooltipOpt && tooltipOpt.show);
+};
+
+function fixMinMaxLabelShow(axisModel, labelEls, tickEls) {
+  if (shouldShowAllLabels(axisModel.axis)) {
+    return;
+  } // If min or max are user set, we need to check
+  // If the tick on min(max) are overlap on their neighbour tick
+  // If they are overlapped, we need to hide the min(max) tick label
+
+
+  var showMinLabel = axisModel.get('axisLabel.showMinLabel');
+  var showMaxLabel = axisModel.get('axisLabel.showMaxLabel'); // FIXME
+  // Have not consider onBand yet, where tick els is more than label els.
+
+  labelEls = labelEls || [];
+  tickEls = tickEls || [];
+  var firstLabel = labelEls[0];
+  var nextLabel = labelEls[1];
+  var lastLabel = labelEls[labelEls.length - 1];
+  var prevLabel = labelEls[labelEls.length - 2];
+  var firstTick = tickEls[0];
+  var nextTick = tickEls[1];
+  var lastTick = tickEls[tickEls.length - 1];
+  var prevTick = tickEls[tickEls.length - 2];
+
+  if (showMinLabel === false) {
+    ignoreEl(firstLabel);
+    ignoreEl(firstTick);
+  } else if (isTwoLabelOverlapped(firstLabel, nextLabel)) {
+    if (showMinLabel) {
+      ignoreEl(nextLabel);
+      ignoreEl(nextTick);
+    } else {
+      ignoreEl(firstLabel);
+      ignoreEl(firstTick);
+    }
+  }
+
+  if (showMaxLabel === false) {
+    ignoreEl(lastLabel);
+    ignoreEl(lastTick);
+  } else if (isTwoLabelOverlapped(prevLabel, lastLabel)) {
+    if (showMaxLabel) {
+      ignoreEl(prevLabel);
+      ignoreEl(prevTick);
+    } else {
+      ignoreEl(lastLabel);
+      ignoreEl(lastTick);
+    }
+  }
+}
+
+function ignoreEl(el) {
+  el && (el.ignore = true);
+}
+
+function isTwoLabelOverlapped(current, next, labelLayout) {
+  // current and next has the same rotation.
+  var firstRect = current && current.getBoundingRect().clone();
+  var nextRect = next && next.getBoundingRect().clone();
+
+  if (!firstRect || !nextRect) {
+    return;
+  } // When checking intersect of two rotated labels, we use mRotationBack
+  // to avoid that boundingRect is enlarge when using `boundingRect.applyTransform`.
+
+
+  var mRotationBack = identity([]);
+  rotate(mRotationBack, mRotationBack, -current.rotation);
+  firstRect.applyTransform(mul$1([], mRotationBack, current.getLocalTransform()));
+  nextRect.applyTransform(mul$1([], mRotationBack, next.getLocalTransform()));
+  return firstRect.intersect(nextRect);
+}
+
+function isNameLocationCenter(nameLocation) {
+  return nameLocation === 'middle' || nameLocation === 'center';
+}
+
+function buildAxisTick(axisBuilder, axisModel, opt) {
+  var axis = axisModel.axis;
+
+  if (!axisModel.get('axisTick.show') || axis.scale.isBlank()) {
+    return;
+  }
+
+  var tickModel = axisModel.getModel('axisTick');
+  var lineStyleModel = tickModel.getModel('lineStyle');
+  var tickLen = tickModel.get('length');
+  var ticksCoords = axis.getTicksCoords();
+  var pt1 = [];
+  var pt2 = [];
+  var matrix = axisBuilder._transform;
+  var tickEls = [];
+
+  for (var i = 0; i < ticksCoords.length; i++) {
+    var tickCoord = ticksCoords[i].coord;
+    pt1[0] = tickCoord;
+    pt1[1] = 0;
+    pt2[0] = tickCoord;
+    pt2[1] = opt.tickDirection * tickLen;
+
+    if (matrix) {
+      applyTransform(pt1, pt1, matrix);
+      applyTransform(pt2, pt2, matrix);
+    } // Tick line, Not use group transform to have better line draw
+
+
+    var tickEl = new Line({
+      // Id for animation
+      anid: 'tick_' + ticksCoords[i].tickValue,
+      subPixelOptimize: true,
+      shape: {
+        x1: pt1[0],
+        y1: pt1[1],
+        x2: pt2[0],
+        y2: pt2[1]
+      },
+      style: defaults(lineStyleModel.getLineStyle(), {
+        stroke: axisModel.get('axisLine.lineStyle.color')
+      }),
+      z2: 2,
+      silent: true
+    });
+    axisBuilder.group.add(tickEl);
+    tickEls.push(tickEl);
+  }
+
+  return tickEls;
+}
+
+function buildAxisLabel(axisBuilder, axisModel, opt) {
+  var axis = axisModel.axis;
+  var show = retrieve(opt.axisLabelShow, axisModel.get('axisLabel.show'));
+
+  if (!show || axis.scale.isBlank()) {
+    return;
+  }
+
+  var labelModel = axisModel.getModel('axisLabel');
+  var labelMargin = labelModel.get('margin');
+  var labels = axis.getViewLabels(); // Special label rotate.
+
+  var labelRotation = (retrieve(opt.labelRotate, labelModel.get('rotate')) || 0) * PI$2 / 180;
+  var labelLayout = innerTextLayout(opt.rotation, labelRotation, opt.labelDirection);
+  var rawCategoryData = axisModel.getCategories && axisModel.getCategories(true);
+  var labelEls = [];
+  var silent = isLabelSilent(axisModel);
+  var triggerEvent = axisModel.get('triggerEvent');
+  each$1(labels, function (labelItem, index) {
+    var tickValue = labelItem.tickValue;
+    var formattedLabel = labelItem.formattedLabel;
+    var rawLabel = labelItem.rawLabel;
+    var itemLabelModel = labelModel;
+
+    if (rawCategoryData && rawCategoryData[tickValue] && rawCategoryData[tickValue].textStyle) {
+      itemLabelModel = new Model(rawCategoryData[tickValue].textStyle, labelModel, axisModel.ecModel);
+    }
+
+    var textColor = itemLabelModel.getTextColor() || axisModel.get('axisLine.lineStyle.color');
+    var tickCoord = axis.dataToCoord(tickValue);
+    var pos = [tickCoord, opt.labelOffset + opt.labelDirection * labelMargin];
+    var textEl = new Text({
+      // Id for animation
+      anid: 'label_' + tickValue,
+      position: pos,
+      rotation: labelLayout.rotation,
+      silent: silent,
+      z2: 10
+    });
+    setTextStyle(textEl.style, itemLabelModel, {
+      text: formattedLabel,
+      textAlign: itemLabelModel.getShallow('align', true) || labelLayout.textAlign,
+      textVerticalAlign: itemLabelModel.getShallow('verticalAlign', true) || itemLabelModel.getShallow('baseline', true) || labelLayout.textVerticalAlign,
+      textFill: typeof textColor === 'function' ? textColor( // (1) In category axis with data zoom, tick is not the original
+      // index of axis.data. So tick should not be exposed to user
+      // in category axis.
+      // (2) Compatible with previous version, which always use formatted label as
+      // input. But in interval scale the formatted label is like '223,445', which
+      // maked user repalce ','. So we modify it to return original val but remain
+      // it as 'string' to avoid error in replacing.
+      axis.type === 'category' ? rawLabel : axis.type === 'value' ? tickValue + '' : tickValue, index) : textColor
+    }); // Pack data for mouse event
+
+    if (triggerEvent) {
+      textEl.eventData = makeAxisEventDataBase(axisModel);
+      textEl.eventData.targetType = 'axisLabel';
+      textEl.eventData.value = rawLabel;
+    } // FIXME
+
+
+    axisBuilder._dumbGroup.add(textEl);
+
+    textEl.updateTransform();
+    labelEls.push(textEl);
+    axisBuilder.group.add(textEl);
+    textEl.decomposeTransform();
+  });
+  return labelEls;
+}
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
 /**
  * @param {module:echarts/model/Model} axisPointerModel
  */
@@ -42983,6 +37438,7 @@ function buildLabelElOption(elOption, axisModel, axisPointerModel, api, labelPos
       textFont: font,
       textFill: labelModel.getTextColor(),
       textPosition: 'inside',
+      textPadding: paddings,
       fill: bgColor,
       stroke: labelModel.get('borderColor') || 'transparent',
       lineWidth: labelModel.get('borderWidth') || 0,
@@ -43027,6 +37483,8 @@ function getValueLabel(value, axis, ecModel, seriesDataIndices, opt) {
   if (formatter) {
     var params = {
       value: getAxisRawValue(axis, value),
+      axisDimension: axis.dim,
+      axisIndex: axis.index,
       seriesData: []
     };
     each$1(seriesDataIndices, function (idxItem) {
@@ -43117,6 +37575,198 @@ function makeRectShape(xy, wh, xDimIndex) {
 * specific language governing permissions and limitations
 * under the License.
 */
+/**
+ * Can only be called after coordinate system creation stage.
+ * (Can be called before coordinate system update stage).
+ *
+ * @param {Object} opt {labelInside}
+ * @return {Object} {
+ *  position, rotation, labelDirection, labelOffset,
+ *  tickDirection, labelRotate, z2
+ * }
+ */
+
+function layout$1(gridModel, axisModel, opt) {
+  opt = opt || {};
+  var grid = gridModel.coordinateSystem;
+  var axis = axisModel.axis;
+  var layout = {};
+  var otherAxisOnZeroOf = axis.getAxesOnZeroOf()[0];
+  var rawAxisPosition = axis.position;
+  var axisPosition = otherAxisOnZeroOf ? 'onZero' : rawAxisPosition;
+  var axisDim = axis.dim;
+  var rect = grid.getRect();
+  var rectBound = [rect.x, rect.x + rect.width, rect.y, rect.y + rect.height];
+  var idx = {
+    left: 0,
+    right: 1,
+    top: 0,
+    bottom: 1,
+    onZero: 2
+  };
+  var axisOffset = axisModel.get('offset') || 0;
+  var posBound = axisDim === 'x' ? [rectBound[2] - axisOffset, rectBound[3] + axisOffset] : [rectBound[0] - axisOffset, rectBound[1] + axisOffset];
+
+  if (otherAxisOnZeroOf) {
+    var onZeroCoord = otherAxisOnZeroOf.toGlobalCoord(otherAxisOnZeroOf.dataToCoord(0));
+    posBound[idx.onZero] = Math.max(Math.min(onZeroCoord, posBound[1]), posBound[0]);
+  } // Axis position
+
+
+  layout.position = [axisDim === 'y' ? posBound[idx[axisPosition]] : rectBound[0], axisDim === 'x' ? posBound[idx[axisPosition]] : rectBound[3]]; // Axis rotation
+
+  layout.rotation = Math.PI / 2 * (axisDim === 'x' ? 0 : 1); // Tick and label direction, x y is axisDim
+
+  var dirMap = {
+    top: -1,
+    bottom: 1,
+    left: -1,
+    right: 1
+  };
+  layout.labelDirection = layout.tickDirection = layout.nameDirection = dirMap[rawAxisPosition];
+  layout.labelOffset = otherAxisOnZeroOf ? posBound[idx[rawAxisPosition]] - posBound[idx.onZero] : 0;
+
+  if (axisModel.get('axisTick.inside')) {
+    layout.tickDirection = -layout.tickDirection;
+  }
+
+  if (retrieve(opt.labelInside, axisModel.get('axisLabel.inside'))) {
+    layout.labelDirection = -layout.labelDirection;
+  } // Special label rotation
+
+
+  var labelRotate = axisModel.get('axisLabel.rotate');
+  layout.labelRotate = axisPosition === 'top' ? -labelRotate : labelRotate; // Over splitLine and splitArea
+
+  layout.z2 = 1;
+  return layout;
+}
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+/**
+ * Base class of AxisView.
+ */
+
+var AxisView = extendComponentView({
+  type: 'axis',
+
+  /**
+   * @private
+   */
+  _axisPointer: null,
+
+  /**
+   * @protected
+   * @type {string}
+   */
+  axisPointerClass: null,
+
+  /**
+   * @override
+   */
+  render: function (axisModel, ecModel, api, payload) {
+    // FIXME
+    // This process should proformed after coordinate systems updated
+    // (axis scale updated), and should be performed each time update.
+    // So put it here temporarily, although it is not appropriate to
+    // put a model-writing procedure in `view`.
+    this.axisPointerClass && fixValue(axisModel);
+    AxisView.superApply(this, 'render', arguments);
+    updateAxisPointer(this, axisModel, ecModel, api, payload, true);
+  },
+
+  /**
+   * Action handler.
+   * @public
+   * @param {module:echarts/coord/cartesian/AxisModel} axisModel
+   * @param {module:echarts/model/Global} ecModel
+   * @param {module:echarts/ExtensionAPI} api
+   * @param {Object} payload
+   */
+  updateAxisPointer: function (axisModel, ecModel, api, payload, force) {
+    updateAxisPointer(this, axisModel, ecModel, api, payload, false);
+  },
+
+  /**
+   * @override
+   */
+  remove: function (ecModel, api) {
+    var axisPointer = this._axisPointer;
+    axisPointer && axisPointer.remove(api);
+    AxisView.superApply(this, 'remove', arguments);
+  },
+
+  /**
+   * @override
+   */
+  dispose: function (ecModel, api) {
+    disposeAxisPointer(this, api);
+    AxisView.superApply(this, 'dispose', arguments);
+  }
+});
+
+function updateAxisPointer(axisView, axisModel, ecModel, api, payload, forceRender) {
+  var Clazz = AxisView.getAxisPointerClass(axisView.axisPointerClass);
+
+  if (!Clazz) {
+    return;
+  }
+
+  var axisPointerModel = getAxisPointerModel(axisModel);
+  axisPointerModel ? (axisView._axisPointer || (axisView._axisPointer = new Clazz())).render(axisModel, axisPointerModel, api, forceRender) : disposeAxisPointer(axisView, api);
+}
+
+function disposeAxisPointer(axisView, ecModel, api) {
+  var axisPointer = axisView._axisPointer;
+  axisPointer && axisPointer.dispose(ecModel, api);
+  axisView._axisPointer = null;
+}
+
+var axisPointerClazz = [];
+
+AxisView.registerAxisPointerClass = function (type, clazz) {
+  axisPointerClazz[type] = clazz;
+};
+
+AxisView.getAxisPointerClass = function (type) {
+  return type && axisPointerClazz[type];
+};
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
 var CartesianAxisPointer = BaseAxisPointer.extend({
   /**
    * @override
@@ -43130,7 +37780,7 @@ var CartesianAxisPointer = BaseAxisPointer.extend({
 
     if (axisPointerType && axisPointerType !== 'none') {
       var elStyle = buildElStyle(axisPointerModel);
-      var pointerOption = pointerShapeBuilder[axisPointerType](axis, pixelValue, otherExtent, elStyle);
+      var pointerOption = pointerShapeBuilder[axisPointerType](axis, pixelValue, otherExtent);
       pointerOption.style = elStyle;
       elOption.graphicKey = pointerOption.type;
       elOption.pointer = pointerOption;
@@ -43192,18 +37842,15 @@ function getCartesian(grid, axis) {
 }
 
 var pointerShapeBuilder = {
-  line: function (axis, pixelValue, otherExtent, elStyle) {
+  line: function (axis, pixelValue, otherExtent) {
     var targetShape = makeLineShape([pixelValue, otherExtent[0]], [pixelValue, otherExtent[1]], getAxisDimIndex(axis));
-    subPixelOptimizeLine({
-      shape: targetShape,
-      style: elStyle
-    });
     return {
       type: 'Line',
+      subPixelOptimize: true,
       shape: targetShape
     };
   },
-  shadow: function (axis, pixelValue, otherExtent, elStyle) {
+  shadow: function (axis, pixelValue, otherExtent) {
     var bandWidth = Math.max(1, axis.getBandWidth());
     var span = otherExtent[1] - otherExtent[0];
     return {
@@ -43383,7 +38030,7 @@ extendComponentModel({
 * specific language governing permissions and limitations
 * under the License.
 */
-var each$11 = each$1;
+var each$10 = each$1;
 var toCamelCase$1 = toCamelCase;
 var vendors = ['', '-webkit-', '-moz-', '-o-'];
 var gCssText = 'position:absolute;display:block;border-style:solid;white-space:nowrap;z-index:9999999;';
@@ -43414,7 +38061,7 @@ function assembleFont(textStyleModel) {
   color && cssText.push('color:' + color);
   cssText.push('font:' + textStyleModel.getFont());
   fontSize && cssText.push('line-height:' + Math.round(fontSize * 3 / 2) + 'px');
-  each$11(['decoration', 'align'], function (name) {
+  each$10(['decoration', 'align'], function (name) {
     var val = textStyleModel.get(name);
     val && cssText.push('text-' + name + ':' + val);
   });
@@ -43447,7 +38094,7 @@ function assembleCssText(tooltipModel) {
   } // Border style
 
 
-  each$11(['width', 'color', 'radius'], function (name) {
+  each$10(['width', 'color', 'radius'], function (name) {
     var borderName = 'border-' + name;
     var camelCase = toCamelCase$1(borderName);
     var val = tooltipModel.get(camelCase);
@@ -43485,7 +38132,10 @@ function TooltipContent(container, api) {
    * @private
    */
 
-  this._hideTimeout;
+  this._hideTimeout; // FIXME
+  // Is it needed to trigger zr event manually if
+  // the browser do not support `pointer-events: none`.
+
   var self = this;
 
   el.onmouseenter = function () {
@@ -43502,6 +38152,10 @@ function TooltipContent(container, api) {
     e = e || window.event;
 
     if (!self._enterable) {
+      // `pointer-events: none` is set to tooltip content div
+      // if `enterable` is set as `false`, and `el.onmousemove`
+      // can not be triggered. But in browser that do not
+      // support `pointer-events`, we need to do this:
       // Try trigger zrender event to avoid mouse
       // in and out shape too frequently
       var handler = zr.handler;
@@ -43550,7 +38204,9 @@ TooltipContent.prototype = {
   show: function (tooltipModel) {
     clearTimeout(this._hideTimeout);
     var el = this.el;
-    el.style.cssText = gCssText + assembleCssText(tooltipModel) // http://stackoverflow.com/questions/21125587/css3-transition-not-working-in-chrome-anymore
+    el.style.cssText = gCssText + assembleCssText(tooltipModel) // Because of the reason described in:
+    // http://stackoverflow.com/questions/21125587/css3-transition-not-working-in-chrome-anymore
+    // we should set initial value to `left` and `top`.
     + ';left:' + this._x + 'px;top:' + this._y + 'px;' + (tooltipModel.get('extraCssText') || '');
     el.style.display = el.innerHTML ? 'block' : 'none'; // If mouse occsionally move over the tooltip, a mouseout event will be
     // triggered by canvas, and cuase some unexpectable result like dragging
@@ -43617,8 +38273,8 @@ TooltipContent.prototype = {
       var stl = document.defaultView.getComputedStyle(this.el);
 
       if (stl) {
-        width += parseInt(stl.paddingLeft, 10) + parseInt(stl.paddingRight, 10) + parseInt(stl.borderLeftWidth, 10) + parseInt(stl.borderRightWidth, 10);
-        height += parseInt(stl.paddingTop, 10) + parseInt(stl.paddingBottom, 10) + parseInt(stl.borderTopWidth, 10) + parseInt(stl.borderBottomWidth, 10);
+        width += parseInt(stl.borderLeftWidth, 10) + parseInt(stl.borderRightWidth, 10);
+        height += parseInt(stl.borderTopWidth, 10) + parseInt(stl.borderBottomWidth, 10);
       }
     }
 
@@ -43777,7 +38433,10 @@ TooltipRichContent.prototype = {
     }
   },
   hide: function () {
-    this.el.hide();
+    if (this.el) {
+      this.el.hide();
+    }
+
     this._show = false;
   },
   hideLater: function (time) {
@@ -43796,7 +38455,11 @@ TooltipRichContent.prototype = {
     return this._show;
   },
   getOuterSize: function () {
-    return this.getSize();
+    var size = this.getSize();
+    return {
+      width: size[0],
+      height: size[1]
+    };
   }
 };
 
@@ -43819,7 +38482,7 @@ TooltipRichContent.prototype = {
 * under the License.
 */
 var bind$2 = bind;
-var each$10 = each$1;
+var each$9 = each$1;
 var parsePercent$2 = parsePercent$1;
 var proxyRect = new Rect({
   shape: {
@@ -43926,7 +38589,7 @@ extendComponentView({
         // Show tip next tick after other charts are rendered
         // In case highlight action has wrong result
         // FIXME
-        self.manuallyShowTip(tooltipModel, ecModel, api, {
+        !api.isDisposed() && self.manuallyShowTip(tooltipModel, ecModel, api, {
           x: self._lastX,
           y: self._lastY
         });
@@ -44114,7 +38777,7 @@ extendComponentView({
     var renderMode = this._renderMode;
     var newLine = this._newLine;
     var markers = {};
-    each$10(dataByCoordSys, function (itemCoordSys) {
+    each$9(dataByCoordSys, function (itemCoordSys) {
       // var coordParamList = [];
       // var coordDefaultHTML = [];
       // var coordTooltipModel = buildTooltipModel([
@@ -44125,7 +38788,7 @@ extendComponentView({
       // ]);
       // var displayMode = coordTooltipModel.get('displayMode');
       // var paramsList = displayMode === 'single' ? singleParamsList : [];
-      each$10(itemCoordSys.dataByAxis, function (item) {
+      each$9(itemCoordSys.dataByAxis, function (item) {
         var axisModel = ecModel.getComponent(item.axisDim + 'Axis', item.axisIndex);
         var axisValue = item.value;
         var seriesDefaultHTML = [];
@@ -44372,17 +39035,17 @@ extendComponentView({
   _updateContentNotChangedOnAxis: function (dataByCoordSys) {
     var lastCoordSys = this._lastDataByCoordSys;
     var contentNotChanged = !!lastCoordSys && lastCoordSys.length === dataByCoordSys.length;
-    contentNotChanged && each$10(lastCoordSys, function (lastItemCoordSys, indexCoordSys) {
+    contentNotChanged && each$9(lastCoordSys, function (lastItemCoordSys, indexCoordSys) {
       var lastDataByAxis = lastItemCoordSys.dataByAxis || {};
       var thisItemCoordSys = dataByCoordSys[indexCoordSys] || {};
       var thisDataByAxis = thisItemCoordSys.dataByAxis || [];
       contentNotChanged &= lastDataByAxis.length === thisDataByAxis.length;
-      contentNotChanged && each$10(lastDataByAxis, function (lastItem, indexAxis) {
+      contentNotChanged && each$9(lastDataByAxis, function (lastItem, indexAxis) {
         var thisItem = thisDataByAxis[indexAxis] || {};
         var lastIndices = lastItem.seriesDataIndices || [];
         var newIndices = thisItem.seriesDataIndices || [];
         contentNotChanged &= lastItem.value === thisItem.value && lastItem.axisType === thisItem.axisType && lastItem.axisId === thisItem.axisId && lastIndices.length === newIndices.length;
-        contentNotChanged && each$10(lastIndices, function (lastIdxItem, j) {
+        contentNotChanged && each$9(lastIndices, function (lastIdxItem, j) {
           var newIdxItem = newIndices[j];
           contentNotChanged &= lastIdxItem.seriesIndex === newIdxItem.seriesIndex && lastIdxItem.dataIndex === newIdxItem.dataIndex;
         });
@@ -44586,3768 +39249,69 @@ function () {});
 * specific language governing permissions and limitations
 * under the License.
 */
-var addCommas$1 = addCommas;
-var encodeHTML$1 = encodeHTML;
-
-function fillLabel(opt) {
-  defaultEmphasis(opt, 'label', ['show']);
-}
-
-var MarkerModel = extendComponentModel({
-  type: 'marker',
-  dependencies: ['series', 'grid', 'polar', 'geo'],
-
-  /**
-   * @overrite
-   */
-  init: function (option, parentModel, ecModel, extraOpt) {
-    this.mergeDefaultAndTheme(option, ecModel);
-    this.mergeOption(option, ecModel, extraOpt.createdBySelf, true);
-  },
-
-  /**
-   * @return {boolean}
-   */
-  isAnimationEnabled: function () {
-    if (env$1.node) {
-      return false;
-    }
-
-    var hostSeries = this.__hostSeries;
-    return this.getShallow('animation') && hostSeries && hostSeries.isAnimationEnabled();
-  },
-  mergeOption: function (newOpt, ecModel, createdBySelf, isInit) {
-    var MarkerModel = this.constructor;
-    var modelPropName = this.mainType + 'Model';
-
-    if (!createdBySelf) {
-      ecModel.eachSeries(function (seriesModel) {
-        var markerOpt = seriesModel.get(this.mainType, true);
-        var markerModel = seriesModel[modelPropName];
-
-        if (!markerOpt || !markerOpt.data) {
-          seriesModel[modelPropName] = null;
-          return;
-        }
-
-        if (!markerModel) {
-          if (isInit) {
-            // Default label emphasis `position` and `show`
-            fillLabel(markerOpt);
-          }
-
-          each$1(markerOpt.data, function (item) {
-            // FIXME Overwrite fillLabel method ?
-            if (item instanceof Array) {
-              fillLabel(item[0]);
-              fillLabel(item[1]);
-            } else {
-              fillLabel(item);
-            }
-          });
-          markerModel = new MarkerModel(markerOpt, this, ecModel);
-          extend(markerModel, {
-            mainType: this.mainType,
-            // Use the same series index and name
-            seriesIndex: seriesModel.seriesIndex,
-            name: seriesModel.name,
-            createdBySelf: true
-          });
-          markerModel.__hostSeries = seriesModel;
-        } else {
-          markerModel.mergeOption(markerOpt, ecModel, true);
-        }
-
-        seriesModel[modelPropName] = markerModel;
-      }, this);
-    }
-  },
-  formatTooltip: function (dataIndex) {
-    var data = this.getData();
-    var value = this.getRawValue(dataIndex);
-    var formattedValue = isArray(value) ? map(value, addCommas$1).join(', ') : addCommas$1(value);
-    var name = data.getName(dataIndex);
-    var html = encodeHTML$1(this.name);
-
-    if (value != null || name) {
-      html += '<br />';
-    }
-
-    if (name) {
-      html += encodeHTML$1(name);
-
-      if (value != null) {
-        html += ' : ';
-      }
-    }
-
-    if (value != null) {
-      html += encodeHTML$1(formattedValue);
-    }
-
-    return html;
-  },
-  getData: function () {
-    return this._data;
-  },
-  setData: function (data) {
-    this._data = data;
-  }
-});
-mixin(MarkerModel, dataFormatMixin);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-MarkerModel.extend({
-  type: 'markPoint',
-  defaultOption: {
-    zlevel: 0,
-    z: 5,
-    symbol: 'pin',
-    symbolSize: 50,
-    //symbolRotate: 0,
-    //symbolOffset: [0, 0]
-    tooltip: {
-      trigger: 'item'
-    },
-    label: {
-      show: true,
-      position: 'inside'
-    },
-    itemStyle: {
-      borderWidth: 2
-    },
-    emphasis: {
-      label: {
-        show: true
-      }
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var indexOf$1 = indexOf;
-
-function hasXOrY(item) {
-  return !(isNaN(parseFloat(item.x)) && isNaN(parseFloat(item.y)));
-}
-
-function hasXAndY(item) {
-  return !isNaN(parseFloat(item.x)) && !isNaN(parseFloat(item.y));
-} // Make it simple, do not visit all stacked value to count precision.
-// function getPrecision(data, valueAxisDim, dataIndex) {
-//     var precision = -1;
-//     var stackedDim = data.mapDimension(valueAxisDim);
-//     do {
-//         precision = Math.max(
-//             numberUtil.getPrecision(data.get(stackedDim, dataIndex)),
-//             precision
-//         );
-//         var stackedOnSeries = data.getCalculationInfo('stackedOnSeries');
-//         if (stackedOnSeries) {
-//             var byValue = data.get(data.getCalculationInfo('stackedByDimension'), dataIndex);
-//             data = stackedOnSeries.getData();
-//             dataIndex = data.indexOf(data.getCalculationInfo('stackedByDimension'), byValue);
-//             stackedDim = data.getCalculationInfo('stackedDimension');
-//         }
-//         else {
-//             data = null;
-//         }
-//     } while (data);
-//     return precision;
-// }
-
-
-function markerTypeCalculatorWithExtent(mlType, data, otherDataDim, targetDataDim, otherCoordIndex, targetCoordIndex) {
-  var coordArr = [];
-  var stacked = isDimensionStacked(data, targetDataDim
-  /*, otherDataDim*/
-  );
-  var calcDataDim = stacked ? data.getCalculationInfo('stackResultDimension') : targetDataDim;
-  var value = numCalculate(data, calcDataDim, mlType);
-  var dataIndex = data.indicesOfNearest(calcDataDim, value)[0];
-  coordArr[otherCoordIndex] = data.get(otherDataDim, dataIndex);
-  coordArr[targetCoordIndex] = data.get(targetDataDim, dataIndex); // Make it simple, do not visit all stacked value to count precision.
-
-  var precision = getPrecision(data.get(targetDataDim, dataIndex));
-  precision = Math.min(precision, 20);
-
-  if (precision >= 0) {
-    coordArr[targetCoordIndex] = +coordArr[targetCoordIndex].toFixed(precision);
-  }
-
-  return coordArr;
-}
-
-var curry$4 = curry; // TODO Specified percent
-
-var markerTypeCalculator = {
-  /**
-   * @method
-   * @param {module:echarts/data/List} data
-   * @param {string} baseAxisDim
-   * @param {string} valueAxisDim
-   */
-  min: curry$4(markerTypeCalculatorWithExtent, 'min'),
-
-  /**
-   * @method
-   * @param {module:echarts/data/List} data
-   * @param {string} baseAxisDim
-   * @param {string} valueAxisDim
-   */
-  max: curry$4(markerTypeCalculatorWithExtent, 'max'),
-
-  /**
-   * @method
-   * @param {module:echarts/data/List} data
-   * @param {string} baseAxisDim
-   * @param {string} valueAxisDim
-   */
-  average: curry$4(markerTypeCalculatorWithExtent, 'average')
-};
-/**
- * Transform markPoint data item to format used in List by do the following
- * 1. Calculate statistic like `max`, `min`, `average`
- * 2. Convert `item.xAxis`, `item.yAxis` to `item.coord` array
- * @param  {module:echarts/model/Series} seriesModel
- * @param  {module:echarts/coord/*} [coordSys]
- * @param  {Object} item
- * @return {Object}
- */
-
-function dataTransform(seriesModel, item) {
-  var data = seriesModel.getData();
-  var coordSys = seriesModel.coordinateSystem; // 1. If not specify the position with pixel directly
-  // 2. If `coord` is not a data array. Which uses `xAxis`,
-  // `yAxis` to specify the coord on each dimension
-  // parseFloat first because item.x and item.y can be percent string like '20%'
-
-  if (item && !hasXAndY(item) && !isArray(item.coord) && coordSys) {
-    var dims = coordSys.dimensions;
-    var axisInfo = getAxisInfo$1(item, data, coordSys, seriesModel); // Clone the option
-    // Transform the properties xAxis, yAxis, radiusAxis, angleAxis, geoCoord to value
-
-    item = clone(item);
-
-    if (item.type && markerTypeCalculator[item.type] && axisInfo.baseAxis && axisInfo.valueAxis) {
-      var otherCoordIndex = indexOf$1(dims, axisInfo.baseAxis.dim);
-      var targetCoordIndex = indexOf$1(dims, axisInfo.valueAxis.dim);
-      item.coord = markerTypeCalculator[item.type](data, axisInfo.baseDataDim, axisInfo.valueDataDim, otherCoordIndex, targetCoordIndex); // Force to use the value of calculated value.
-
-      item.value = item.coord[targetCoordIndex];
-    } else {
-      // FIXME Only has one of xAxis and yAxis.
-      var coord = [item.xAxis != null ? item.xAxis : item.radiusAxis, item.yAxis != null ? item.yAxis : item.angleAxis]; // Each coord support max, min, average
-
-      for (var i = 0; i < 2; i++) {
-        if (markerTypeCalculator[coord[i]]) {
-          coord[i] = numCalculate(data, data.mapDimension(dims[i]), coord[i]);
-        }
-      }
-
-      item.coord = coord;
-    }
-  }
-
-  return item;
-}
-function getAxisInfo$1(item, data, coordSys, seriesModel) {
-  var ret = {};
-
-  if (item.valueIndex != null || item.valueDim != null) {
-    ret.valueDataDim = item.valueIndex != null ? data.getDimension(item.valueIndex) : item.valueDim;
-    ret.valueAxis = coordSys.getAxis(dataDimToCoordDim(seriesModel, ret.valueDataDim));
-    ret.baseAxis = coordSys.getOtherAxis(ret.valueAxis);
-    ret.baseDataDim = data.mapDimension(ret.baseAxis.dim);
-  } else {
-    ret.baseAxis = seriesModel.getBaseAxis();
-    ret.valueAxis = coordSys.getOtherAxis(ret.baseAxis);
-    ret.baseDataDim = data.mapDimension(ret.baseAxis.dim);
-    ret.valueDataDim = data.mapDimension(ret.valueAxis.dim);
-  }
-
-  return ret;
-}
-
-function dataDimToCoordDim(seriesModel, dataDim) {
-  var data = seriesModel.getData();
-  var dimensions = data.dimensions;
-  dataDim = data.getDimension(dataDim);
-
-  for (var i = 0; i < dimensions.length; i++) {
-    var dimItem = data.getDimensionInfo(dimensions[i]);
-
-    if (dimItem.name === dataDim) {
-      return dimItem.coordDim;
-    }
-  }
-}
-/**
- * Filter data which is out of coordinateSystem range
- * [dataFilter description]
- * @param  {module:echarts/coord/*} [coordSys]
- * @param  {Object} item
- * @return {boolean}
- */
-
-
-function dataFilter$1(coordSys, item) {
-  // Alwalys return true if there is no coordSys
-  return coordSys && coordSys.containData && item.coord && !hasXOrY(item) ? coordSys.containData(item.coord) : true;
-}
-function dimValueGetter(item, dimName, dataIndex, dimIndex) {
-  // x, y, radius, angle
-  if (dimIndex < 2) {
-    return item.coord && item.coord[dimIndex];
-  }
-
-  return item.value;
-}
-function numCalculate(data, valueDataDim, type) {
-  if (type === 'average') {
-    var sum = 0;
-    var count = 0;
-    data.each(valueDataDim, function (val, idx) {
-      if (!isNaN(val)) {
-        sum += val;
-        count++;
-      }
-    });
-    return sum / count;
-  } else if (type === 'median') {
-    return data.getMedian(valueDataDim);
-  } else {
-    // max & min
-    return data.getDataExtent(valueDataDim, true)[type === 'max' ? 1 : 0];
-  }
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var MarkerView = extendComponentView({
-  type: 'marker',
-  init: function () {
-    /**
-     * Markline grouped by series
-     * @private
-     * @type {module:zrender/core/util.HashMap}
-     */
-    this.markerGroupMap = createHashMap();
-  },
-  render: function (markerModel, ecModel, api) {
-    var markerGroupMap = this.markerGroupMap;
-    markerGroupMap.each(function (item) {
-      item.__keep = false;
-    });
-    var markerModelKey = this.type + 'Model';
-    ecModel.eachSeries(function (seriesModel) {
-      var markerModel = seriesModel[markerModelKey];
-      markerModel && this.renderSeries(seriesModel, markerModel, ecModel, api);
-    }, this);
-    markerGroupMap.each(function (item) {
-      !item.__keep && this.group.remove(item.group);
-    }, this);
-  },
-  renderSeries: function () {}
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-function updateMarkerLayout(mpData, seriesModel, api) {
-  var coordSys = seriesModel.coordinateSystem;
-  mpData.each(function (idx) {
-    var itemModel = mpData.getItemModel(idx);
-    var point;
-    var xPx = parsePercent$1(itemModel.get('x'), api.getWidth());
-    var yPx = parsePercent$1(itemModel.get('y'), api.getHeight());
-
-    if (!isNaN(xPx) && !isNaN(yPx)) {
-      point = [xPx, yPx];
-    } // Chart like bar may have there own marker positioning logic
-    else if (seriesModel.getMarkerPosition) {
-        // Use the getMarkerPoisition
-        point = seriesModel.getMarkerPosition(mpData.getValues(mpData.dimensions, idx));
-      } else if (coordSys) {
-        var x = mpData.get(coordSys.dimensions[0], idx);
-        var y = mpData.get(coordSys.dimensions[1], idx);
-        point = coordSys.dataToPoint([x, y]);
-      } // Use x, y if has any
-
-
-    if (!isNaN(xPx)) {
-      point[0] = xPx;
-    }
-
-    if (!isNaN(yPx)) {
-      point[1] = yPx;
-    }
-
-    mpData.setItemLayout(idx, point);
-  });
-}
-
-MarkerView.extend({
-  type: 'markPoint',
-  // updateLayout: function (markPointModel, ecModel, api) {
-  //     ecModel.eachSeries(function (seriesModel) {
-  //         var mpModel = seriesModel.markPointModel;
-  //         if (mpModel) {
-  //             updateMarkerLayout(mpModel.getData(), seriesModel, api);
-  //             this.markerGroupMap.get(seriesModel.id).updateLayout(mpModel);
-  //         }
-  //     }, this);
-  // },
-  updateTransform: function (markPointModel, ecModel, api) {
-    ecModel.eachSeries(function (seriesModel) {
-      var mpModel = seriesModel.markPointModel;
-
-      if (mpModel) {
-        updateMarkerLayout(mpModel.getData(), seriesModel, api);
-        this.markerGroupMap.get(seriesModel.id).updateLayout(mpModel);
-      }
-    }, this);
-  },
-  renderSeries: function (seriesModel, mpModel, ecModel, api) {
-    var coordSys = seriesModel.coordinateSystem;
-    var seriesId = seriesModel.id;
-    var seriesData = seriesModel.getData();
-    var symbolDrawMap = this.markerGroupMap;
-    var symbolDraw = symbolDrawMap.get(seriesId) || symbolDrawMap.set(seriesId, new SymbolDraw());
-    var mpData = createList$1(coordSys, seriesModel, mpModel); // FIXME
-
-    mpModel.setData(mpData);
-    updateMarkerLayout(mpModel.getData(), seriesModel, api);
-    mpData.each(function (idx) {
-      var itemModel = mpData.getItemModel(idx);
-      var symbolSize = itemModel.getShallow('symbolSize');
-
-      if (typeof symbolSize === 'function') {
-        // FIXME 这里不兼容 ECharts 2.x，2.x 貌似参数是整个数据？
-        symbolSize = symbolSize(mpModel.getRawValue(idx), mpModel.getDataParams(idx));
-      }
-
-      mpData.setItemVisual(idx, {
-        symbolSize: symbolSize,
-        color: itemModel.get('itemStyle.color') || seriesData.getVisual('color'),
-        symbol: itemModel.getShallow('symbol')
-      });
-    }); // TODO Text are wrong
-
-    symbolDraw.updateData(mpData);
-    this.group.add(symbolDraw.group); // Set host model for tooltip
-    // FIXME
-
-    mpData.eachItemGraphicEl(function (el) {
-      el.traverse(function (child) {
-        child.dataModel = mpModel;
-      });
-    });
-    symbolDraw.__keep = true;
-    symbolDraw.group.silent = mpModel.get('silent') || seriesModel.get('silent');
-  }
-});
-/**
- * @inner
- * @param {module:echarts/coord/*} [coordSys]
- * @param {module:echarts/model/Series} seriesModel
- * @param {module:echarts/model/Model} mpModel
- */
-
-function createList$1(coordSys, seriesModel, mpModel) {
-  var coordDimsInfos;
-
-  if (coordSys) {
-    coordDimsInfos = map(coordSys && coordSys.dimensions, function (coordDim) {
-      var info = seriesModel.getData().getDimensionInfo(seriesModel.getData().mapDimension(coordDim)) || {}; // In map series data don't have lng and lat dimension. Fallback to same with coordSys
-
-      return defaults({
-        name: coordDim
-      }, info);
-    });
-  } else {
-    coordDimsInfos = [{
-      name: 'value',
-      type: 'float'
-    }];
-  }
-
-  var mpData = new List(coordDimsInfos, mpModel);
-  var dataOpt = map(mpModel.get('data'), curry(dataTransform, seriesModel));
-
-  if (coordSys) {
-    dataOpt = filter(dataOpt, curry(dataFilter$1, coordSys));
-  }
-
-  mpData.initData(dataOpt, null, coordSys ? dimValueGetter : function (item) {
-    return item.value;
-  });
-  return mpData;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// HINT Markpoint can't be used too much
-registerPreprocessor(function (opt) {
-  // Make sure markPoint component is enabled
-  opt.markPoint = opt.markPoint || {};
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-MarkerModel.extend({
-  type: 'markLine',
-  defaultOption: {
-    zlevel: 0,
-    z: 5,
-    symbol: ['circle', 'arrow'],
-    symbolSize: [8, 16],
-    //symbolRotate: 0,
-    precision: 2,
-    tooltip: {
-      trigger: 'item'
-    },
-    label: {
-      show: true,
-      position: 'end'
-    },
-    lineStyle: {
-      type: 'dashed'
-    },
-    emphasis: {
-      label: {
-        show: true
-      },
-      lineStyle: {
-        width: 3
-      }
-    },
-    animationEasing: 'linear'
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * Line path for bezier and straight line draw
- */
-var straightLineProto = Line.prototype;
-var bezierCurveProto = BezierCurve.prototype;
-
-function isLine(shape) {
-  return isNaN(+shape.cpx1) || isNaN(+shape.cpy1);
-}
-
-var LinePath = extendShape({
-  type: 'ec-line',
-  style: {
-    stroke: '#000',
-    fill: null
-  },
-  shape: {
-    x1: 0,
-    y1: 0,
-    x2: 0,
-    y2: 0,
-    percent: 1,
-    cpx1: null,
-    cpy1: null
-  },
-  buildPath: function (ctx, shape) {
-    (isLine(shape) ? straightLineProto : bezierCurveProto).buildPath(ctx, shape);
-  },
-  pointAt: function (t) {
-    return isLine(this.shape) ? straightLineProto.pointAt.call(this, t) : bezierCurveProto.pointAt.call(this, t);
-  },
-  tangentAt: function (t) {
-    var shape = this.shape;
-    var p = isLine(shape) ? [shape.x2 - shape.x1, shape.y2 - shape.y1] : bezierCurveProto.tangentAt.call(this, t);
-    return normalize(p, p);
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * @module echarts/chart/helper/Line
- */
-var SYMBOL_CATEGORIES = ['fromSymbol', 'toSymbol'];
-
-function makeSymbolTypeKey(symbolCategory) {
-  return '_' + symbolCategory + 'Type';
-}
-/**
- * @inner
- */
-
-
-function createSymbol$1(name, lineData, idx) {
-  var color = lineData.getItemVisual(idx, 'color');
-  var symbolType = lineData.getItemVisual(idx, name);
-  var symbolSize = lineData.getItemVisual(idx, name + 'Size');
-
-  if (!symbolType || symbolType === 'none') {
-    return;
-  }
-
-  if (!isArray(symbolSize)) {
-    symbolSize = [symbolSize, symbolSize];
-  }
-
-  var symbolPath = createSymbol(symbolType, -symbolSize[0] / 2, -symbolSize[1] / 2, symbolSize[0], symbolSize[1], color);
-  symbolPath.name = name;
-  return symbolPath;
-}
-
-function createLine(points) {
-  var line = new LinePath({
-    name: 'line'
-  });
-  setLinePoints(line.shape, points);
-  return line;
-}
-
-function setLinePoints(targetShape, points) {
-  var p1 = points[0];
-  var p2 = points[1];
-  var cp1 = points[2];
-  targetShape.x1 = p1[0];
-  targetShape.y1 = p1[1];
-  targetShape.x2 = p2[0];
-  targetShape.y2 = p2[1];
-  targetShape.percent = 1;
-
-  if (cp1) {
-    targetShape.cpx1 = cp1[0];
-    targetShape.cpy1 = cp1[1];
-  } else {
-    targetShape.cpx1 = NaN;
-    targetShape.cpy1 = NaN;
-  }
-}
-
-function updateSymbolAndLabelBeforeLineUpdate() {
-  var lineGroup = this;
-  var symbolFrom = lineGroup.childOfName('fromSymbol');
-  var symbolTo = lineGroup.childOfName('toSymbol');
-  var label = lineGroup.childOfName('label'); // Quick reject
-
-  if (!symbolFrom && !symbolTo && label.ignore) {
-    return;
-  }
-
-  var invScale = 1;
-  var parentNode = this.parent;
-
-  while (parentNode) {
-    if (parentNode.scale) {
-      invScale /= parentNode.scale[0];
-    }
-
-    parentNode = parentNode.parent;
-  }
-
-  var line = lineGroup.childOfName('line'); // If line not changed
-  // FIXME Parent scale changed
-
-  if (!this.__dirty && !line.__dirty) {
-    return;
-  }
-
-  var percent = line.shape.percent;
-  var fromPos = line.pointAt(0);
-  var toPos = line.pointAt(percent);
-  var d = sub([], toPos, fromPos);
-  normalize(d, d);
-
-  if (symbolFrom) {
-    symbolFrom.attr('position', fromPos);
-    var tangent = line.tangentAt(0);
-    symbolFrom.attr('rotation', Math.PI / 2 - Math.atan2(tangent[1], tangent[0]));
-    symbolFrom.attr('scale', [invScale * percent, invScale * percent]);
-  }
-
-  if (symbolTo) {
-    symbolTo.attr('position', toPos);
-    var tangent = line.tangentAt(1);
-    symbolTo.attr('rotation', -Math.PI / 2 - Math.atan2(tangent[1], tangent[0]));
-    symbolTo.attr('scale', [invScale * percent, invScale * percent]);
-  }
-
-  if (!label.ignore) {
-    label.attr('position', toPos);
-    var textPosition;
-    var textAlign;
-    var textVerticalAlign;
-    var distance$$1 = 5 * invScale; // End
-
-    if (label.__position === 'end') {
-      textPosition = [d[0] * distance$$1 + toPos[0], d[1] * distance$$1 + toPos[1]];
-      textAlign = d[0] > 0.8 ? 'left' : d[0] < -0.8 ? 'right' : 'center';
-      textVerticalAlign = d[1] > 0.8 ? 'top' : d[1] < -0.8 ? 'bottom' : 'middle';
-    } // Middle
-    else if (label.__position === 'middle') {
-        var halfPercent = percent / 2;
-        var tangent = line.tangentAt(halfPercent);
-        var n = [tangent[1], -tangent[0]];
-        var cp = line.pointAt(halfPercent);
-
-        if (n[1] > 0) {
-          n[0] = -n[0];
-          n[1] = -n[1];
-        }
-
-        textPosition = [cp[0] + n[0] * distance$$1, cp[1] + n[1] * distance$$1];
-        textAlign = 'center';
-        textVerticalAlign = 'bottom';
-        var rotation = -Math.atan2(tangent[1], tangent[0]);
-
-        if (toPos[0] < fromPos[0]) {
-          rotation = Math.PI + rotation;
-        }
-
-        label.attr('rotation', rotation);
-      } // Start
-      else {
-          textPosition = [-d[0] * distance$$1 + fromPos[0], -d[1] * distance$$1 + fromPos[1]];
-          textAlign = d[0] > 0.8 ? 'right' : d[0] < -0.8 ? 'left' : 'center';
-          textVerticalAlign = d[1] > 0.8 ? 'bottom' : d[1] < -0.8 ? 'top' : 'middle';
-        }
-
-    label.attr({
-      style: {
-        // Use the user specified text align and baseline first
-        textVerticalAlign: label.__verticalAlign || textVerticalAlign,
-        textAlign: label.__textAlign || textAlign
-      },
-      position: textPosition,
-      scale: [invScale, invScale]
-    });
-  }
-}
-/**
- * @constructor
- * @extends {module:zrender/graphic/Group}
- * @alias {module:echarts/chart/helper/Line}
- */
-
-
-function Line$1(lineData, idx, seriesScope) {
-  Group.call(this);
-
-  this._createLine(lineData, idx, seriesScope);
-}
-
-var lineProto = Line$1.prototype; // Update symbol position and rotation
-
-lineProto.beforeUpdate = updateSymbolAndLabelBeforeLineUpdate;
-
-lineProto._createLine = function (lineData, idx, seriesScope) {
-  var seriesModel = lineData.hostModel;
-  var linePoints = lineData.getItemLayout(idx);
-  var line = createLine(linePoints);
-  line.shape.percent = 0;
-  initProps(line, {
-    shape: {
-      percent: 1
-    }
-  }, seriesModel, idx);
-  this.add(line);
-  var label = new Text({
-    name: 'label',
-    // FIXME
-    // Temporary solution for `focusNodeAdjacency`.
-    // line label do not use the opacity of lineStyle.
-    lineLabelOriginalOpacity: 1
-  });
-  this.add(label);
-  each$1(SYMBOL_CATEGORIES, function (symbolCategory) {
-    var symbol = createSymbol$1(symbolCategory, lineData, idx); // symbols must added after line to make sure
-    // it will be updated after line#update.
-    // Or symbol position and rotation update in line#beforeUpdate will be one frame slow
-
-    this.add(symbol);
-    this[makeSymbolTypeKey(symbolCategory)] = lineData.getItemVisual(idx, symbolCategory);
-  }, this);
-
-  this._updateCommonStl(lineData, idx, seriesScope);
-};
-
-lineProto.updateData = function (lineData, idx, seriesScope) {
-  var seriesModel = lineData.hostModel;
-  var line = this.childOfName('line');
-  var linePoints = lineData.getItemLayout(idx);
-  var target = {
-    shape: {}
-  };
-  setLinePoints(target.shape, linePoints);
-  updateProps(line, target, seriesModel, idx);
-  each$1(SYMBOL_CATEGORIES, function (symbolCategory) {
-    var symbolType = lineData.getItemVisual(idx, symbolCategory);
-    var key = makeSymbolTypeKey(symbolCategory); // Symbol changed
-
-    if (this[key] !== symbolType) {
-      this.remove(this.childOfName(symbolCategory));
-      var symbol = createSymbol$1(symbolCategory, lineData, idx);
-      this.add(symbol);
-    }
-
-    this[key] = symbolType;
-  }, this);
-
-  this._updateCommonStl(lineData, idx, seriesScope);
-};
-
-lineProto._updateCommonStl = function (lineData, idx, seriesScope) {
-  var seriesModel = lineData.hostModel;
-  var line = this.childOfName('line');
-  var lineStyle = seriesScope && seriesScope.lineStyle;
-  var hoverLineStyle = seriesScope && seriesScope.hoverLineStyle;
-  var labelModel = seriesScope && seriesScope.labelModel;
-  var hoverLabelModel = seriesScope && seriesScope.hoverLabelModel; // Optimization for large dataset
-
-  if (!seriesScope || lineData.hasItemOption) {
-    var itemModel = lineData.getItemModel(idx);
-    lineStyle = itemModel.getModel('lineStyle').getLineStyle();
-    hoverLineStyle = itemModel.getModel('emphasis.lineStyle').getLineStyle();
-    labelModel = itemModel.getModel('label');
-    hoverLabelModel = itemModel.getModel('emphasis.label');
-  }
-
-  var visualColor = lineData.getItemVisual(idx, 'color');
-  var visualOpacity = retrieve3(lineData.getItemVisual(idx, 'opacity'), lineStyle.opacity, 1);
-  line.useStyle(defaults({
-    strokeNoScale: true,
-    fill: 'none',
-    stroke: visualColor,
-    opacity: visualOpacity
-  }, lineStyle));
-  line.hoverStyle = hoverLineStyle; // Update symbol
-
-  each$1(SYMBOL_CATEGORIES, function (symbolCategory) {
-    var symbol = this.childOfName(symbolCategory);
-
-    if (symbol) {
-      symbol.setColor(visualColor);
-      symbol.setStyle({
-        opacity: visualOpacity
-      });
-    }
-  }, this);
-  var showLabel = labelModel.getShallow('show');
-  var hoverShowLabel = hoverLabelModel.getShallow('show');
-  var label = this.childOfName('label');
-  var defaultLabelColor;
-  var baseText; // FIXME: the logic below probably should be merged to `graphic.setLabelStyle`.
-
-  if (showLabel || hoverShowLabel) {
-    defaultLabelColor = visualColor || '#000';
-    baseText = seriesModel.getFormattedLabel(idx, 'normal', lineData.dataType);
-
-    if (baseText == null) {
-      var rawVal = seriesModel.getRawValue(idx);
-      baseText = rawVal == null ? lineData.getName(idx) : isFinite(rawVal) ? round$2(rawVal) : rawVal;
-    }
-  }
-
-  var normalText = showLabel ? baseText : null;
-  var emphasisText = hoverShowLabel ? retrieve2(seriesModel.getFormattedLabel(idx, 'emphasis', lineData.dataType), baseText) : null;
-  var labelStyle = label.style; // Always set `textStyle` even if `normalStyle.text` is null, because default
-  // values have to be set on `normalStyle`.
-
-  if (normalText != null || emphasisText != null) {
-    setTextStyle(label.style, labelModel, {
-      text: normalText
-    }, {
-      autoColor: defaultLabelColor
-    });
-    label.__textAlign = labelStyle.textAlign;
-    label.__verticalAlign = labelStyle.textVerticalAlign; // 'start', 'middle', 'end'
-
-    label.__position = labelModel.get('position') || 'middle';
-  }
-
-  if (emphasisText != null) {
-    // Only these properties supported in this emphasis style here.
-    label.hoverStyle = {
-      text: emphasisText,
-      textFill: hoverLabelModel.getTextColor(true),
-      // For merging hover style to normal style, do not use
-      // `hoverLabelModel.getFont()` here.
-      fontStyle: hoverLabelModel.getShallow('fontStyle'),
-      fontWeight: hoverLabelModel.getShallow('fontWeight'),
-      fontSize: hoverLabelModel.getShallow('fontSize'),
-      fontFamily: hoverLabelModel.getShallow('fontFamily')
-    };
-  } else {
-    label.hoverStyle = {
-      text: null
-    };
-  }
-
-  label.ignore = !showLabel && !hoverShowLabel;
-  setHoverStyle(this);
-};
-
-lineProto.highlight = function () {
-  this.trigger('emphasis');
-};
-
-lineProto.downplay = function () {
-  this.trigger('normal');
-};
-
-lineProto.updateLayout = function (lineData, idx) {
-  this.setLinePoints(lineData.getItemLayout(idx));
-};
-
-lineProto.setLinePoints = function (points) {
-  var linePath = this.childOfName('line');
-  setLinePoints(linePath.shape, points);
-  linePath.dirty();
-};
-
-inherits(Line$1, Group);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * @module echarts/chart/helper/LineDraw
- */
-/**
- * @alias module:echarts/component/marker/LineDraw
- * @constructor
- */
-
-function LineDraw(ctor) {
-  this._ctor = ctor || Line$1;
-  this.group = new Group();
-}
-
-var lineDrawProto = LineDraw.prototype;
-
-lineDrawProto.isPersistent = function () {
-  return true;
-};
-/**
- * @param {module:echarts/data/List} lineData
- */
-
-
-lineDrawProto.updateData = function (lineData) {
-  var lineDraw = this;
-  var group = lineDraw.group;
-  var oldLineData = lineDraw._lineData;
-  lineDraw._lineData = lineData; // There is no oldLineData only when first rendering or switching from
-  // stream mode to normal mode, where previous elements should be removed.
-
-  if (!oldLineData) {
-    group.removeAll();
-  }
-
-  var seriesScope = makeSeriesScope$1(lineData);
-  lineData.diff(oldLineData).add(function (idx) {
-    doAdd(lineDraw, lineData, idx, seriesScope);
-  }).update(function (newIdx, oldIdx) {
-    doUpdate(lineDraw, oldLineData, lineData, oldIdx, newIdx, seriesScope);
-  }).remove(function (idx) {
-    group.remove(oldLineData.getItemGraphicEl(idx));
-  }).execute();
-};
-
-function doAdd(lineDraw, lineData, idx, seriesScope) {
-  var itemLayout = lineData.getItemLayout(idx);
-
-  if (!lineNeedsDraw(itemLayout)) {
-    return;
-  }
-
-  var el = new lineDraw._ctor(lineData, idx, seriesScope);
-  lineData.setItemGraphicEl(idx, el);
-  lineDraw.group.add(el);
-}
-
-function doUpdate(lineDraw, oldLineData, newLineData, oldIdx, newIdx, seriesScope) {
-  var itemEl = oldLineData.getItemGraphicEl(oldIdx);
-
-  if (!lineNeedsDraw(newLineData.getItemLayout(newIdx))) {
-    lineDraw.group.remove(itemEl);
-    return;
-  }
-
-  if (!itemEl) {
-    itemEl = new lineDraw._ctor(newLineData, newIdx, seriesScope);
-  } else {
-    itemEl.updateData(newLineData, newIdx, seriesScope);
-  }
-
-  newLineData.setItemGraphicEl(newIdx, itemEl);
-  lineDraw.group.add(itemEl);
-}
-
-lineDrawProto.updateLayout = function () {
-  var lineData = this._lineData; // Do not support update layout in incremental mode.
-
-  if (!lineData) {
-    return;
-  }
-
-  lineData.eachItemGraphicEl(function (el, idx) {
-    el.updateLayout(lineData, idx);
-  }, this);
-};
-
-lineDrawProto.incrementalPrepareUpdate = function (lineData) {
-  this._seriesScope = makeSeriesScope$1(lineData);
-  this._lineData = null;
-  this.group.removeAll();
-};
-
-lineDrawProto.incrementalUpdate = function (taskParams, lineData) {
-  function updateIncrementalAndHover(el) {
-    if (!el.isGroup) {
-      el.incremental = el.useHoverLayer = true;
-    }
-  }
-
-  for (var idx = taskParams.start; idx < taskParams.end; idx++) {
-    var itemLayout = lineData.getItemLayout(idx);
-
-    if (lineNeedsDraw(itemLayout)) {
-      var el = new this._ctor(lineData, idx, this._seriesScope);
-      el.traverse(updateIncrementalAndHover);
-      this.group.add(el);
-      lineData.setItemGraphicEl(idx, el);
-    }
-  }
-};
-
-function makeSeriesScope$1(lineData) {
-  var hostModel = lineData.hostModel;
-  return {
-    lineStyle: hostModel.getModel('lineStyle').getLineStyle(),
-    hoverLineStyle: hostModel.getModel('emphasis.lineStyle').getLineStyle(),
-    labelModel: hostModel.getModel('label'),
-    hoverLabelModel: hostModel.getModel('emphasis.label')
-  };
-}
-
-lineDrawProto.remove = function () {
-  this._clearIncremental();
-
-  this._incremental = null;
-  this.group.removeAll();
-};
-
-lineDrawProto._clearIncremental = function () {
-  var incremental = this._incremental;
-
-  if (incremental) {
-    incremental.clearDisplaybles();
-  }
-};
-
-function isPointNaN(pt) {
-  return isNaN(pt[0]) || isNaN(pt[1]);
-}
-
-function lineNeedsDraw(pts) {
-  return !isPointNaN(pts[0]) && !isPointNaN(pts[1]);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var markLineTransform = function (seriesModel, coordSys, mlModel, item) {
-  var data = seriesModel.getData(); // Special type markLine like 'min', 'max', 'average', 'median'
-
-  var mlType = item.type;
-
-  if (!isArray(item) && (mlType === 'min' || mlType === 'max' || mlType === 'average' || mlType === 'median' // In case
-  // data: [{
-  //   yAxis: 10
-  // }]
-  || item.xAxis != null || item.yAxis != null)) {
-    var valueAxis;
-    var valueDataDim;
-    var value;
-
-    if (item.yAxis != null || item.xAxis != null) {
-      valueDataDim = item.yAxis != null ? 'y' : 'x';
-      valueAxis = coordSys.getAxis(valueDataDim);
-      value = retrieve(item.yAxis, item.xAxis);
-    } else {
-      var axisInfo = getAxisInfo$1(item, data, coordSys, seriesModel);
-      valueDataDim = axisInfo.valueDataDim;
-      valueAxis = axisInfo.valueAxis;
-      value = numCalculate(data, valueDataDim, mlType);
-    }
-
-    var valueIndex = valueDataDim === 'x' ? 0 : 1;
-    var baseIndex = 1 - valueIndex;
-    var mlFrom = clone(item);
-    var mlTo = {};
-    mlFrom.type = null;
-    mlFrom.coord = [];
-    mlTo.coord = [];
-    mlFrom.coord[baseIndex] = -Infinity;
-    mlTo.coord[baseIndex] = Infinity;
-    var precision = mlModel.get('precision');
-
-    if (precision >= 0 && typeof value === 'number') {
-      value = +value.toFixed(Math.min(precision, 20));
-    }
-
-    mlFrom.coord[valueIndex] = mlTo.coord[valueIndex] = value;
-    item = [mlFrom, mlTo, {
-      // Extra option for tooltip and label
-      type: mlType,
-      valueIndex: item.valueIndex,
-      // Force to use the value of calculated value.
-      value: value
-    }];
-  }
-
-  item = [dataTransform(seriesModel, item[0]), dataTransform(seriesModel, item[1]), extend({}, item[2])]; // Avoid line data type is extended by from(to) data type
-
-  item[2].type = item[2].type || ''; // Merge from option and to option into line option
-
-  merge(item[2], item[0]);
-  merge(item[2], item[1]);
-  return item;
-};
-
-function isInifinity(val) {
-  return !isNaN(val) && !isFinite(val);
-} // If a markLine has one dim
-
-
-function ifMarkLineHasOnlyDim(dimIndex, fromCoord, toCoord, coordSys) {
-  var otherDimIndex = 1 - dimIndex;
-  var dimName = coordSys.dimensions[dimIndex];
-  return isInifinity(fromCoord[otherDimIndex]) && isInifinity(toCoord[otherDimIndex]) && fromCoord[dimIndex] === toCoord[dimIndex] && coordSys.getAxis(dimName).containData(fromCoord[dimIndex]);
-}
-
-function markLineFilter(coordSys, item) {
-  if (coordSys.type === 'cartesian2d') {
-    var fromCoord = item[0].coord;
-    var toCoord = item[1].coord; // In case
-    // {
-    //  markLine: {
-    //    data: [{ yAxis: 2 }]
-    //  }
-    // }
-
-    if (fromCoord && toCoord && (ifMarkLineHasOnlyDim(1, fromCoord, toCoord, coordSys) || ifMarkLineHasOnlyDim(0, fromCoord, toCoord, coordSys))) {
-      return true;
-    }
-  }
-
-  return dataFilter$1(coordSys, item[0]) && dataFilter$1(coordSys, item[1]);
-}
-
-function updateSingleMarkerEndLayout(data, idx, isFrom, seriesModel, api) {
-  var coordSys = seriesModel.coordinateSystem;
-  var itemModel = data.getItemModel(idx);
-  var point;
-  var xPx = parsePercent$1(itemModel.get('x'), api.getWidth());
-  var yPx = parsePercent$1(itemModel.get('y'), api.getHeight());
-
-  if (!isNaN(xPx) && !isNaN(yPx)) {
-    point = [xPx, yPx];
-  } else {
-    // Chart like bar may have there own marker positioning logic
-    if (seriesModel.getMarkerPosition) {
-      // Use the getMarkerPoisition
-      point = seriesModel.getMarkerPosition(data.getValues(data.dimensions, idx));
-    } else {
-      var dims = coordSys.dimensions;
-      var x = data.get(dims[0], idx);
-      var y = data.get(dims[1], idx);
-      point = coordSys.dataToPoint([x, y]);
-    } // Expand line to the edge of grid if value on one axis is Inifnity
-    // In case
-    //  markLine: {
-    //    data: [{
-    //      yAxis: 2
-    //      // or
-    //      type: 'average'
-    //    }]
-    //  }
-
-
-    if (coordSys.type === 'cartesian2d') {
-      var xAxis = coordSys.getAxis('x');
-      var yAxis = coordSys.getAxis('y');
-      var dims = coordSys.dimensions;
-
-      if (isInifinity(data.get(dims[0], idx))) {
-        point[0] = xAxis.toGlobalCoord(xAxis.getExtent()[isFrom ? 0 : 1]);
-      } else if (isInifinity(data.get(dims[1], idx))) {
-        point[1] = yAxis.toGlobalCoord(yAxis.getExtent()[isFrom ? 0 : 1]);
-      }
-    } // Use x, y if has any
-
-
-    if (!isNaN(xPx)) {
-      point[0] = xPx;
-    }
-
-    if (!isNaN(yPx)) {
-      point[1] = yPx;
-    }
-  }
-
-  data.setItemLayout(idx, point);
-}
-
-MarkerView.extend({
-  type: 'markLine',
-  // updateLayout: function (markLineModel, ecModel, api) {
-  //     ecModel.eachSeries(function (seriesModel) {
-  //         var mlModel = seriesModel.markLineModel;
-  //         if (mlModel) {
-  //             var mlData = mlModel.getData();
-  //             var fromData = mlModel.__from;
-  //             var toData = mlModel.__to;
-  //             // Update visual and layout of from symbol and to symbol
-  //             fromData.each(function (idx) {
-  //                 updateSingleMarkerEndLayout(fromData, idx, true, seriesModel, api);
-  //                 updateSingleMarkerEndLayout(toData, idx, false, seriesModel, api);
-  //             });
-  //             // Update layout of line
-  //             mlData.each(function (idx) {
-  //                 mlData.setItemLayout(idx, [
-  //                     fromData.getItemLayout(idx),
-  //                     toData.getItemLayout(idx)
-  //                 ]);
-  //             });
-  //             this.markerGroupMap.get(seriesModel.id).updateLayout();
-  //         }
-  //     }, this);
-  // },
-  updateTransform: function (markLineModel, ecModel, api) {
-    ecModel.eachSeries(function (seriesModel) {
-      var mlModel = seriesModel.markLineModel;
-
-      if (mlModel) {
-        var mlData = mlModel.getData();
-        var fromData = mlModel.__from;
-        var toData = mlModel.__to; // Update visual and layout of from symbol and to symbol
-
-        fromData.each(function (idx) {
-          updateSingleMarkerEndLayout(fromData, idx, true, seriesModel, api);
-          updateSingleMarkerEndLayout(toData, idx, false, seriesModel, api);
-        }); // Update layout of line
-
-        mlData.each(function (idx) {
-          mlData.setItemLayout(idx, [fromData.getItemLayout(idx), toData.getItemLayout(idx)]);
-        });
-        this.markerGroupMap.get(seriesModel.id).updateLayout();
-      }
-    }, this);
-  },
-  renderSeries: function (seriesModel, mlModel, ecModel, api) {
-    var coordSys = seriesModel.coordinateSystem;
-    var seriesId = seriesModel.id;
-    var seriesData = seriesModel.getData();
-    var lineDrawMap = this.markerGroupMap;
-    var lineDraw = lineDrawMap.get(seriesId) || lineDrawMap.set(seriesId, new LineDraw());
-    this.group.add(lineDraw.group);
-    var mlData = createList$2(coordSys, seriesModel, mlModel);
-    var fromData = mlData.from;
-    var toData = mlData.to;
-    var lineData = mlData.line;
-    mlModel.__from = fromData;
-    mlModel.__to = toData; // Line data for tooltip and formatter
-
-    mlModel.setData(lineData);
-    var symbolType = mlModel.get('symbol');
-    var symbolSize = mlModel.get('symbolSize');
-
-    if (!isArray(symbolType)) {
-      symbolType = [symbolType, symbolType];
-    }
-
-    if (typeof symbolSize === 'number') {
-      symbolSize = [symbolSize, symbolSize];
-    } // Update visual and layout of from symbol and to symbol
-
-
-    mlData.from.each(function (idx) {
-      updateDataVisualAndLayout(fromData, idx, true);
-      updateDataVisualAndLayout(toData, idx, false);
-    }); // Update visual and layout of line
-
-    lineData.each(function (idx) {
-      var lineColor = lineData.getItemModel(idx).get('lineStyle.color');
-      lineData.setItemVisual(idx, {
-        color: lineColor || fromData.getItemVisual(idx, 'color')
-      });
-      lineData.setItemLayout(idx, [fromData.getItemLayout(idx), toData.getItemLayout(idx)]);
-      lineData.setItemVisual(idx, {
-        'fromSymbolSize': fromData.getItemVisual(idx, 'symbolSize'),
-        'fromSymbol': fromData.getItemVisual(idx, 'symbol'),
-        'toSymbolSize': toData.getItemVisual(idx, 'symbolSize'),
-        'toSymbol': toData.getItemVisual(idx, 'symbol')
-      });
-    });
-    lineDraw.updateData(lineData); // Set host model for tooltip
-    // FIXME
-
-    mlData.line.eachItemGraphicEl(function (el, idx) {
-      el.traverse(function (child) {
-        child.dataModel = mlModel;
-      });
-    });
-
-    function updateDataVisualAndLayout(data, idx, isFrom) {
-      var itemModel = data.getItemModel(idx);
-      updateSingleMarkerEndLayout(data, idx, isFrom, seriesModel, api);
-      data.setItemVisual(idx, {
-        symbolSize: itemModel.get('symbolSize') || symbolSize[isFrom ? 0 : 1],
-        symbol: itemModel.get('symbol', true) || symbolType[isFrom ? 0 : 1],
-        color: itemModel.get('itemStyle.color') || seriesData.getVisual('color')
-      });
-    }
-
-    lineDraw.__keep = true;
-    lineDraw.group.silent = mlModel.get('silent') || seriesModel.get('silent');
-  }
-});
-/**
- * @inner
- * @param {module:echarts/coord/*} coordSys
- * @param {module:echarts/model/Series} seriesModel
- * @param {module:echarts/model/Model} mpModel
- */
-
-function createList$2(coordSys, seriesModel, mlModel) {
-  var coordDimsInfos;
-
-  if (coordSys) {
-    coordDimsInfos = map(coordSys && coordSys.dimensions, function (coordDim) {
-      var info = seriesModel.getData().getDimensionInfo(seriesModel.getData().mapDimension(coordDim)) || {}; // In map series data don't have lng and lat dimension. Fallback to same with coordSys
-
-      return defaults({
-        name: coordDim
-      }, info);
-    });
-  } else {
-    coordDimsInfos = [{
-      name: 'value',
-      type: 'float'
-    }];
-  }
-
-  var fromData = new List(coordDimsInfos, mlModel);
-  var toData = new List(coordDimsInfos, mlModel); // No dimensions
-
-  var lineData = new List([], mlModel);
-  var optData = map(mlModel.get('data'), curry(markLineTransform, seriesModel, coordSys, mlModel));
-
-  if (coordSys) {
-    optData = filter(optData, curry(markLineFilter, coordSys));
-  }
-
-  var dimValueGetter$$1 = coordSys ? dimValueGetter : function (item) {
-    return item.value;
-  };
-  fromData.initData(map(optData, function (item) {
-    return item[0];
-  }), null, dimValueGetter$$1);
-  toData.initData(map(optData, function (item) {
-    return item[1];
-  }), null, dimValueGetter$$1);
-  lineData.initData(map(optData, function (item) {
-    return item[2];
-  }));
-  lineData.hasItemOption = true;
-  return {
-    from: fromData,
-    to: toData,
-    line: lineData
-  };
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerPreprocessor(function (opt) {
-  // Make sure markLine component is enabled
-  opt.markLine = opt.markLine || {};
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-MarkerModel.extend({
-  type: 'markArea',
-  defaultOption: {
-    zlevel: 0,
-    // PENDING
-    z: 1,
-    tooltip: {
-      trigger: 'item'
-    },
-    // markArea should fixed on the coordinate system
-    animation: false,
-    label: {
-      show: true,
-      position: 'top'
-    },
-    itemStyle: {
-      // color and borderColor default to use color from series
-      // color: 'auto'
-      // borderColor: 'auto'
-      borderWidth: 0
-    },
-    emphasis: {
-      label: {
-        show: true,
-        position: 'top'
-      }
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// TODO Better on polar
-var markAreaTransform = function (seriesModel, coordSys, maModel, item) {
-  var lt = dataTransform(seriesModel, item[0]);
-  var rb = dataTransform(seriesModel, item[1]);
-  var retrieve$$1 = retrieve; // FIXME make sure lt is less than rb
-
-  var ltCoord = lt.coord;
-  var rbCoord = rb.coord;
-  ltCoord[0] = retrieve$$1(ltCoord[0], -Infinity);
-  ltCoord[1] = retrieve$$1(ltCoord[1], -Infinity);
-  rbCoord[0] = retrieve$$1(rbCoord[0], Infinity);
-  rbCoord[1] = retrieve$$1(rbCoord[1], Infinity); // Merge option into one
-
-  var result = mergeAll([{}, lt, rb]);
-  result.coord = [lt.coord, rb.coord];
-  result.x0 = lt.x;
-  result.y0 = lt.y;
-  result.x1 = rb.x;
-  result.y1 = rb.y;
-  return result;
-};
-
-function isInifinity$1(val) {
-  return !isNaN(val) && !isFinite(val);
-} // If a markArea has one dim
-
-
-function ifMarkLineHasOnlyDim$1(dimIndex, fromCoord, toCoord, coordSys) {
-  var otherDimIndex = 1 - dimIndex;
-  return isInifinity$1(fromCoord[otherDimIndex]) && isInifinity$1(toCoord[otherDimIndex]);
-}
-
-function markAreaFilter(coordSys, item) {
-  var fromCoord = item.coord[0];
-  var toCoord = item.coord[1];
-
-  if (coordSys.type === 'cartesian2d') {
-    // In case
-    // {
-    //  markArea: {
-    //    data: [{ yAxis: 2 }]
-    //  }
-    // }
-    if (fromCoord && toCoord && (ifMarkLineHasOnlyDim$1(1, fromCoord, toCoord, coordSys) || ifMarkLineHasOnlyDim$1(0, fromCoord, toCoord, coordSys))) {
-      return true;
-    }
-  }
-
-  return dataFilter$1(coordSys, {
-    coord: fromCoord,
-    x: item.x0,
-    y: item.y0
-  }) || dataFilter$1(coordSys, {
-    coord: toCoord,
-    x: item.x1,
-    y: item.y1
-  });
-} // dims can be ['x0', 'y0'], ['x1', 'y1'], ['x0', 'y1'], ['x1', 'y0']
-
-
-function getSingleMarkerEndPoint(data, idx, dims, seriesModel, api) {
-  var coordSys = seriesModel.coordinateSystem;
-  var itemModel = data.getItemModel(idx);
-  var point;
-  var xPx = parsePercent$1(itemModel.get(dims[0]), api.getWidth());
-  var yPx = parsePercent$1(itemModel.get(dims[1]), api.getHeight());
-
-  if (!isNaN(xPx) && !isNaN(yPx)) {
-    point = [xPx, yPx];
-  } else {
-    // Chart like bar may have there own marker positioning logic
-    if (seriesModel.getMarkerPosition) {
-      // Use the getMarkerPoisition
-      point = seriesModel.getMarkerPosition(data.getValues(dims, idx));
-    } else {
-      var x = data.get(dims[0], idx);
-      var y = data.get(dims[1], idx);
-      var pt = [x, y];
-      coordSys.clampData && coordSys.clampData(pt, pt);
-      point = coordSys.dataToPoint(pt, true);
-    }
-
-    if (coordSys.type === 'cartesian2d') {
-      var xAxis = coordSys.getAxis('x');
-      var yAxis = coordSys.getAxis('y');
-      var x = data.get(dims[0], idx);
-      var y = data.get(dims[1], idx);
-
-      if (isInifinity$1(x)) {
-        point[0] = xAxis.toGlobalCoord(xAxis.getExtent()[dims[0] === 'x0' ? 0 : 1]);
-      } else if (isInifinity$1(y)) {
-        point[1] = yAxis.toGlobalCoord(yAxis.getExtent()[dims[1] === 'y0' ? 0 : 1]);
-      }
-    } // Use x, y if has any
-
-
-    if (!isNaN(xPx)) {
-      point[0] = xPx;
-    }
-
-    if (!isNaN(yPx)) {
-      point[1] = yPx;
-    }
-  }
-
-  return point;
-}
-
-var dimPermutations = [['x0', 'y0'], ['x1', 'y0'], ['x1', 'y1'], ['x0', 'y1']];
-MarkerView.extend({
-  type: 'markArea',
-  // updateLayout: function (markAreaModel, ecModel, api) {
-  //     ecModel.eachSeries(function (seriesModel) {
-  //         var maModel = seriesModel.markAreaModel;
-  //         if (maModel) {
-  //             var areaData = maModel.getData();
-  //             areaData.each(function (idx) {
-  //                 var points = zrUtil.map(dimPermutations, function (dim) {
-  //                     return getSingleMarkerEndPoint(areaData, idx, dim, seriesModel, api);
-  //                 });
-  //                 // Layout
-  //                 areaData.setItemLayout(idx, points);
-  //                 var el = areaData.getItemGraphicEl(idx);
-  //                 el.setShape('points', points);
-  //             });
-  //         }
-  //     }, this);
-  // },
-  updateTransform: function (markAreaModel, ecModel, api) {
-    ecModel.eachSeries(function (seriesModel) {
-      var maModel = seriesModel.markAreaModel;
-
-      if (maModel) {
-        var areaData = maModel.getData();
-        areaData.each(function (idx) {
-          var points = map(dimPermutations, function (dim) {
-            return getSingleMarkerEndPoint(areaData, idx, dim, seriesModel, api);
-          }); // Layout
-
-          areaData.setItemLayout(idx, points);
-          var el = areaData.getItemGraphicEl(idx);
-          el.setShape('points', points);
-        });
-      }
-    }, this);
-  },
-  renderSeries: function (seriesModel, maModel, ecModel, api) {
-    var coordSys = seriesModel.coordinateSystem;
-    var seriesId = seriesModel.id;
-    var seriesData = seriesModel.getData();
-    var areaGroupMap = this.markerGroupMap;
-    var polygonGroup = areaGroupMap.get(seriesId) || areaGroupMap.set(seriesId, {
-      group: new Group()
-    });
-    this.group.add(polygonGroup.group);
-    polygonGroup.__keep = true;
-    var areaData = createList$3(coordSys, seriesModel, maModel); // Line data for tooltip and formatter
-
-    maModel.setData(areaData); // Update visual and layout of line
-
-    areaData.each(function (idx) {
-      // Layout
-      areaData.setItemLayout(idx, map(dimPermutations, function (dim) {
-        return getSingleMarkerEndPoint(areaData, idx, dim, seriesModel, api);
-      })); // Visual
-
-      areaData.setItemVisual(idx, {
-        color: seriesData.getVisual('color')
-      });
-    });
-    areaData.diff(polygonGroup.__data).add(function (idx) {
-      var polygon = new Polygon({
-        shape: {
-          points: areaData.getItemLayout(idx)
-        }
-      });
-      areaData.setItemGraphicEl(idx, polygon);
-      polygonGroup.group.add(polygon);
-    }).update(function (newIdx, oldIdx) {
-      var polygon = polygonGroup.__data.getItemGraphicEl(oldIdx);
-
-      updateProps(polygon, {
-        shape: {
-          points: areaData.getItemLayout(newIdx)
-        }
-      }, maModel, newIdx);
-      polygonGroup.group.add(polygon);
-      areaData.setItemGraphicEl(newIdx, polygon);
-    }).remove(function (idx) {
-      var polygon = polygonGroup.__data.getItemGraphicEl(idx);
-
-      polygonGroup.group.remove(polygon);
-    }).execute();
-    areaData.eachItemGraphicEl(function (polygon, idx) {
-      var itemModel = areaData.getItemModel(idx);
-      var labelModel = itemModel.getModel('label');
-      var labelHoverModel = itemModel.getModel('emphasis.label');
-      var color = areaData.getItemVisual(idx, 'color');
-      polygon.useStyle(defaults(itemModel.getModel('itemStyle').getItemStyle(), {
-        fill: modifyAlpha(color, 0.4),
-        stroke: color
-      }));
-      polygon.hoverStyle = itemModel.getModel('emphasis.itemStyle').getItemStyle();
-      setLabelStyle(polygon.style, polygon.hoverStyle, labelModel, labelHoverModel, {
-        labelFetcher: maModel,
-        labelDataIndex: idx,
-        defaultText: areaData.getName(idx) || '',
-        isRectText: true,
-        autoColor: color
-      });
-      setHoverStyle(polygon, {});
-      polygon.dataModel = maModel;
-    });
-    polygonGroup.__data = areaData;
-    polygonGroup.group.silent = maModel.get('silent') || seriesModel.get('silent');
-  }
-});
-/**
- * @inner
- * @param {module:echarts/coord/*} coordSys
- * @param {module:echarts/model/Series} seriesModel
- * @param {module:echarts/model/Model} mpModel
- */
-
-function createList$3(coordSys, seriesModel, maModel) {
-  var coordDimsInfos;
-  var areaData;
-  var dims = ['x0', 'y0', 'x1', 'y1'];
-
-  if (coordSys) {
-    coordDimsInfos = map(coordSys && coordSys.dimensions, function (coordDim) {
-      var data = seriesModel.getData();
-      var info = data.getDimensionInfo(data.mapDimension(coordDim)) || {}; // In map series data don't have lng and lat dimension. Fallback to same with coordSys
-
-      return defaults({
-        name: coordDim
-      }, info);
-    });
-    areaData = new List(map(dims, function (dim, idx) {
-      return {
-        name: dim,
-        type: coordDimsInfos[idx % 2].type
-      };
-    }), maModel);
-  } else {
-    coordDimsInfos = [{
-      name: 'value',
-      type: 'float'
-    }];
-    areaData = new List(coordDimsInfos, maModel);
-  }
-
-  var optData = map(maModel.get('data'), curry(markAreaTransform, seriesModel, coordSys, maModel));
-
-  if (coordSys) {
-    optData = filter(optData, curry(markAreaFilter, coordSys));
-  }
-
-  var dimValueGetter$$1 = coordSys ? function (item, dimName, dataIndex, dimIndex) {
-    return item.coord[Math.floor(dimIndex / 2)][dimIndex % 2];
-  } : function (item) {
-    return item.value;
-  };
-  areaData.initData(optData, null, dimValueGetter$$1);
-  areaData.hasItemOption = true;
-  return areaData;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerPreprocessor(function (opt) {
-  // Make sure markArea component is enabled
-  opt.markArea = opt.markArea || {};
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
+var each$11 = each$1;
 var preprocessor = function (option) {
-  var timelineOpt = option && option.timeline;
+  var visualMap = option && option.visualMap;
 
-  if (!isArray(timelineOpt)) {
-    timelineOpt = timelineOpt ? [timelineOpt] : [];
+  if (!isArray(visualMap)) {
+    visualMap = visualMap ? [visualMap] : [];
   }
 
-  each$1(timelineOpt, function (opt) {
+  each$11(visualMap, function (opt) {
     if (!opt) {
       return;
+    } // rename splitList to pieces
+
+
+    if (has$1(opt, 'splitList') && !has$1(opt, 'pieces')) {
+      opt.pieces = opt.splitList;
+      delete opt.splitList;
     }
 
-    compatibleEC2(opt);
-  });
-};
-
-function compatibleEC2(opt) {
-  var type = opt.type;
-  var ec2Types = {
-    'number': 'value',
-    'time': 'time'
-  }; // Compatible with ec2
-
-  if (ec2Types[type]) {
-    opt.axisType = ec2Types[type];
-    delete opt.type;
-  }
-
-  transferItem(opt);
-
-  if (has$1(opt, 'controlPosition')) {
-    var controlStyle = opt.controlStyle || (opt.controlStyle = {});
-
-    if (!has$1(controlStyle, 'position')) {
-      controlStyle.position = opt.controlPosition;
-    }
-
-    if (controlStyle.position === 'none' && !has$1(controlStyle, 'show')) {
-      controlStyle.show = false;
-      delete controlStyle.position;
-    }
-
-    delete opt.controlPosition;
-  }
-
-  each$1(opt.data || [], function (dataItem) {
-    if (isObject$1(dataItem) && !isArray(dataItem)) {
-      if (!has$1(dataItem, 'value') && has$1(dataItem, 'name')) {
-        // In ec2, using name as value.
-        dataItem.value = dataItem.name;
-      }
-
-      transferItem(dataItem);
-    }
-  });
-}
-
-function transferItem(opt) {
-  var itemStyle = opt.itemStyle || (opt.itemStyle = {});
-  var itemStyleEmphasis = itemStyle.emphasis || (itemStyle.emphasis = {}); // Transfer label out
-
-  var label = opt.label || opt.label || {};
-  var labelNormal = label.normal || (label.normal = {});
-  var excludeLabelAttr = {
-    normal: 1,
-    emphasis: 1
-  };
-  each$1(label, function (value, name) {
-    if (!excludeLabelAttr[name] && !has$1(labelNormal, name)) {
-      labelNormal[name] = value;
-    }
-  });
-
-  if (itemStyleEmphasis.label && !has$1(label, 'emphasis')) {
-    label.emphasis = itemStyleEmphasis.label;
-    delete itemStyleEmphasis.label;
-  }
-}
-
-function has$1(obj, attr) {
-  return obj.hasOwnProperty(attr);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-ComponentModel.registerSubTypeDefaulter('timeline', function () {
-  // Only slider now.
-  return 'slider';
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerAction({
-  type: 'timelineChange',
-  event: 'timelineChanged',
-  update: 'prepareAndUpdate'
-}, function (payload, ecModel) {
-  var timelineModel = ecModel.getComponent('timeline');
-
-  if (timelineModel && payload.currentIndex != null) {
-    timelineModel.setCurrentIndex(payload.currentIndex);
-
-    if (!timelineModel.get('loop', true) && timelineModel.isIndexMax()) {
-      timelineModel.setPlayState(false);
-    }
-  } // Set normalized currentIndex to payload.
-
-
-  ecModel.resetOption('timeline');
-  return defaults({
-    currentIndex: timelineModel.option.currentIndex
-  }, payload);
-});
-registerAction({
-  type: 'timelinePlayChange',
-  event: 'timelinePlayChanged',
-  update: 'update'
-}, function (payload, ecModel) {
-  var timelineModel = ecModel.getComponent('timeline');
-
-  if (timelineModel && payload.playState != null) {
-    timelineModel.setPlayState(payload.playState);
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var TimelineModel = ComponentModel.extend({
-  type: 'timeline',
-  layoutMode: 'box',
-
-  /**
-   * @protected
-   */
-  defaultOption: {
-    zlevel: 0,
-    // 一级层叠
-    z: 4,
-    // 二级层叠
-    show: true,
-    axisType: 'time',
-    // 模式是时间类型，支持 value, category
-    realtime: true,
-    left: '20%',
-    top: null,
-    right: '20%',
-    bottom: 0,
-    width: null,
-    height: 40,
-    padding: 5,
-    controlPosition: 'left',
-    // 'left' 'right' 'top' 'bottom' 'none'
-    autoPlay: false,
-    rewind: false,
-    // 反向播放
-    loop: true,
-    playInterval: 2000,
-    // 播放时间间隔，单位ms
-    currentIndex: 0,
-    itemStyle: {},
-    label: {
-      color: '#000'
-    },
-    data: []
-  },
-
-  /**
-   * @override
-   */
-  init: function (option, parentModel, ecModel) {
-    /**
-     * @private
-     * @type {module:echarts/data/List}
-     */
-    this._data;
-    /**
-     * @private
-     * @type {Array.<string>}
-     */
-
-    this._names;
-    this.mergeDefaultAndTheme(option, ecModel);
-
-    this._initData();
-  },
-
-  /**
-   * @override
-   */
-  mergeOption: function (option) {
-    TimelineModel.superApply(this, 'mergeOption', arguments);
-
-    this._initData();
-  },
-
-  /**
-   * @param {number} [currentIndex]
-   */
-  setCurrentIndex: function (currentIndex) {
-    if (currentIndex == null) {
-      currentIndex = this.option.currentIndex;
-    }
-
-    var count = this._data.count();
-
-    if (this.option.loop) {
-      currentIndex = (currentIndex % count + count) % count;
-    } else {
-      currentIndex >= count && (currentIndex = count - 1);
-      currentIndex < 0 && (currentIndex = 0);
-    }
-
-    this.option.currentIndex = currentIndex;
-  },
-
-  /**
-   * @return {number} currentIndex
-   */
-  getCurrentIndex: function () {
-    return this.option.currentIndex;
-  },
-
-  /**
-   * @return {boolean}
-   */
-  isIndexMax: function () {
-    return this.getCurrentIndex() >= this._data.count() - 1;
-  },
-
-  /**
-   * @param {boolean} state true: play, false: stop
-   */
-  setPlayState: function (state) {
-    this.option.autoPlay = !!state;
-  },
-
-  /**
-   * @return {boolean} true: play, false: stop
-   */
-  getPlayState: function () {
-    return !!this.option.autoPlay;
-  },
-
-  /**
-   * @private
-   */
-  _initData: function () {
-    var thisOption = this.option;
-    var dataArr = thisOption.data || [];
-    var axisType = thisOption.axisType;
-    var names = this._names = [];
-
-    if (axisType === 'category') {
-      var idxArr = [];
-      each$1(dataArr, function (item, index) {
-        var value = getDataItemValue(item);
-        var newItem;
-
-        if (isObject$1(item)) {
-          newItem = clone(item);
-          newItem.value = index;
-        } else {
-          newItem = index;
-        }
-
-        idxArr.push(newItem);
-
-        if (!isString(value) && (value == null || isNaN(value))) {
-          value = '';
-        }
-
-        names.push(value + '');
-      });
-      dataArr = idxArr;
-    }
-
-    var dimType = {
-      category: 'ordinal',
-      time: 'time'
-    }[axisType] || 'number';
-    var data = this._data = new List([{
-      name: 'value',
-      type: dimType
-    }], this);
-    data.initData(dataArr, names);
-  },
-  getData: function () {
-    return this._data;
-  },
-
-  /**
-   * @public
-   * @return {Array.<string>} categoreis
-   */
-  getCategories: function () {
-    if (this.get('axisType') === 'category') {
-      return this._names.slice();
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var SliderTimelineModel = TimelineModel.extend({
-  type: 'timeline.slider',
-
-  /**
-   * @protected
-   */
-  defaultOption: {
-    backgroundColor: 'rgba(0,0,0,0)',
-    // 时间轴背景颜色
-    borderColor: '#ccc',
-    // 时间轴边框颜色
-    borderWidth: 0,
-    // 时间轴边框线宽，单位px，默认为0（无边框）
-    orient: 'horizontal',
-    // 'vertical'
-    inverse: false,
-    tooltip: {
-      // boolean or Object
-      trigger: 'item' // data item may also have tootip attr.
-
-    },
-    symbol: 'emptyCircle',
-    symbolSize: 10,
-    lineStyle: {
-      show: true,
-      width: 2,
-      color: '#304654'
-    },
-    label: {
-      // 文本标签
-      position: 'auto',
-      // auto left right top bottom
-      // When using number, label position is not
-      // restricted by viewRect.
-      // positive: right/bottom, negative: left/top
-      show: true,
-      interval: 'auto',
-      rotate: 0,
-      // formatter: null,
-      // 其余属性默认使用全局文本样式，详见TEXTSTYLE
-      color: '#304654'
-    },
-    itemStyle: {
-      color: '#304654',
-      borderWidth: 1
-    },
-    checkpointStyle: {
-      symbol: 'circle',
-      symbolSize: 13,
-      color: '#c23531',
-      borderWidth: 5,
-      borderColor: 'rgba(194,53,49, 0.5)',
-      animation: true,
-      animationDuration: 300,
-      animationEasing: 'quinticInOut'
-    },
-    controlStyle: {
-      show: true,
-      showPlayBtn: true,
-      showPrevBtn: true,
-      showNextBtn: true,
-      itemSize: 22,
-      itemGap: 12,
-      position: 'left',
-      // 'left' 'right' 'top' 'bottom'
-      playIcon: 'path://M31.6,53C17.5,53,6,41.5,6,27.4S17.5,1.8,31.6,1.8C45.7,1.8,57.2,13.3,57.2,27.4S45.7,53,31.6,53z M31.6,3.3 C18.4,3.3,7.5,14.1,7.5,27.4c0,13.3,10.8,24.1,24.1,24.1C44.9,51.5,55.7,40.7,55.7,27.4C55.7,14.1,44.9,3.3,31.6,3.3z M24.9,21.3 c0-2.2,1.6-3.1,3.5-2l10.5,6.1c1.899,1.1,1.899,2.9,0,4l-10.5,6.1c-1.9,1.1-3.5,0.2-3.5-2V21.3z',
-      // jshint ignore:line
-      stopIcon: 'path://M30.9,53.2C16.8,53.2,5.3,41.7,5.3,27.6S16.8,2,30.9,2C45,2,56.4,13.5,56.4,27.6S45,53.2,30.9,53.2z M30.9,3.5C17.6,3.5,6.8,14.4,6.8,27.6c0,13.3,10.8,24.1,24.101,24.1C44.2,51.7,55,40.9,55,27.6C54.9,14.4,44.1,3.5,30.9,3.5z M36.9,35.8c0,0.601-0.4,1-0.9,1h-1.3c-0.5,0-0.9-0.399-0.9-1V19.5c0-0.6,0.4-1,0.9-1H36c0.5,0,0.9,0.4,0.9,1V35.8z M27.8,35.8 c0,0.601-0.4,1-0.9,1h-1.3c-0.5,0-0.9-0.399-0.9-1V19.5c0-0.6,0.4-1,0.9-1H27c0.5,0,0.9,0.4,0.9,1L27.8,35.8L27.8,35.8z',
-      // jshint ignore:line
-      nextIcon: 'path://M18.6,50.8l22.5-22.5c0.2-0.2,0.3-0.4,0.3-0.7c0-0.3-0.1-0.5-0.3-0.7L18.7,4.4c-0.1-0.1-0.2-0.3-0.2-0.5 c0-0.4,0.3-0.8,0.8-0.8c0.2,0,0.5,0.1,0.6,0.3l23.5,23.5l0,0c0.2,0.2,0.3,0.4,0.3,0.7c0,0.3-0.1,0.5-0.3,0.7l-0.1,0.1L19.7,52 c-0.1,0.1-0.3,0.2-0.5,0.2c-0.4,0-0.8-0.3-0.8-0.8C18.4,51.2,18.5,51,18.6,50.8z',
-      // jshint ignore:line
-      prevIcon: 'path://M43,52.8L20.4,30.3c-0.2-0.2-0.3-0.4-0.3-0.7c0-0.3,0.1-0.5,0.3-0.7L42.9,6.4c0.1-0.1,0.2-0.3,0.2-0.5 c0-0.4-0.3-0.8-0.8-0.8c-0.2,0-0.5,0.1-0.6,0.3L18.3,28.8l0,0c-0.2,0.2-0.3,0.4-0.3,0.7c0,0.3,0.1,0.5,0.3,0.7l0.1,0.1L41.9,54 c0.1,0.1,0.3,0.2,0.5,0.2c0.4,0,0.8-0.3,0.8-0.8C43.2,53.2,43.1,53,43,52.8z',
-      // jshint ignore:line
-      color: '#304654',
-      borderColor: '#304654',
-      borderWidth: 1
-    },
-    emphasis: {
-      label: {
-        show: true,
-        // 其余属性默认使用全局文本样式，详见TEXTSTYLE
-        color: '#c23531'
-      },
-      itemStyle: {
-        color: '#c23531'
-      },
-      controlStyle: {
-        color: '#c23531',
-        borderColor: '#c23531',
-        borderWidth: 2
-      }
-    },
-    data: []
-  }
-});
-mixin(SliderTimelineModel, dataFormatMixin);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var TimelineView = Component$1.extend({
-  type: 'timeline'
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * Extend axis 2d
- * @constructor module:echarts/coord/cartesian/Axis2D
- * @extends {module:echarts/coord/cartesian/Axis}
- * @param {string} dim
- * @param {*} scale
- * @param {Array.<number>} coordExtent
- * @param {string} axisType
- * @param {string} position
- */
-
-var TimelineAxis = function (dim, scale, coordExtent, axisType) {
-  Axis.call(this, dim, scale, coordExtent);
-  /**
-   * Axis type
-   *  - 'category'
-   *  - 'value'
-   *  - 'time'
-   *  - 'log'
-   * @type {string}
-   */
-
-  this.type = axisType || 'value';
-  /**
-   * Axis model
-   * @param {module:echarts/component/TimelineModel}
-   */
-
-  this.model = null;
-};
-
-TimelineAxis.prototype = {
-  constructor: TimelineAxis,
-
-  /**
-   * @override
-   */
-  getLabelModel: function () {
-    return this.model.getModel('label');
-  },
-
-  /**
-   * @override
-   */
-  isHorizontal: function () {
-    return this.model.get('orient') === 'horizontal';
-  }
-};
-inherits(TimelineAxis, Axis);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var bind$3 = bind;
-var each$12 = each$1;
-var PI$3 = Math.PI;
-TimelineView.extend({
-  type: 'timeline.slider',
-  init: function (ecModel, api) {
-    this.api = api;
-    /**
-     * @private
-     * @type {module:echarts/component/timeline/TimelineAxis}
-     */
-
-    this._axis;
-    /**
-     * @private
-     * @type {module:zrender/core/BoundingRect}
-     */
-
-    this._viewRect;
-    /**
-     * @type {number}
-     */
-
-    this._timer;
-    /**
-     * @type {module:zrender/Element}
-     */
-
-    this._currentPointer;
-    /**
-     * @type {module:zrender/container/Group}
-     */
-
-    this._mainGroup;
-    /**
-     * @type {module:zrender/container/Group}
-     */
-
-    this._labelGroup;
-  },
-
-  /**
-   * @override
-   */
-  render: function (timelineModel, ecModel, api, payload) {
-    this.model = timelineModel;
-    this.api = api;
-    this.ecModel = ecModel;
-    this.group.removeAll();
-
-    if (timelineModel.get('show', true)) {
-      var layoutInfo = this._layout(timelineModel, api);
-
-      var mainGroup = this._createGroup('mainGroup');
-
-      var labelGroup = this._createGroup('labelGroup');
-      /**
-       * @private
-       * @type {module:echarts/component/timeline/TimelineAxis}
-       */
-
-
-      var axis = this._axis = this._createAxis(layoutInfo, timelineModel);
-
-      timelineModel.formatTooltip = function (dataIndex) {
-        return encodeHTML(axis.scale.getLabel(dataIndex));
-      };
-
-      each$12(['AxisLine', 'AxisTick', 'Control', 'CurrentPointer'], function (name) {
-        this['_render' + name](layoutInfo, mainGroup, axis, timelineModel);
-      }, this);
-
-      this._renderAxisLabel(layoutInfo, labelGroup, axis, timelineModel);
-
-      this._position(layoutInfo, timelineModel);
-    }
-
-    this._doPlayStop();
-  },
-
-  /**
-   * @override
-   */
-  remove: function () {
-    this._clearTimer();
-
-    this.group.removeAll();
-  },
-
-  /**
-   * @override
-   */
-  dispose: function () {
-    this._clearTimer();
-  },
-  _layout: function (timelineModel, api) {
-    var labelPosOpt = timelineModel.get('label.position');
-    var orient = timelineModel.get('orient');
-    var viewRect = getViewRect(timelineModel, api); // Auto label offset.
-
-    if (labelPosOpt == null || labelPosOpt === 'auto') {
-      labelPosOpt = orient === 'horizontal' ? viewRect.y + viewRect.height / 2 < api.getHeight() / 2 ? '-' : '+' : viewRect.x + viewRect.width / 2 < api.getWidth() / 2 ? '+' : '-';
-    } else if (isNaN(labelPosOpt)) {
-      labelPosOpt = {
-        horizontal: {
-          top: '-',
-          bottom: '+'
-        },
-        vertical: {
-          left: '-',
-          right: '+'
-        }
-      }[orient][labelPosOpt];
-    }
-
-    var labelAlignMap = {
-      horizontal: 'center',
-      vertical: labelPosOpt >= 0 || labelPosOpt === '+' ? 'left' : 'right'
-    };
-    var labelBaselineMap = {
-      horizontal: labelPosOpt >= 0 || labelPosOpt === '+' ? 'top' : 'bottom',
-      vertical: 'middle'
-    };
-    var rotationMap = {
-      horizontal: 0,
-      vertical: PI$3 / 2
-    }; // Position
-
-    var mainLength = orient === 'vertical' ? viewRect.height : viewRect.width;
-    var controlModel = timelineModel.getModel('controlStyle');
-    var showControl = controlModel.get('show', true);
-    var controlSize = showControl ? controlModel.get('itemSize') : 0;
-    var controlGap = showControl ? controlModel.get('itemGap') : 0;
-    var sizePlusGap = controlSize + controlGap; // Special label rotate.
-
-    var labelRotation = timelineModel.get('label.rotate') || 0;
-    labelRotation = labelRotation * PI$3 / 180; // To radian.
-
-    var playPosition;
-    var prevBtnPosition;
-    var nextBtnPosition;
-    var axisExtent;
-    var controlPosition = controlModel.get('position', true);
-    var showPlayBtn = showControl && controlModel.get('showPlayBtn', true);
-    var showPrevBtn = showControl && controlModel.get('showPrevBtn', true);
-    var showNextBtn = showControl && controlModel.get('showNextBtn', true);
-    var xLeft = 0;
-    var xRight = mainLength; // position[0] means left, position[1] means middle.
-
-    if (controlPosition === 'left' || controlPosition === 'bottom') {
-      showPlayBtn && (playPosition = [0, 0], xLeft += sizePlusGap);
-      showPrevBtn && (prevBtnPosition = [xLeft, 0], xLeft += sizePlusGap);
-      showNextBtn && (nextBtnPosition = [xRight - controlSize, 0], xRight -= sizePlusGap);
-    } else {
-      // 'top' 'right'
-      showPlayBtn && (playPosition = [xRight - controlSize, 0], xRight -= sizePlusGap);
-      showPrevBtn && (prevBtnPosition = [0, 0], xLeft += sizePlusGap);
-      showNextBtn && (nextBtnPosition = [xRight - controlSize, 0], xRight -= sizePlusGap);
-    }
-
-    axisExtent = [xLeft, xRight];
-
-    if (timelineModel.get('inverse')) {
-      axisExtent.reverse();
-    }
-
-    return {
-      viewRect: viewRect,
-      mainLength: mainLength,
-      orient: orient,
-      rotation: rotationMap[orient],
-      labelRotation: labelRotation,
-      labelPosOpt: labelPosOpt,
-      labelAlign: timelineModel.get('label.align') || labelAlignMap[orient],
-      labelBaseline: timelineModel.get('label.verticalAlign') || timelineModel.get('label.baseline') || labelBaselineMap[orient],
-      // Based on mainGroup.
-      playPosition: playPosition,
-      prevBtnPosition: prevBtnPosition,
-      nextBtnPosition: nextBtnPosition,
-      axisExtent: axisExtent,
-      controlSize: controlSize,
-      controlGap: controlGap
-    };
-  },
-  _position: function (layoutInfo, timelineModel) {
-    // Position is be called finally, because bounding rect is needed for
-    // adapt content to fill viewRect (auto adapt offset).
-    // Timeline may be not all in the viewRect when 'offset' is specified
-    // as a number, because it is more appropriate that label aligns at
-    // 'offset' but not the other edge defined by viewRect.
-    var mainGroup = this._mainGroup;
-    var labelGroup = this._labelGroup;
-    var viewRect = layoutInfo.viewRect;
-
-    if (layoutInfo.orient === 'vertical') {
-      // transform to horizontal, inverse rotate by left-top point.
-      var m = create$1();
-      var rotateOriginX = viewRect.x;
-      var rotateOriginY = viewRect.y + viewRect.height;
-      translate(m, m, [-rotateOriginX, -rotateOriginY]);
-      rotate(m, m, -PI$3 / 2);
-      translate(m, m, [rotateOriginX, rotateOriginY]);
-      viewRect = viewRect.clone();
-      viewRect.applyTransform(m);
-    }
-
-    var viewBound = getBound(viewRect);
-    var mainBound = getBound(mainGroup.getBoundingRect());
-    var labelBound = getBound(labelGroup.getBoundingRect());
-    var mainPosition = mainGroup.position;
-    var labelsPosition = labelGroup.position;
-    labelsPosition[0] = mainPosition[0] = viewBound[0][0];
-    var labelPosOpt = layoutInfo.labelPosOpt;
-
-    if (isNaN(labelPosOpt)) {
-      // '+' or '-'
-      var mainBoundIdx = labelPosOpt === '+' ? 0 : 1;
-      toBound(mainPosition, mainBound, viewBound, 1, mainBoundIdx);
-      toBound(labelsPosition, labelBound, viewBound, 1, 1 - mainBoundIdx);
-    } else {
-      var mainBoundIdx = labelPosOpt >= 0 ? 0 : 1;
-      toBound(mainPosition, mainBound, viewBound, 1, mainBoundIdx);
-      labelsPosition[1] = mainPosition[1] + labelPosOpt;
-    }
-
-    mainGroup.attr('position', mainPosition);
-    labelGroup.attr('position', labelsPosition);
-    mainGroup.rotation = labelGroup.rotation = layoutInfo.rotation;
-    setOrigin(mainGroup);
-    setOrigin(labelGroup);
-
-    function setOrigin(targetGroup) {
-      var pos = targetGroup.position;
-      targetGroup.origin = [viewBound[0][0] - pos[0], viewBound[1][0] - pos[1]];
-    }
-
-    function getBound(rect) {
-      // [[xmin, xmax], [ymin, ymax]]
-      return [[rect.x, rect.x + rect.width], [rect.y, rect.y + rect.height]];
-    }
-
-    function toBound(fromPos, from, to, dimIdx, boundIdx) {
-      fromPos[dimIdx] += to[dimIdx][boundIdx] - from[dimIdx][boundIdx];
-    }
-  },
-  _createAxis: function (layoutInfo, timelineModel) {
-    var data = timelineModel.getData();
-    var axisType = timelineModel.get('axisType');
-    var scale = createScaleByModel(timelineModel, axisType); // Customize scale. The `tickValue` is `dataIndex`.
-
-    scale.getTicks = function () {
-      return data.mapArray(['value'], function (value) {
-        return value;
-      });
-    };
-
-    var dataExtent = data.getDataExtent('value');
-    scale.setExtent(dataExtent[0], dataExtent[1]);
-    scale.niceTicks();
-    var axis = new TimelineAxis('value', scale, layoutInfo.axisExtent, axisType);
-    axis.model = timelineModel;
-    return axis;
-  },
-  _createGroup: function (name) {
-    var newGroup = this['_' + name] = new Group();
-    this.group.add(newGroup);
-    return newGroup;
-  },
-  _renderAxisLine: function (layoutInfo, group, axis, timelineModel) {
-    var axisExtent = axis.getExtent();
-
-    if (!timelineModel.get('lineStyle.show')) {
-      return;
-    }
-
-    group.add(new Line({
-      shape: {
-        x1: axisExtent[0],
-        y1: 0,
-        x2: axisExtent[1],
-        y2: 0
-      },
-      style: extend({
-        lineCap: 'round'
-      }, timelineModel.getModel('lineStyle').getLineStyle()),
-      silent: true,
-      z2: 1
-    }));
-  },
-
-  /**
-   * @private
-   */
-  _renderAxisTick: function (layoutInfo, group, axis, timelineModel) {
-    var data = timelineModel.getData(); // Show all ticks, despite ignoring strategy.
-
-    var ticks = axis.scale.getTicks(); // The value is dataIndex, see the costomized scale.
-
-    each$12(ticks, function (value) {
-      var tickCoord = axis.dataToCoord(value);
-      var itemModel = data.getItemModel(value);
-      var itemStyleModel = itemModel.getModel('itemStyle');
-      var hoverStyleModel = itemModel.getModel('emphasis.itemStyle');
-      var symbolOpt = {
-        position: [tickCoord, 0],
-        onclick: bind$3(this._changeTimeline, this, value)
-      };
-      var el = giveSymbol(itemModel, itemStyleModel, group, symbolOpt);
-      setHoverStyle(el, hoverStyleModel.getItemStyle());
-
-      if (itemModel.get('tooltip')) {
-        el.dataIndex = value;
-        el.dataModel = timelineModel;
-      } else {
-        el.dataIndex = el.dataModel = null;
-      }
-    }, this);
-  },
-
-  /**
-   * @private
-   */
-  _renderAxisLabel: function (layoutInfo, group, axis, timelineModel) {
-    var labelModel = axis.getLabelModel();
-
-    if (!labelModel.get('show')) {
-      return;
-    }
-
-    var data = timelineModel.getData();
-    var labels = axis.getViewLabels();
-    each$12(labels, function (labelItem) {
-      // The tickValue is dataIndex, see the costomized scale.
-      var dataIndex = labelItem.tickValue;
-      var itemModel = data.getItemModel(dataIndex);
-      var normalLabelModel = itemModel.getModel('label');
-      var hoverLabelModel = itemModel.getModel('emphasis.label');
-      var tickCoord = axis.dataToCoord(labelItem.tickValue);
-      var textEl = new Text({
-        position: [tickCoord, 0],
-        rotation: layoutInfo.labelRotation - layoutInfo.rotation,
-        onclick: bind$3(this._changeTimeline, this, dataIndex),
-        silent: false
-      });
-      setTextStyle(textEl.style, normalLabelModel, {
-        text: labelItem.formattedLabel,
-        textAlign: layoutInfo.labelAlign,
-        textVerticalAlign: layoutInfo.labelBaseline
-      });
-      group.add(textEl);
-      setHoverStyle(textEl, setTextStyle({}, hoverLabelModel));
-    }, this);
-  },
-
-  /**
-   * @private
-   */
-  _renderControl: function (layoutInfo, group, axis, timelineModel) {
-    var controlSize = layoutInfo.controlSize;
-    var rotation = layoutInfo.rotation;
-    var itemStyle = timelineModel.getModel('controlStyle').getItemStyle();
-    var hoverStyle = timelineModel.getModel('emphasis.controlStyle').getItemStyle();
-    var rect = [0, -controlSize / 2, controlSize, controlSize];
-    var playState = timelineModel.getPlayState();
-    var inverse = timelineModel.get('inverse', true);
-    makeBtn(layoutInfo.nextBtnPosition, 'controlStyle.nextIcon', bind$3(this._changeTimeline, this, inverse ? '-' : '+'));
-    makeBtn(layoutInfo.prevBtnPosition, 'controlStyle.prevIcon', bind$3(this._changeTimeline, this, inverse ? '+' : '-'));
-    makeBtn(layoutInfo.playPosition, 'controlStyle.' + (playState ? 'stopIcon' : 'playIcon'), bind$3(this._handlePlayClick, this, !playState), true);
-
-    function makeBtn(position, iconPath, onclick, willRotate) {
-      if (!position) {
-        return;
-      }
-
-      var opt = {
-        position: position,
-        origin: [controlSize / 2, 0],
-        rotation: willRotate ? -rotation : 0,
-        rectHover: true,
-        style: itemStyle,
-        onclick: onclick
-      };
-      var btn = makeIcon(timelineModel, iconPath, rect, opt);
-      group.add(btn);
-      setHoverStyle(btn, hoverStyle);
-    }
-  },
-  _renderCurrentPointer: function (layoutInfo, group, axis, timelineModel) {
-    var data = timelineModel.getData();
-    var currentIndex = timelineModel.getCurrentIndex();
-    var pointerModel = data.getItemModel(currentIndex).getModel('checkpointStyle');
-    var me = this;
-    var callback = {
-      onCreate: function (pointer) {
-        pointer.draggable = true;
-        pointer.drift = bind$3(me._handlePointerDrag, me);
-        pointer.ondragend = bind$3(me._handlePointerDragend, me);
-        pointerMoveTo(pointer, currentIndex, axis, timelineModel, true);
-      },
-      onUpdate: function (pointer) {
-        pointerMoveTo(pointer, currentIndex, axis, timelineModel);
-      }
-    }; // Reuse when exists, for animation and drag.
-
-    this._currentPointer = giveSymbol(pointerModel, pointerModel, this._mainGroup, {}, this._currentPointer, callback);
-  },
-  _handlePlayClick: function (nextState) {
-    this._clearTimer();
-
-    this.api.dispatchAction({
-      type: 'timelinePlayChange',
-      playState: nextState,
-      from: this.uid
-    });
-  },
-  _handlePointerDrag: function (dx, dy, e) {
-    this._clearTimer();
-
-    this._pointerChangeTimeline([e.offsetX, e.offsetY]);
-  },
-  _handlePointerDragend: function (e) {
-    this._pointerChangeTimeline([e.offsetX, e.offsetY], true);
-  },
-  _pointerChangeTimeline: function (mousePos, trigger) {
-    var toCoord = this._toAxisCoord(mousePos)[0];
-
-    var axis = this._axis;
-    var axisExtent = asc(axis.getExtent().slice());
-    toCoord > axisExtent[1] && (toCoord = axisExtent[1]);
-    toCoord < axisExtent[0] && (toCoord = axisExtent[0]);
-    this._currentPointer.position[0] = toCoord;
-
-    this._currentPointer.dirty();
-
-    var targetDataIndex = this._findNearestTick(toCoord);
-
-    var timelineModel = this.model;
-
-    if (trigger || targetDataIndex !== timelineModel.getCurrentIndex() && timelineModel.get('realtime')) {
-      this._changeTimeline(targetDataIndex);
-    }
-  },
-  _doPlayStop: function () {
-    this._clearTimer();
-
-    if (this.model.getPlayState()) {
-      this._timer = setTimeout(bind$3(handleFrame, this), this.model.get('playInterval'));
-    }
-
-    function handleFrame() {
-      // Do not cache
-      var timelineModel = this.model;
-
-      this._changeTimeline(timelineModel.getCurrentIndex() + (timelineModel.get('rewind', true) ? -1 : 1));
-    }
-  },
-  _toAxisCoord: function (vertex) {
-    var trans = this._mainGroup.getLocalTransform();
-
-    return applyTransform$1(vertex, trans, true);
-  },
-  _findNearestTick: function (axisCoord) {
-    var data = this.model.getData();
-    var dist = Infinity;
-    var targetDataIndex;
-    var axis = this._axis;
-    data.each(['value'], function (value, dataIndex) {
-      var coord = axis.dataToCoord(value);
-      var d = Math.abs(coord - axisCoord);
-
-      if (d < dist) {
-        dist = d;
-        targetDataIndex = dataIndex;
-      }
-    });
-    return targetDataIndex;
-  },
-  _clearTimer: function () {
-    if (this._timer) {
-      clearTimeout(this._timer);
-      this._timer = null;
-    }
-  },
-  _changeTimeline: function (nextIndex) {
-    var currentIndex = this.model.getCurrentIndex();
-
-    if (nextIndex === '+') {
-      nextIndex = currentIndex + 1;
-    } else if (nextIndex === '-') {
-      nextIndex = currentIndex - 1;
-    }
-
-    this.api.dispatchAction({
-      type: 'timelineChange',
-      currentIndex: nextIndex,
-      from: this.uid
-    });
-  }
-});
-
-function getViewRect(model, api) {
-  return getLayoutRect(model.getBoxLayoutParams(), {
-    width: api.getWidth(),
-    height: api.getHeight()
-  }, model.get('padding'));
-}
-
-function makeIcon(timelineModel, objPath, rect, opts) {
-  var icon = makePath(timelineModel.get(objPath).replace(/^path:\/\//, ''), clone(opts || {}), new BoundingRect(rect[0], rect[1], rect[2], rect[3]), 'center');
-  return icon;
-}
-/**
- * Create symbol or update symbol
- * opt: basic position and event handlers
- */
-
-
-function giveSymbol(hostModel, itemStyleModel, group, opt, symbol, callback) {
-  var color = itemStyleModel.get('color');
-
-  if (!symbol) {
-    var symbolType = hostModel.get('symbol');
-    symbol = createSymbol(symbolType, -1, -1, 2, 2, color);
-    symbol.setStyle('strokeNoScale', true);
-    group.add(symbol);
-    callback && callback.onCreate(symbol);
-  } else {
-    symbol.setColor(color);
-    group.add(symbol); // Group may be new, also need to add.
-
-    callback && callback.onUpdate(symbol);
-  } // Style
-
-
-  var itemStyle = itemStyleModel.getItemStyle(['color', 'symbol', 'symbolSize']);
-  symbol.setStyle(itemStyle); // Transform and events.
-
-  opt = merge({
-    rectHover: true,
-    z2: 100
-  }, opt, true);
-  var symbolSize = hostModel.get('symbolSize');
-  symbolSize = symbolSize instanceof Array ? symbolSize.slice() : [+symbolSize, +symbolSize];
-  symbolSize[0] /= 2;
-  symbolSize[1] /= 2;
-  opt.scale = symbolSize;
-  var symbolOffset = hostModel.get('symbolOffset');
-
-  if (symbolOffset) {
-    var pos = opt.position = opt.position || [0, 0];
-    pos[0] += parsePercent$1(symbolOffset[0], symbolSize[0]);
-    pos[1] += parsePercent$1(symbolOffset[1], symbolSize[1]);
-  }
-
-  var symbolRotate = hostModel.get('symbolRotate');
-  opt.rotation = (symbolRotate || 0) * Math.PI / 180 || 0;
-  symbol.attr(opt); // FIXME
-  // (1) When symbol.style.strokeNoScale is true and updateTransform is not performed,
-  // getBoundingRect will return wrong result.
-  // (This is supposed to be resolved in zrender, but it is a little difficult to
-  // leverage performance and auto updateTransform)
-  // (2) All of ancesters of symbol do not scale, so we can just updateTransform symbol.
-
-  symbol.updateTransform();
-  return symbol;
-}
-
-function pointerMoveTo(pointer, dataIndex, axis, timelineModel, noAnimation) {
-  if (pointer.dragging) {
-    return;
-  }
-
-  var pointerModel = timelineModel.getModel('checkpointStyle');
-  var toCoord = axis.dataToCoord(timelineModel.getData().get(['value'], dataIndex));
-
-  if (noAnimation || !pointerModel.get('animation', true)) {
-    pointer.attr({
-      position: [toCoord, 0]
-    });
-  } else {
-    pointer.stopAnimation(true);
-    pointer.animateTo({
-      position: [toCoord, 0]
-    }, pointerModel.get('animationDuration', true), pointerModel.get('animationEasing', true));
-  }
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * DataZoom component entry
- */
-registerPreprocessor(preprocessor);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-ComponentModel.registerSubTypeDefaulter('dataZoom', function () {
-  // Default 'slider' when no type specified.
-  return 'slider';
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var AXIS_DIMS = ['x', 'y', 'z', 'radius', 'angle', 'single']; // Supported coords.
-
-var COORDS = ['cartesian2d', 'polar', 'singleAxis'];
-/**
- * @param {string} coordType
- * @return {boolean}
- */
-
-function isCoordSupported(coordType) {
-  return indexOf(COORDS, coordType) >= 0;
-}
-/**
- * Create "each" method to iterate names.
- *
- * @pubilc
- * @param  {Array.<string>} names
- * @param  {Array.<string>=} attrs
- * @return {Function}
- */
-
-function createNameEach(names, attrs) {
-  names = names.slice();
-  var capitalNames = map(names, capitalFirst);
-  attrs = (attrs || []).slice();
-  var capitalAttrs = map(attrs, capitalFirst);
-  return function (callback, context) {
-    each$1(names, function (name, index) {
-      var nameObj = {
-        name: name,
-        capital: capitalNames[index]
-      };
-
-      for (var j = 0; j < attrs.length; j++) {
-        nameObj[attrs[j]] = name + capitalAttrs[j];
-      }
-
-      callback.call(context, nameObj);
-    });
-  };
-}
-/**
- * Iterate each dimension name.
- *
- * @public
- * @param {Function} callback The parameter is like:
- *                            {
- *                                name: 'angle',
- *                                capital: 'Angle',
- *                                axis: 'angleAxis',
- *                                axisIndex: 'angleAixs',
- *                                index: 'angleIndex'
- *                            }
- * @param {Object} context
- */
-
-var eachAxisDim$1 = createNameEach(AXIS_DIMS, ['axisIndex', 'axis', 'index', 'id']);
-/**
- * If tow dataZoomModels has the same axis controlled, we say that they are 'linked'.
- * dataZoomModels and 'links' make up one or more graphics.
- * This function finds the graphic where the source dataZoomModel is in.
- *
- * @public
- * @param {Function} forEachNode Node iterator.
- * @param {Function} forEachEdgeType edgeType iterator
- * @param {Function} edgeIdGetter Giving node and edgeType, return an array of edge id.
- * @return {Function} Input: sourceNode, Output: Like {nodes: [], dims: {}}
- */
-
-function createLinkedNodesFinder(forEachNode, forEachEdgeType, edgeIdGetter) {
-  return function (sourceNode) {
-    var result = {
-      nodes: [],
-      records: {} // key: edgeType.name, value: Object (key: edge id, value: boolean).
-
-    };
-    forEachEdgeType(function (edgeType) {
-      result.records[edgeType.name] = {};
-    });
-
-    if (!sourceNode) {
-      return result;
-    }
-
-    absorb(sourceNode, result);
-    var existsLink;
-
-    do {
-      existsLink = false;
-      forEachNode(processSingleNode);
-    } while (existsLink);
-
-    function processSingleNode(node) {
-      if (!isNodeAbsorded(node, result) && isLinked(node, result)) {
-        absorb(node, result);
-        existsLink = true;
-      }
-    }
-
-    return result;
-  };
-
-  function isNodeAbsorded(node, result) {
-    return indexOf(result.nodes, node) >= 0;
-  }
-
-  function isLinked(node, result) {
-    var hasLink = false;
-    forEachEdgeType(function (edgeType) {
-      each$1(edgeIdGetter(node, edgeType) || [], function (edgeId) {
-        result.records[edgeType.name][edgeId] && (hasLink = true);
-      });
-    });
-    return hasLink;
-  }
-
-  function absorb(node, result) {
-    result.nodes.push(node);
-    forEachEdgeType(function (edgeType) {
-      each$1(edgeIdGetter(node, edgeType) || [], function (edgeId) {
-        result.records[edgeType.name][edgeId] = true;
-      });
-    });
-  }
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var each$14 = each$1;
-var asc$1 = asc;
-/**
- * Operate single axis.
- * One axis can only operated by one axis operator.
- * Different dataZoomModels may be defined to operate the same axis.
- * (i.e. 'inside' data zoom and 'slider' data zoom components)
- * So dataZoomModels share one axisProxy in that case.
- *
- * @class
- */
-
-var AxisProxy = function (dimName, axisIndex, dataZoomModel, ecModel) {
-  /**
-   * @private
-   * @type {string}
-   */
-  this._dimName = dimName;
-  /**
-   * @private
-   */
-
-  this._axisIndex = axisIndex;
-  /**
-   * @private
-   * @type {Array.<number>}
-   */
-
-  this._valueWindow;
-  /**
-   * @private
-   * @type {Array.<number>}
-   */
-
-  this._percentWindow;
-  /**
-   * @private
-   * @type {Array.<number>}
-   */
-
-  this._dataExtent;
-  /**
-   * {minSpan, maxSpan, minValueSpan, maxValueSpan}
-   * @private
-   * @type {Object}
-   */
-
-  this._minMaxSpan;
-  /**
-   * @readOnly
-   * @type {module: echarts/model/Global}
-   */
-
-  this.ecModel = ecModel;
-  /**
-   * @private
-   * @type {module: echarts/component/dataZoom/DataZoomModel}
-   */
-
-  this._dataZoomModel = dataZoomModel; // /**
-  //  * @readOnly
-  //  * @private
-  //  */
-  // this.hasSeriesStacked;
-};
-
-AxisProxy.prototype = {
-  constructor: AxisProxy,
-
-  /**
-   * Whether the axisProxy is hosted by dataZoomModel.
-   *
-   * @public
-   * @param {module: echarts/component/dataZoom/DataZoomModel} dataZoomModel
-   * @return {boolean}
-   */
-  hostedBy: function (dataZoomModel) {
-    return this._dataZoomModel === dataZoomModel;
-  },
-
-  /**
-   * @return {Array.<number>} Value can only be NaN or finite value.
-   */
-  getDataValueWindow: function () {
-    return this._valueWindow.slice();
-  },
-
-  /**
-   * @return {Array.<number>}
-   */
-  getDataPercentWindow: function () {
-    return this._percentWindow.slice();
-  },
-
-  /**
-   * @public
-   * @param {number} axisIndex
-   * @return {Array} seriesModels
-   */
-  getTargetSeriesModels: function () {
-    var seriesModels = [];
-    var ecModel = this.ecModel;
-    ecModel.eachSeries(function (seriesModel) {
-      if (isCoordSupported(seriesModel.get('coordinateSystem'))) {
-        var dimName = this._dimName;
-        var axisModel = ecModel.queryComponents({
-          mainType: dimName + 'Axis',
-          index: seriesModel.get(dimName + 'AxisIndex'),
-          id: seriesModel.get(dimName + 'AxisId')
-        })[0];
-
-        if (this._axisIndex === (axisModel && axisModel.componentIndex)) {
-          seriesModels.push(seriesModel);
-        }
-      }
-    }, this);
-    return seriesModels;
-  },
-  getAxisModel: function () {
-    return this.ecModel.getComponent(this._dimName + 'Axis', this._axisIndex);
-  },
-  getOtherAxisModel: function () {
-    var axisDim = this._dimName;
-    var ecModel = this.ecModel;
-    var axisModel = this.getAxisModel();
-    var isCartesian = axisDim === 'x' || axisDim === 'y';
-    var otherAxisDim;
-    var coordSysIndexName;
-
-    if (isCartesian) {
-      coordSysIndexName = 'gridIndex';
-      otherAxisDim = axisDim === 'x' ? 'y' : 'x';
-    } else {
-      coordSysIndexName = 'polarIndex';
-      otherAxisDim = axisDim === 'angle' ? 'radius' : 'angle';
-    }
-
-    var foundOtherAxisModel;
-    ecModel.eachComponent(otherAxisDim + 'Axis', function (otherAxisModel) {
-      if ((otherAxisModel.get(coordSysIndexName) || 0) === (axisModel.get(coordSysIndexName) || 0)) {
-        foundOtherAxisModel = otherAxisModel;
-      }
-    });
-    return foundOtherAxisModel;
-  },
-  getMinMaxSpan: function () {
-    return clone(this._minMaxSpan);
-  },
-
-  /**
-   * Only calculate by given range and this._dataExtent, do not change anything.
-   *
-   * @param {Object} opt
-   * @param {number} [opt.start]
-   * @param {number} [opt.end]
-   * @param {number} [opt.startValue]
-   * @param {number} [opt.endValue]
-   */
-  calculateDataWindow: function (opt) {
-    var dataExtent = this._dataExtent;
-    var axisModel = this.getAxisModel();
-    var scale = axisModel.axis.scale;
-
-    var rangePropMode = this._dataZoomModel.getRangePropMode();
-
-    var percentExtent = [0, 100];
-    var percentWindow = [opt.start, opt.end];
-    var valueWindow = [];
-    each$14(['startValue', 'endValue'], function (prop) {
-      valueWindow.push(opt[prop] != null ? scale.parse(opt[prop]) : null);
-    }); // Normalize bound.
-
-    each$14([0, 1], function (idx) {
-      var boundValue = valueWindow[idx];
-      var boundPercent = percentWindow[idx]; // Notice: dataZoom is based either on `percentProp` ('start', 'end') or
-      // on `valueProp` ('startValue', 'endValue'). The former one is suitable
-      // for cases that a dataZoom component controls multiple axes with different
-      // unit or extent, and the latter one is suitable for accurate zoom by pixel
-      // (e.g., in dataZoomSelect). `valueProp` can be calculated from `percentProp`,
-      // but it is awkward that `percentProp` can not be obtained from `valueProp`
-      // accurately (because all of values that are overflow the `dataExtent` will
-      // be calculated to percent '100%'). So we have to use
-      // `dataZoom.getRangePropMode()` to mark which prop is used.
-      // `rangePropMode` is updated only when setOption or dispatchAction, otherwise
-      // it remains its original value.
-
-      if (rangePropMode[idx] === 'percent') {
-        if (boundPercent == null) {
-          boundPercent = percentExtent[idx];
-        } // Use scale.parse to math round for category or time axis.
-
-
-        boundValue = scale.parse(linearMap(boundPercent, percentExtent, dataExtent, true));
-      } else {
-        // Calculating `percent` from `value` may be not accurate, because
-        // This calculation can not be inversed, because all of values that
-        // are overflow the `dataExtent` will be calculated to percent '100%'
-        boundPercent = linearMap(boundValue, dataExtent, percentExtent, true);
-      } // valueWindow[idx] = round(boundValue);
-      // percentWindow[idx] = round(boundPercent);
-
-
-      valueWindow[idx] = boundValue;
-      percentWindow[idx] = boundPercent;
-    });
-    return {
-      valueWindow: asc$1(valueWindow),
-      percentWindow: asc$1(percentWindow)
-    };
-  },
-
-  /**
-   * Notice: reset should not be called before series.restoreData() called,
-   * so it is recommanded to be called in "process stage" but not "model init
-   * stage".
-   *
-   * @param {module: echarts/component/dataZoom/DataZoomModel} dataZoomModel
-   */
-  reset: function (dataZoomModel) {
-    if (dataZoomModel !== this._dataZoomModel) {
-      return;
-    }
-
-    var targetSeries = this.getTargetSeriesModels(); // Culculate data window and data extent, and record them.
-
-    this._dataExtent = calculateDataExtent(this, this._dimName, targetSeries); // this.hasSeriesStacked = false;
-    // each(targetSeries, function (series) {
-    // var data = series.getData();
-    // var dataDim = data.mapDimension(this._dimName);
-    // var stackedDimension = data.getCalculationInfo('stackedDimension');
-    // if (stackedDimension && stackedDimension === dataDim) {
-    // this.hasSeriesStacked = true;
-    // }
-    // }, this);
-
-    var dataWindow = this.calculateDataWindow(dataZoomModel.option);
-    this._valueWindow = dataWindow.valueWindow;
-    this._percentWindow = dataWindow.percentWindow;
-    setMinMaxSpan(this); // Update axis setting then.
-
-    setAxisModel(this);
-  },
-
-  /**
-   * @param {module: echarts/component/dataZoom/DataZoomModel} dataZoomModel
-   */
-  restore: function (dataZoomModel) {
-    if (dataZoomModel !== this._dataZoomModel) {
-      return;
-    }
-
-    this._valueWindow = this._percentWindow = null;
-    setAxisModel(this, true);
-  },
-
-  /**
-   * @param {module: echarts/component/dataZoom/DataZoomModel} dataZoomModel
-   */
-  filterData: function (dataZoomModel, api) {
-    if (dataZoomModel !== this._dataZoomModel) {
-      return;
-    }
-
-    var axisDim = this._dimName;
-    var seriesModels = this.getTargetSeriesModels();
-    var filterMode = dataZoomModel.get('filterMode');
-    var valueWindow = this._valueWindow;
-
-    if (filterMode === 'none') {
-      return;
-    } // FIXME
-    // Toolbox may has dataZoom injected. And if there are stacked bar chart
-    // with NaN data, NaN will be filtered and stack will be wrong.
-    // So we need to force the mode to be set empty.
-    // In fect, it is not a big deal that do not support filterMode-'filter'
-    // when using toolbox#dataZoom, utill tooltip#dataZoom support "single axis
-    // selection" some day, which might need "adapt to data extent on the
-    // otherAxis", which is disabled by filterMode-'empty'.
-    // But currently, stack has been fixed to based on value but not index,
-    // so this is not an issue any more.
-    // var otherAxisModel = this.getOtherAxisModel();
-    // if (dataZoomModel.get('$fromToolbox')
-    //     && otherAxisModel
-    //     && otherAxisModel.hasSeriesStacked
-    // ) {
-    //     filterMode = 'empty';
-    // }
-    // TODO
-    // filterMode 'weakFilter' and 'empty' is not optimized for huge data yet.
-
-
-    each$14(seriesModels, function (seriesModel) {
-      var seriesData = seriesModel.getData();
-      var dataDims = seriesData.mapDimension(axisDim, true);
-
-      if (!dataDims.length) {
-        return;
-      }
-
-      if (filterMode === 'weakFilter') {
-        seriesData.filterSelf(function (dataIndex) {
-          var leftOut;
-          var rightOut;
-          var hasValue;
-
-          for (var i = 0; i < dataDims.length; i++) {
-            var value = seriesData.get(dataDims[i], dataIndex);
-            var thisHasValue = !isNaN(value);
-            var thisLeftOut = value < valueWindow[0];
-            var thisRightOut = value > valueWindow[1];
-
-            if (thisHasValue && !thisLeftOut && !thisRightOut) {
-              return true;
-            }
-
-            thisHasValue && (hasValue = true);
-            thisLeftOut && (leftOut = true);
-            thisRightOut && (rightOut = true);
-          } // If both left out and right out, do not filter.
-
-
-          return hasValue && leftOut && rightOut;
-        });
-      } else {
-        each$14(dataDims, function (dim) {
-          if (filterMode === 'empty') {
-            seriesModel.setData(seriesData.map(dim, function (value) {
-              return !isInWindow(value) ? NaN : value;
-            }));
-          } else {
-            var range = {};
-            range[dim] = valueWindow; // console.time('select');
-
-            seriesData.selectRange(range); // console.timeEnd('select');
+    var pieces = opt.pieces;
+
+    if (pieces && isArray(pieces)) {
+      each$11(pieces, function (piece) {
+        if (isObject$1(piece)) {
+          if (has$1(piece, 'start') && !has$1(piece, 'min')) {
+            piece.min = piece.start;
           }
-        });
-      }
 
-      each$14(dataDims, function (dim) {
-        seriesData.setApproximateExtent(valueWindow, dim);
+          if (has$1(piece, 'end') && !has$1(piece, 'max')) {
+            piece.max = piece.end;
+          }
+        }
       });
-    });
-
-    function isInWindow(value) {
-      return value >= valueWindow[0] && value <= valueWindow[1];
     }
-  }
+  });
 };
 
-function calculateDataExtent(axisProxy, axisDim, seriesModels) {
-  var dataExtent = [Infinity, -Infinity];
-  each$14(seriesModels, function (seriesModel) {
-    var seriesData = seriesModel.getData();
-
-    if (seriesData) {
-      each$14(seriesData.mapDimension(axisDim, true), function (dim) {
-        var seriesExtent = seriesData.getApproximateExtent(dim);
-        seriesExtent[0] < dataExtent[0] && (dataExtent[0] = seriesExtent[0]);
-        seriesExtent[1] > dataExtent[1] && (dataExtent[1] = seriesExtent[1]);
-      });
-    }
-  });
-
-  if (dataExtent[1] < dataExtent[0]) {
-    dataExtent = [NaN, NaN];
-  } // It is important to get "consistent" extent when more then one axes is
-  // controlled by a `dataZoom`, otherwise those axes will not be synchronized
-  // when zooming. But it is difficult to know what is "consistent", considering
-  // axes have different type or even different meanings (For example, two
-  // time axes are used to compare data of the same date in different years).
-  // So basically dataZoom just obtains extent by series.data (in category axis
-  // extent can be obtained from axis.data).
-  // Nevertheless, user can set min/max/scale on axes to make extent of axes
-  // consistent.
-
-
-  fixExtentByAxis(axisProxy, dataExtent);
-  return dataExtent;
+function has$1(obj, name) {
+  return obj && obj.hasOwnProperty && obj.hasOwnProperty(name);
 }
 
-function fixExtentByAxis(axisProxy, dataExtent) {
-  var axisModel = axisProxy.getAxisModel();
-  var min = axisModel.getMin(true); // For category axis, if min/max/scale are not set, extent is determined
-  // by axis.data by default.
-
-  var isCategoryAxis = axisModel.get('type') === 'category';
-  var axisDataLen = isCategoryAxis && axisModel.getCategories().length;
-
-  if (min != null && min !== 'dataMin' && typeof min !== 'function') {
-    dataExtent[0] = min;
-  } else if (isCategoryAxis) {
-    dataExtent[0] = axisDataLen > 0 ? 0 : NaN;
-  }
-
-  var max = axisModel.getMax(true);
-
-  if (max != null && max !== 'dataMax' && typeof max !== 'function') {
-    dataExtent[1] = max;
-  } else if (isCategoryAxis) {
-    dataExtent[1] = axisDataLen > 0 ? axisDataLen - 1 : NaN;
-  }
-
-  if (!axisModel.get('scale', true)) {
-    dataExtent[0] > 0 && (dataExtent[0] = 0);
-    dataExtent[1] < 0 && (dataExtent[1] = 0);
-  } // For value axis, if min/max/scale are not set, we just use the extent obtained
-  // by series data, which may be a little different from the extent calculated by
-  // `axisHelper.getScaleExtent`. But the different just affects the experience a
-  // little when zooming. So it will not be fixed until some users require it strongly.
-
-
-  return dataExtent;
-}
-
-function setAxisModel(axisProxy, isRestore) {
-  var axisModel = axisProxy.getAxisModel();
-  var percentWindow = axisProxy._percentWindow;
-  var valueWindow = axisProxy._valueWindow;
-
-  if (!percentWindow) {
-    return;
-  } // [0, 500]: arbitrary value, guess axis extent.
-
-
-  var precision = getPixelPrecision(valueWindow, [0, 500]);
-  precision = Math.min(precision, 20); // isRestore or isFull
-
-  var useOrigin = isRestore || percentWindow[0] === 0 && percentWindow[1] === 100;
-  axisModel.setRange(useOrigin ? null : +valueWindow[0].toFixed(precision), useOrigin ? null : +valueWindow[1].toFixed(precision));
-}
-
-function setMinMaxSpan(axisProxy) {
-  var minMaxSpan = axisProxy._minMaxSpan = {};
-  var dataZoomModel = axisProxy._dataZoomModel;
-  each$14(['min', 'max'], function (minMax) {
-    minMaxSpan[minMax + 'Span'] = dataZoomModel.get(minMax + 'Span'); // minValueSpan and maxValueSpan has higher priority than minSpan and maxSpan
-
-    var valueSpan = dataZoomModel.get(minMax + 'ValueSpan');
-
-    if (valueSpan != null) {
-      minMaxSpan[minMax + 'ValueSpan'] = valueSpan;
-      valueSpan = axisProxy.getAxisModel().axis.scale.parse(valueSpan);
-
-      if (valueSpan != null) {
-        var dataExtent = axisProxy._dataExtent;
-        minMaxSpan[minMax + 'Span'] = linearMap(dataExtent[0] + valueSpan, dataExtent, [0, 100], true);
-      }
-    }
-  });
-}
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
+ComponentModel.registerSubTypeDefaulter('visualMap', function (option) {
+  // Compatible with ec2, when splitNumber === 0, continuous visualMap will be used.
+  return !option.categories && (!(option.pieces ? option.pieces.length > 0 : option.splitNumber > 0) || option.calculable) ? 'continuous' : 'piecewise';
+});
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -48368,2504 +39332,6 @@ function setMinMaxSpan(axisProxy) {
 * under the License.
 */
 var each$13 = each$1;
-var eachAxisDim = eachAxisDim$1;
-var DataZoomModel = extendComponentModel({
-  type: 'dataZoom',
-  dependencies: ['xAxis', 'yAxis', 'zAxis', 'radiusAxis', 'angleAxis', 'singleAxis', 'series'],
-
-  /**
-   * @protected
-   */
-  defaultOption: {
-    zlevel: 0,
-    z: 4,
-    // Higher than normal component (z: 2).
-    orient: null,
-    // Default auto by axisIndex. Possible value: 'horizontal', 'vertical'.
-    xAxisIndex: null,
-    // Default the first horizontal category axis.
-    yAxisIndex: null,
-    // Default the first vertical category axis.
-    filterMode: 'filter',
-    // Possible values: 'filter' or 'empty' or 'weakFilter'.
-    // 'filter': data items which are out of window will be removed. This option is
-    //          applicable when filtering outliers. For each data item, it will be
-    //          filtered if one of the relevant dimensions is out of the window.
-    // 'weakFilter': data items which are out of window will be removed. This option
-    //          is applicable when filtering outliers. For each data item, it will be
-    //          filtered only if all  of the relevant dimensions are out of the same
-    //          side of the window.
-    // 'empty': data items which are out of window will be set to empty.
-    //          This option is applicable when user should not neglect
-    //          that there are some data items out of window.
-    // 'none': Do not filter.
-    // Taking line chart as an example, line will be broken in
-    // the filtered points when filterModel is set to 'empty', but
-    // be connected when set to 'filter'.
-    throttle: null,
-    // Dispatch action by the fixed rate, avoid frequency.
-    // default 100. Do not throttle when use null/undefined.
-    // If animation === true and animationDurationUpdate > 0,
-    // default value is 100, otherwise 20.
-    start: 0,
-    // Start percent. 0 ~ 100
-    end: 100,
-    // End percent. 0 ~ 100
-    startValue: null,
-    // Start value. If startValue specified, start is ignored.
-    endValue: null,
-    // End value. If endValue specified, end is ignored.
-    minSpan: null,
-    // 0 ~ 100
-    maxSpan: null,
-    // 0 ~ 100
-    minValueSpan: null,
-    // The range of dataZoom can not be smaller than that.
-    maxValueSpan: null,
-    // The range of dataZoom can not be larger than that.
-    rangeMode: null // Array, can be 'value' or 'percent'.
-
-  },
-
-  /**
-   * @override
-   */
-  init: function (option, parentModel, ecModel) {
-    /**
-     * key like x_0, y_1
-     * @private
-     * @type {Object}
-     */
-    this._dataIntervalByAxis = {};
-    /**
-     * @private
-     */
-
-    this._dataInfo = {};
-    /**
-     * key like x_0, y_1
-     * @private
-     */
-
-    this._axisProxies = {};
-    /**
-     * @readOnly
-     */
-
-    this.textStyleModel;
-    /**
-     * @private
-     */
-
-    this._autoThrottle = true;
-    /**
-     * 'percent' or 'value'
-     * @private
-     */
-
-    this._rangePropMode = ['percent', 'percent'];
-    var rawOption = retrieveRaw(option);
-    this.mergeDefaultAndTheme(option, ecModel);
-    this.doInit(rawOption);
-  },
-
-  /**
-   * @override
-   */
-  mergeOption: function (newOption) {
-    var rawOption = retrieveRaw(newOption); //FIX #2591
-
-    merge(this.option, newOption, true);
-    this.doInit(rawOption);
-  },
-
-  /**
-   * @protected
-   */
-  doInit: function (rawOption) {
-    var thisOption = this.option; // Disable realtime view update if canvas is not supported.
-
-    if (!env$1.canvasSupported) {
-      thisOption.realtime = false;
-    }
-
-    this._setDefaultThrottle(rawOption);
-
-    updateRangeUse(this, rawOption);
-    each$13([['start', 'startValue'], ['end', 'endValue']], function (names, index) {
-      // start/end has higher priority over startValue/endValue if they
-      // both set, but we should make chart.setOption({endValue: 1000})
-      // effective, rather than chart.setOption({endValue: 1000, end: null}).
-      if (this._rangePropMode[index] === 'value') {
-        thisOption[names[0]] = null;
-      } // Otherwise do nothing and use the merge result.
-
-    }, this);
-    this.textStyleModel = this.getModel('textStyle');
-
-    this._resetTarget();
-
-    this._giveAxisProxies();
-  },
-
-  /**
-   * @private
-   */
-  _giveAxisProxies: function () {
-    var axisProxies = this._axisProxies;
-    this.eachTargetAxis(function (dimNames, axisIndex, dataZoomModel, ecModel) {
-      var axisModel = this.dependentModels[dimNames.axis][axisIndex]; // If exists, share axisProxy with other dataZoomModels.
-
-      var axisProxy = axisModel.__dzAxisProxy || ( // Use the first dataZoomModel as the main model of axisProxy.
-      axisModel.__dzAxisProxy = new AxisProxy(dimNames.name, axisIndex, this, ecModel)); // FIXME
-      // dispose __dzAxisProxy
-
-      axisProxies[dimNames.name + '_' + axisIndex] = axisProxy;
-    }, this);
-  },
-
-  /**
-   * @private
-   */
-  _resetTarget: function () {
-    var thisOption = this.option;
-
-    var autoMode = this._judgeAutoMode();
-
-    eachAxisDim(function (dimNames) {
-      var axisIndexName = dimNames.axisIndex;
-      thisOption[axisIndexName] = normalizeToArray(thisOption[axisIndexName]);
-    }, this);
-
-    if (autoMode === 'axisIndex') {
-      this._autoSetAxisIndex();
-    } else if (autoMode === 'orient') {
-      this._autoSetOrient();
-    }
-  },
-
-  /**
-   * @private
-   */
-  _judgeAutoMode: function () {
-    // Auto set only works for setOption at the first time.
-    // The following is user's reponsibility. So using merged
-    // option is OK.
-    var thisOption = this.option;
-    var hasIndexSpecified = false;
-    eachAxisDim(function (dimNames) {
-      // When user set axisIndex as a empty array, we think that user specify axisIndex
-      // but do not want use auto mode. Because empty array may be encountered when
-      // some error occured.
-      if (thisOption[dimNames.axisIndex] != null) {
-        hasIndexSpecified = true;
-      }
-    }, this);
-    var orient = thisOption.orient;
-
-    if (orient == null && hasIndexSpecified) {
-      return 'orient';
-    } else if (!hasIndexSpecified) {
-      if (orient == null) {
-        thisOption.orient = 'horizontal';
-      }
-
-      return 'axisIndex';
-    }
-  },
-
-  /**
-   * @private
-   */
-  _autoSetAxisIndex: function () {
-    var autoAxisIndex = true;
-    var orient = this.get('orient', true);
-    var thisOption = this.option;
-    var dependentModels = this.dependentModels;
-
-    if (autoAxisIndex) {
-      // Find axis that parallel to dataZoom as default.
-      var dimName = orient === 'vertical' ? 'y' : 'x';
-
-      if (dependentModels[dimName + 'Axis'].length) {
-        thisOption[dimName + 'AxisIndex'] = [0];
-        autoAxisIndex = false;
-      } else {
-        each$13(dependentModels.singleAxis, function (singleAxisModel) {
-          if (autoAxisIndex && singleAxisModel.get('orient', true) === orient) {
-            thisOption.singleAxisIndex = [singleAxisModel.componentIndex];
-            autoAxisIndex = false;
-          }
-        });
-      }
-    }
-
-    if (autoAxisIndex) {
-      // Find the first category axis as default. (consider polar)
-      eachAxisDim(function (dimNames) {
-        if (!autoAxisIndex) {
-          return;
-        }
-
-        var axisIndices = [];
-        var axisModels = this.dependentModels[dimNames.axis];
-
-        if (axisModels.length && !axisIndices.length) {
-          for (var i = 0, len = axisModels.length; i < len; i++) {
-            if (axisModels[i].get('type') === 'category') {
-              axisIndices.push(i);
-            }
-          }
-        }
-
-        thisOption[dimNames.axisIndex] = axisIndices;
-
-        if (axisIndices.length) {
-          autoAxisIndex = false;
-        }
-      }, this);
-    }
-
-    if (autoAxisIndex) {
-      // FIXME
-      // 这里是兼容ec2的写法（没指定xAxisIndex和yAxisIndex时把scatter和双数值轴折柱纳入dataZoom控制），
-      // 但是实际是否需要Grid.js#getScaleByOption来判断（考虑time，log等axis type）？
-      // If both dataZoom.xAxisIndex and dataZoom.yAxisIndex is not specified,
-      // dataZoom component auto adopts series that reference to
-      // both xAxis and yAxis which type is 'value'.
-      this.ecModel.eachSeries(function (seriesModel) {
-        if (this._isSeriesHasAllAxesTypeOf(seriesModel, 'value')) {
-          eachAxisDim(function (dimNames) {
-            var axisIndices = thisOption[dimNames.axisIndex];
-            var axisIndex = seriesModel.get(dimNames.axisIndex);
-            var axisId = seriesModel.get(dimNames.axisId);
-            var axisModel = seriesModel.ecModel.queryComponents({
-              mainType: dimNames.axis,
-              index: axisIndex,
-              id: axisId
-            })[0];
-            axisIndex = axisModel.componentIndex;
-
-            if (indexOf(axisIndices, axisIndex) < 0) {
-              axisIndices.push(axisIndex);
-            }
-          });
-        }
-      }, this);
-    }
-  },
-
-  /**
-   * @private
-   */
-  _autoSetOrient: function () {
-    var dim; // Find the first axis
-
-    this.eachTargetAxis(function (dimNames) {
-      !dim && (dim = dimNames.name);
-    }, this);
-    this.option.orient = dim === 'y' ? 'vertical' : 'horizontal';
-  },
-
-  /**
-   * @private
-   */
-  _isSeriesHasAllAxesTypeOf: function (seriesModel, axisType) {
-    // FIXME
-    // 需要series的xAxisIndex和yAxisIndex都首先自动设置上。
-    // 例如series.type === scatter时。
-    var is = true;
-    eachAxisDim(function (dimNames) {
-      var seriesAxisIndex = seriesModel.get(dimNames.axisIndex);
-      var axisModel = this.dependentModels[dimNames.axis][seriesAxisIndex];
-
-      if (!axisModel || axisModel.get('type') !== axisType) {
-        is = false;
-      }
-    }, this);
-    return is;
-  },
-
-  /**
-   * @private
-   */
-  _setDefaultThrottle: function (rawOption) {
-    // When first time user set throttle, auto throttle ends.
-    if (rawOption.hasOwnProperty('throttle')) {
-      this._autoThrottle = false;
-    }
-
-    if (this._autoThrottle) {
-      var globalOption = this.ecModel.option;
-      this.option.throttle = globalOption.animation && globalOption.animationDurationUpdate > 0 ? 100 : 20;
-    }
-  },
-
-  /**
-   * @public
-   */
-  getFirstTargetAxisModel: function () {
-    var firstAxisModel;
-    eachAxisDim(function (dimNames) {
-      if (firstAxisModel == null) {
-        var indices = this.get(dimNames.axisIndex);
-
-        if (indices.length) {
-          firstAxisModel = this.dependentModels[dimNames.axis][indices[0]];
-        }
-      }
-    }, this);
-    return firstAxisModel;
-  },
-
-  /**
-   * @public
-   * @param {Function} callback param: axisModel, dimNames, axisIndex, dataZoomModel, ecModel
-   */
-  eachTargetAxis: function (callback, context) {
-    var ecModel = this.ecModel;
-    eachAxisDim(function (dimNames) {
-      each$13(this.get(dimNames.axisIndex), function (axisIndex) {
-        callback.call(context, dimNames, axisIndex, this, ecModel);
-      }, this);
-    }, this);
-  },
-
-  /**
-   * @param {string} dimName
-   * @param {number} axisIndex
-   * @return {module:echarts/component/dataZoom/AxisProxy} If not found, return null/undefined.
-   */
-  getAxisProxy: function (dimName, axisIndex) {
-    return this._axisProxies[dimName + '_' + axisIndex];
-  },
-
-  /**
-   * @param {string} dimName
-   * @param {number} axisIndex
-   * @return {module:echarts/model/Model} If not found, return null/undefined.
-   */
-  getAxisModel: function (dimName, axisIndex) {
-    var axisProxy = this.getAxisProxy(dimName, axisIndex);
-    return axisProxy && axisProxy.getAxisModel();
-  },
-
-  /**
-   * If not specified, set to undefined.
-   *
-   * @public
-   * @param {Object} opt
-   * @param {number} [opt.start]
-   * @param {number} [opt.end]
-   * @param {number} [opt.startValue]
-   * @param {number} [opt.endValue]
-   * @param {boolean} [ignoreUpdateRangeUsg=false]
-   */
-  setRawRange: function (opt, ignoreUpdateRangeUsg) {
-    var option = this.option;
-    each$13([['start', 'startValue'], ['end', 'endValue']], function (names) {
-      // If only one of 'start' and 'startValue' is not null/undefined, the other
-      // should be cleared, which enable clear the option.
-      // If both of them are not set, keep option with the original value, which
-      // enable use only set start but not set end when calling `dispatchAction`.
-      // The same as 'end' and 'endValue'.
-      if (opt[names[0]] != null || opt[names[1]] != null) {
-        option[names[0]] = opt[names[0]];
-        option[names[1]] = opt[names[1]];
-      }
-    }, this);
-    !ignoreUpdateRangeUsg && updateRangeUse(this, opt);
-  },
-
-  /**
-   * @public
-   * @return {Array.<number>} [startPercent, endPercent]
-   */
-  getPercentRange: function () {
-    var axisProxy = this.findRepresentativeAxisProxy();
-
-    if (axisProxy) {
-      return axisProxy.getDataPercentWindow();
-    }
-  },
-
-  /**
-   * @public
-   * For example, chart.getModel().getComponent('dataZoom').getValueRange('y', 0);
-   *
-   * @param {string} [axisDimName]
-   * @param {number} [axisIndex]
-   * @return {Array.<number>} [startValue, endValue] value can only be '-' or finite number.
-   */
-  getValueRange: function (axisDimName, axisIndex) {
-    if (axisDimName == null && axisIndex == null) {
-      var axisProxy = this.findRepresentativeAxisProxy();
-
-      if (axisProxy) {
-        return axisProxy.getDataValueWindow();
-      }
-    } else {
-      return this.getAxisProxy(axisDimName, axisIndex).getDataValueWindow();
-    }
-  },
-
-  /**
-   * @public
-   * @param {module:echarts/model/Model} [axisModel] If axisModel given, find axisProxy
-   *      corresponding to the axisModel
-   * @return {module:echarts/component/dataZoom/AxisProxy}
-   */
-  findRepresentativeAxisProxy: function (axisModel) {
-    if (axisModel) {
-      return axisModel.__dzAxisProxy;
-    } // Find the first hosted axisProxy
-
-
-    var axisProxies = this._axisProxies;
-
-    for (var key in axisProxies) {
-      if (axisProxies.hasOwnProperty(key) && axisProxies[key].hostedBy(this)) {
-        return axisProxies[key];
-      }
-    } // If no hosted axis find not hosted axisProxy.
-    // Consider this case: dataZoomModel1 and dataZoomModel2 control the same axis,
-    // and the option.start or option.end settings are different. The percentRange
-    // should follow axisProxy.
-    // (We encounter this problem in toolbox data zoom.)
-
-
-    for (var key in axisProxies) {
-      if (axisProxies.hasOwnProperty(key) && !axisProxies[key].hostedBy(this)) {
-        return axisProxies[key];
-      }
-    }
-  },
-
-  /**
-   * @return {Array.<string>}
-   */
-  getRangePropMode: function () {
-    return this._rangePropMode.slice();
-  }
-});
-
-function retrieveRaw(option) {
-  var ret = {};
-  each$13(['start', 'end', 'startValue', 'endValue', 'throttle'], function (name) {
-    option.hasOwnProperty(name) && (ret[name] = option[name]);
-  });
-  return ret;
-}
-
-function updateRangeUse(dataZoomModel, rawOption) {
-  var rangePropMode = dataZoomModel._rangePropMode;
-  var rangeModeInOption = dataZoomModel.get('rangeMode');
-  each$13([['start', 'startValue'], ['end', 'endValue']], function (names, index) {
-    var percentSpecified = rawOption[names[0]] != null;
-    var valueSpecified = rawOption[names[1]] != null;
-
-    if (percentSpecified && !valueSpecified) {
-      rangePropMode[index] = 'percent';
-    } else if (!percentSpecified && valueSpecified) {
-      rangePropMode[index] = 'value';
-    } else if (rangeModeInOption) {
-      rangePropMode[index] = rangeModeInOption[index];
-    } else if (percentSpecified) {
-      // percentSpecified && valueSpecified
-      rangePropMode[index] = 'percent';
-    } // else remain its original setting.
-
-  });
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var DataZoomView = Component$1.extend({
-  type: 'dataZoom',
-  render: function (dataZoomModel, ecModel, api, payload) {
-    this.dataZoomModel = dataZoomModel;
-    this.ecModel = ecModel;
-    this.api = api;
-  },
-
-  /**
-   * Find the first target coordinate system.
-   *
-   * @protected
-   * @return {Object} {
-   *                   grid: [
-   *                       {model: coord0, axisModels: [axis1, axis3], coordIndex: 1},
-   *                       {model: coord1, axisModels: [axis0, axis2], coordIndex: 0},
-   *                       ...
-   *                   ],  // cartesians must not be null/undefined.
-   *                   polar: [
-   *                       {model: coord0, axisModels: [axis4], coordIndex: 0},
-   *                       ...
-   *                   ],  // polars must not be null/undefined.
-   *                   singleAxis: [
-   *                       {model: coord0, axisModels: [], coordIndex: 0}
-   *                   ]
-   */
-  getTargetCoordInfo: function () {
-    var dataZoomModel = this.dataZoomModel;
-    var ecModel = this.ecModel;
-    var coordSysLists = {};
-    dataZoomModel.eachTargetAxis(function (dimNames, axisIndex) {
-      var axisModel = ecModel.getComponent(dimNames.axis, axisIndex);
-
-      if (axisModel) {
-        var coordModel = axisModel.getCoordSysModel();
-        coordModel && save(coordModel, axisModel, coordSysLists[coordModel.mainType] || (coordSysLists[coordModel.mainType] = []), coordModel.componentIndex);
-      }
-    }, this);
-
-    function save(coordModel, axisModel, store, coordIndex) {
-      var item;
-
-      for (var i = 0; i < store.length; i++) {
-        if (store[i].model === coordModel) {
-          item = store[i];
-          break;
-        }
-      }
-
-      if (!item) {
-        store.push(item = {
-          model: coordModel,
-          axisModels: [],
-          coordIndex: coordIndex
-        });
-      }
-
-      item.axisModels.push(axisModel);
-    }
-
-    return coordSysLists;
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var SliderZoomModel = DataZoomModel.extend({
-  type: 'dataZoom.slider',
-  layoutMode: 'box',
-
-  /**
-   * @protected
-   */
-  defaultOption: {
-    show: true,
-    // ph => placeholder. Using placehoder here because
-    // deault value can only be drived in view stage.
-    right: 'ph',
-    // Default align to grid rect.
-    top: 'ph',
-    // Default align to grid rect.
-    width: 'ph',
-    // Default align to grid rect.
-    height: 'ph',
-    // Default align to grid rect.
-    left: null,
-    // Default align to grid rect.
-    bottom: null,
-    // Default align to grid rect.
-    backgroundColor: 'rgba(47,69,84,0)',
-    // Background of slider zoom component.
-    // dataBackgroundColor: '#ddd',         // Background coor of data shadow and border of box,
-    // highest priority, remain for compatibility of
-    // previous version, but not recommended any more.
-    dataBackground: {
-      lineStyle: {
-        color: '#2f4554',
-        width: 0.5,
-        opacity: 0.3
-      },
-      areaStyle: {
-        color: 'rgba(47,69,84,0.3)',
-        opacity: 0.3
-      }
-    },
-    borderColor: '#ddd',
-    // border color of the box. For compatibility,
-    // if dataBackgroundColor is set, borderColor
-    // is ignored.
-    fillerColor: 'rgba(167,183,204,0.4)',
-    // Color of selected area.
-    // handleColor: 'rgba(89,170,216,0.95)',     // Color of handle.
-    // handleIcon: 'path://M4.9,17.8c0-1.4,4.5-10.5,5.5-12.4c0-0.1,0.6-1.1,0.9-1.1c0.4,0,0.9,1,0.9,1.1c1.1,2.2,5.4,11,5.4,12.4v17.8c0,1.5-0.6,2.1-1.3,2.1H6.1c-0.7,0-1.3-0.6-1.3-2.1V17.8z',
-
-    /* eslint-disable */
-    handleIcon: 'M8.2,13.6V3.9H6.3v9.7H3.1v14.9h3.3v9.7h1.8v-9.7h3.3V13.6H8.2z M9.7,24.4H4.8v-1.4h4.9V24.4z M9.7,19.1H4.8v-1.4h4.9V19.1z',
-
-    /* eslint-enable */
-    // Percent of the slider height
-    handleSize: '100%',
-    handleStyle: {
-      color: '#a7b7cc'
-    },
-    labelPrecision: null,
-    labelFormatter: null,
-    showDetail: true,
-    showDataShadow: 'auto',
-    // Default auto decision.
-    realtime: true,
-    zoomLock: false,
-    // Whether disable zoom.
-    textStyle: {
-      color: '#333'
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * Calculate slider move result.
- * Usage:
- * (1) If both handle0 and handle1 are needed to be moved, set minSpan the same as
- * maxSpan and the same as `Math.abs(handleEnd[1] - handleEnds[0])`.
- * (2) If handle0 is forbidden to cross handle1, set minSpan as `0`.
- *
- * @param {number} delta Move length.
- * @param {Array.<number>} handleEnds handleEnds[0] can be bigger then handleEnds[1].
- *              handleEnds will be modified in this method.
- * @param {Array.<number>} extent handleEnds is restricted by extent.
- *              extent[0] should less or equals than extent[1].
- * @param {number|string} handleIndex Can be 'all', means that both move the two handleEnds,
- *              where the input minSpan and maxSpan will not work.
- * @param {number} [minSpan] The range of dataZoom can not be smaller than that.
- *              If not set, handle0 and cross handle1. If set as a non-negative
- *              number (including `0`), handles will push each other when reaching
- *              the minSpan.
- * @param {number} [maxSpan] The range of dataZoom can not be larger than that.
- * @return {Array.<number>} The input handleEnds.
- */
-var sliderMove = function (delta, handleEnds, extent, handleIndex, minSpan, maxSpan) {
-  // Normalize firstly.
-  handleEnds[0] = restrict(handleEnds[0], extent);
-  handleEnds[1] = restrict(handleEnds[1], extent);
-  delta = delta || 0;
-  var extentSpan = extent[1] - extent[0]; // Notice maxSpan and minSpan can be null/undefined.
-
-  if (minSpan != null) {
-    minSpan = restrict(minSpan, [0, extentSpan]);
-  }
-
-  if (maxSpan != null) {
-    maxSpan = Math.max(maxSpan, minSpan != null ? minSpan : 0);
-  }
-
-  if (handleIndex === 'all') {
-    minSpan = maxSpan = Math.abs(handleEnds[1] - handleEnds[0]);
-    handleIndex = 0;
-  }
-
-  var originalDistSign = getSpanSign(handleEnds, handleIndex);
-  handleEnds[handleIndex] += delta; // Restrict in extent.
-
-  var extentMinSpan = minSpan || 0;
-  var realExtent = extent.slice();
-  originalDistSign.sign < 0 ? realExtent[0] += extentMinSpan : realExtent[1] -= extentMinSpan;
-  handleEnds[handleIndex] = restrict(handleEnds[handleIndex], realExtent); // Expand span.
-
-  var currDistSign = getSpanSign(handleEnds, handleIndex);
-
-  if (minSpan != null && (currDistSign.sign !== originalDistSign.sign || currDistSign.span < minSpan)) {
-    // If minSpan exists, 'cross' is forbinden.
-    handleEnds[1 - handleIndex] = handleEnds[handleIndex] + originalDistSign.sign * minSpan;
-  } // Shrink span.
-
-
-  var currDistSign = getSpanSign(handleEnds, handleIndex);
-
-  if (maxSpan != null && currDistSign.span > maxSpan) {
-    handleEnds[1 - handleIndex] = handleEnds[handleIndex] + currDistSign.sign * maxSpan;
-  }
-
-  return handleEnds;
-};
-
-function getSpanSign(handleEnds, handleIndex) {
-  var dist = handleEnds[handleIndex] - handleEnds[1 - handleIndex]; // If `handleEnds[0] === handleEnds[1]`, always believe that handleEnd[0]
-  // is at left of handleEnds[1] for non-cross case.
-
-  return {
-    span: Math.abs(dist),
-    sign: dist > 0 ? -1 : dist < 0 ? 1 : handleIndex ? -1 : 1
-  };
-}
-
-function restrict(value, extend) {
-  return Math.min(extend[1], Math.max(extend[0], value));
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var Rect$1 = Rect;
-var linearMap$1 = linearMap;
-var asc$2 = asc;
-var bind$4 = bind;
-var each$15 = each$1; // Constants
-
-var DEFAULT_LOCATION_EDGE_GAP = 7;
-var DEFAULT_FRAME_BORDER_WIDTH = 1;
-var DEFAULT_FILLER_SIZE = 30;
-var HORIZONTAL = 'horizontal';
-var VERTICAL = 'vertical';
-var LABEL_GAP = 5;
-var SHOW_DATA_SHADOW_SERIES_TYPE = ['line', 'bar', 'candlestick', 'scatter'];
-var SliderZoomView = DataZoomView.extend({
-  type: 'dataZoom.slider',
-  init: function (ecModel, api) {
-    /**
-     * @private
-     * @type {Object}
-     */
-    this._displayables = {};
-    /**
-     * @private
-     * @type {string}
-     */
-
-    this._orient;
-    /**
-     * [0, 100]
-     * @private
-     */
-
-    this._range;
-    /**
-     * [coord of the first handle, coord of the second handle]
-     * @private
-     */
-
-    this._handleEnds;
-    /**
-     * [length, thick]
-     * @private
-     * @type {Array.<number>}
-     */
-
-    this._size;
-    /**
-     * @private
-     * @type {number}
-     */
-
-    this._handleWidth;
-    /**
-     * @private
-     * @type {number}
-     */
-
-    this._handleHeight;
-    /**
-     * @private
-     */
-
-    this._location;
-    /**
-     * @private
-     */
-
-    this._dragging;
-    /**
-     * @private
-     */
-
-    this._dataShadowInfo;
-    this.api = api;
-  },
-
-  /**
-   * @override
-   */
-  render: function (dataZoomModel, ecModel, api, payload) {
-    SliderZoomView.superApply(this, 'render', arguments);
-    createOrUpdate(this, '_dispatchZoomAction', this.dataZoomModel.get('throttle'), 'fixRate');
-    this._orient = dataZoomModel.get('orient');
-
-    if (this.dataZoomModel.get('show') === false) {
-      this.group.removeAll();
-      return;
-    } // Notice: this._resetInterval() should not be executed when payload.type
-    // is 'dataZoom', origin this._range should be maintained, otherwise 'pan'
-    // or 'zoom' info will be missed because of 'throttle' of this.dispatchAction,
-
-
-    if (!payload || payload.type !== 'dataZoom' || payload.from !== this.uid) {
-      this._buildView();
-    }
-
-    this._updateView();
-  },
-
-  /**
-   * @override
-   */
-  remove: function () {
-    SliderZoomView.superApply(this, 'remove', arguments);
-    clear(this, '_dispatchZoomAction');
-  },
-
-  /**
-   * @override
-   */
-  dispose: function () {
-    SliderZoomView.superApply(this, 'dispose', arguments);
-    clear(this, '_dispatchZoomAction');
-  },
-  _buildView: function () {
-    var thisGroup = this.group;
-    thisGroup.removeAll();
-
-    this._resetLocation();
-
-    this._resetInterval();
-
-    var barGroup = this._displayables.barGroup = new Group();
-
-    this._renderBackground();
-
-    this._renderHandle();
-
-    this._renderDataShadow();
-
-    thisGroup.add(barGroup);
-
-    this._positionGroup();
-  },
-
-  /**
-   * @private
-   */
-  _resetLocation: function () {
-    var dataZoomModel = this.dataZoomModel;
-    var api = this.api; // If some of x/y/width/height are not specified,
-    // auto-adapt according to target grid.
-
-    var coordRect = this._findCoordRect();
-
-    var ecSize = {
-      width: api.getWidth(),
-      height: api.getHeight()
-    }; // Default align by coordinate system rect.
-
-    var positionInfo = this._orient === HORIZONTAL ? {
-      // Why using 'right', because right should be used in vertical,
-      // and it is better to be consistent for dealing with position param merge.
-      right: ecSize.width - coordRect.x - coordRect.width,
-      top: ecSize.height - DEFAULT_FILLER_SIZE - DEFAULT_LOCATION_EDGE_GAP,
-      width: coordRect.width,
-      height: DEFAULT_FILLER_SIZE
-    } : {
-      // vertical
-      right: DEFAULT_LOCATION_EDGE_GAP,
-      top: coordRect.y,
-      width: DEFAULT_FILLER_SIZE,
-      height: coordRect.height
-    }; // Do not write back to option and replace value 'ph', because
-    // the 'ph' value should be recalculated when resize.
-
-    var layoutParams = getLayoutParams(dataZoomModel.option); // Replace the placeholder value.
-
-    each$1(['right', 'top', 'width', 'height'], function (name) {
-      if (layoutParams[name] === 'ph') {
-        layoutParams[name] = positionInfo[name];
-      }
-    });
-    var layoutRect = getLayoutRect(layoutParams, ecSize, dataZoomModel.padding);
-    this._location = {
-      x: layoutRect.x,
-      y: layoutRect.y
-    };
-    this._size = [layoutRect.width, layoutRect.height];
-    this._orient === VERTICAL && this._size.reverse();
-  },
-
-  /**
-   * @private
-   */
-  _positionGroup: function () {
-    var thisGroup = this.group;
-    var location = this._location;
-    var orient = this._orient; // Just use the first axis to determine mapping.
-
-    var targetAxisModel = this.dataZoomModel.getFirstTargetAxisModel();
-    var inverse = targetAxisModel && targetAxisModel.get('inverse');
-    var barGroup = this._displayables.barGroup;
-    var otherAxisInverse = (this._dataShadowInfo || {}).otherAxisInverse; // Transform barGroup.
-
-    barGroup.attr(orient === HORIZONTAL && !inverse ? {
-      scale: otherAxisInverse ? [1, 1] : [1, -1]
-    } : orient === HORIZONTAL && inverse ? {
-      scale: otherAxisInverse ? [-1, 1] : [-1, -1]
-    } : orient === VERTICAL && !inverse ? {
-      scale: otherAxisInverse ? [1, -1] : [1, 1],
-      rotation: Math.PI / 2 // Dont use Math.PI, considering shadow direction.
-
-    } : {
-      scale: otherAxisInverse ? [-1, -1] : [-1, 1],
-      rotation: Math.PI / 2
-    }); // Position barGroup
-
-    var rect = thisGroup.getBoundingRect([barGroup]);
-    thisGroup.attr('position', [location.x - rect.x, location.y - rect.y]);
-  },
-
-  /**
-   * @private
-   */
-  _getViewExtent: function () {
-    return [0, this._size[0]];
-  },
-  _renderBackground: function () {
-    var dataZoomModel = this.dataZoomModel;
-    var size = this._size;
-    var barGroup = this._displayables.barGroup;
-    barGroup.add(new Rect$1({
-      silent: true,
-      shape: {
-        x: 0,
-        y: 0,
-        width: size[0],
-        height: size[1]
-      },
-      style: {
-        fill: dataZoomModel.get('backgroundColor')
-      },
-      z2: -40
-    })); // Click panel, over shadow, below handles.
-
-    barGroup.add(new Rect$1({
-      shape: {
-        x: 0,
-        y: 0,
-        width: size[0],
-        height: size[1]
-      },
-      style: {
-        fill: 'transparent'
-      },
-      z2: 0,
-      onclick: bind(this._onClickPanelClick, this)
-    }));
-  },
-  _renderDataShadow: function () {
-    var info = this._dataShadowInfo = this._prepareDataShadowInfo();
-
-    if (!info) {
-      return;
-    }
-
-    var size = this._size;
-    var seriesModel = info.series;
-    var data = seriesModel.getRawData();
-    var otherDim = seriesModel.getShadowDim ? seriesModel.getShadowDim() // @see candlestick
-    : info.otherDim;
-
-    if (otherDim == null) {
-      return;
-    }
-
-    var otherDataExtent = data.getDataExtent(otherDim); // Nice extent.
-
-    var otherOffset = (otherDataExtent[1] - otherDataExtent[0]) * 0.3;
-    otherDataExtent = [otherDataExtent[0] - otherOffset, otherDataExtent[1] + otherOffset];
-    var otherShadowExtent = [0, size[1]];
-    var thisShadowExtent = [0, size[0]];
-    var areaPoints = [[size[0], 0], [0, 0]];
-    var linePoints = [];
-    var step = thisShadowExtent[1] / (data.count() - 1);
-    var thisCoord = 0; // Optimize for large data shadow
-
-    var stride = Math.round(data.count() / size[0]);
-    var lastIsEmpty;
-    data.each([otherDim], function (value, index) {
-      if (stride > 0 && index % stride) {
-        thisCoord += step;
-        return;
-      } // FIXME
-      // Should consider axis.min/axis.max when drawing dataShadow.
-      // FIXME
-      // 应该使用统一的空判断？还是在list里进行空判断？
-
-
-      var isEmpty = value == null || isNaN(value) || value === ''; // See #4235.
-
-      var otherCoord = isEmpty ? 0 : linearMap$1(value, otherDataExtent, otherShadowExtent, true); // Attempt to draw data shadow precisely when there are empty value.
-
-      if (isEmpty && !lastIsEmpty && index) {
-        areaPoints.push([areaPoints[areaPoints.length - 1][0], 0]);
-        linePoints.push([linePoints[linePoints.length - 1][0], 0]);
-      } else if (!isEmpty && lastIsEmpty) {
-        areaPoints.push([thisCoord, 0]);
-        linePoints.push([thisCoord, 0]);
-      }
-
-      areaPoints.push([thisCoord, otherCoord]);
-      linePoints.push([thisCoord, otherCoord]);
-      thisCoord += step;
-      lastIsEmpty = isEmpty;
-    });
-    var dataZoomModel = this.dataZoomModel; // var dataBackgroundModel = dataZoomModel.getModel('dataBackground');
-
-    this._displayables.barGroup.add(new Polygon({
-      shape: {
-        points: areaPoints
-      },
-      style: defaults({
-        fill: dataZoomModel.get('dataBackgroundColor')
-      }, dataZoomModel.getModel('dataBackground.areaStyle').getAreaStyle()),
-      silent: true,
-      z2: -20
-    }));
-
-    this._displayables.barGroup.add(new Polyline({
-      shape: {
-        points: linePoints
-      },
-      style: dataZoomModel.getModel('dataBackground.lineStyle').getLineStyle(),
-      silent: true,
-      z2: -19
-    }));
-  },
-  _prepareDataShadowInfo: function () {
-    var dataZoomModel = this.dataZoomModel;
-    var showDataShadow = dataZoomModel.get('showDataShadow');
-
-    if (showDataShadow === false) {
-      return;
-    } // Find a representative series.
-
-
-    var result;
-    var ecModel = this.ecModel;
-    dataZoomModel.eachTargetAxis(function (dimNames, axisIndex) {
-      var seriesModels = dataZoomModel.getAxisProxy(dimNames.name, axisIndex).getTargetSeriesModels();
-      each$1(seriesModels, function (seriesModel) {
-        if (result) {
-          return;
-        }
-
-        if (showDataShadow !== true && indexOf(SHOW_DATA_SHADOW_SERIES_TYPE, seriesModel.get('type')) < 0) {
-          return;
-        }
-
-        var thisAxis = ecModel.getComponent(dimNames.axis, axisIndex).axis;
-        var otherDim = getOtherDim(dimNames.name);
-        var otherAxisInverse;
-        var coordSys = seriesModel.coordinateSystem;
-
-        if (otherDim != null && coordSys.getOtherAxis) {
-          otherAxisInverse = coordSys.getOtherAxis(thisAxis).inverse;
-        }
-
-        otherDim = seriesModel.getData().mapDimension(otherDim);
-        result = {
-          thisAxis: thisAxis,
-          series: seriesModel,
-          thisDim: dimNames.name,
-          otherDim: otherDim,
-          otherAxisInverse: otherAxisInverse
-        };
-      }, this);
-    }, this);
-    return result;
-  },
-  _renderHandle: function () {
-    var displaybles = this._displayables;
-    var handles = displaybles.handles = [];
-    var handleLabels = displaybles.handleLabels = [];
-    var barGroup = this._displayables.barGroup;
-    var size = this._size;
-    var dataZoomModel = this.dataZoomModel;
-    barGroup.add(displaybles.filler = new Rect$1({
-      draggable: true,
-      cursor: getCursor(this._orient),
-      drift: bind$4(this._onDragMove, this, 'all'),
-      onmousemove: function (e) {
-        // Fot mobile devicem, prevent screen slider on the button.
-        stop(e.event);
-      },
-      ondragstart: bind$4(this._showDataInfo, this, true),
-      ondragend: bind$4(this._onDragEnd, this),
-      onmouseover: bind$4(this._showDataInfo, this, true),
-      onmouseout: bind$4(this._showDataInfo, this, false),
-      style: {
-        fill: dataZoomModel.get('fillerColor'),
-        textPosition: 'inside'
-      }
-    })); // Frame border.
-
-    barGroup.add(new Rect$1(subPixelOptimizeRect({
-      silent: true,
-      shape: {
-        x: 0,
-        y: 0,
-        width: size[0],
-        height: size[1]
-      },
-      style: {
-        stroke: dataZoomModel.get('dataBackgroundColor') || dataZoomModel.get('borderColor'),
-        lineWidth: DEFAULT_FRAME_BORDER_WIDTH,
-        fill: 'rgba(0,0,0,0)'
-      }
-    })));
-    each$15([0, 1], function (handleIndex) {
-      var path = createIcon(dataZoomModel.get('handleIcon'), {
-        cursor: getCursor(this._orient),
-        draggable: true,
-        drift: bind$4(this._onDragMove, this, handleIndex),
-        onmousemove: function (e) {
-          // Fot mobile devicem, prevent screen slider on the button.
-          stop(e.event);
-        },
-        ondragend: bind$4(this._onDragEnd, this),
-        onmouseover: bind$4(this._showDataInfo, this, true),
-        onmouseout: bind$4(this._showDataInfo, this, false)
-      }, {
-        x: -1,
-        y: 0,
-        width: 2,
-        height: 2
-      });
-      var bRect = path.getBoundingRect();
-      this._handleHeight = parsePercent$1(dataZoomModel.get('handleSize'), this._size[1]);
-      this._handleWidth = bRect.width / bRect.height * this._handleHeight;
-      path.setStyle(dataZoomModel.getModel('handleStyle').getItemStyle());
-      var handleColor = dataZoomModel.get('handleColor'); // Compatitable with previous version
-
-      if (handleColor != null) {
-        path.style.fill = handleColor;
-      }
-
-      barGroup.add(handles[handleIndex] = path);
-      var textStyleModel = dataZoomModel.textStyleModel;
-      this.group.add(handleLabels[handleIndex] = new Text({
-        silent: true,
-        invisible: true,
-        style: {
-          x: 0,
-          y: 0,
-          text: '',
-          textVerticalAlign: 'middle',
-          textAlign: 'center',
-          textFill: textStyleModel.getTextColor(),
-          textFont: textStyleModel.getFont()
-        },
-        z2: 10
-      }));
-    }, this);
-  },
-
-  /**
-   * @private
-   */
-  _resetInterval: function () {
-    var range = this._range = this.dataZoomModel.getPercentRange();
-
-    var viewExtent = this._getViewExtent();
-
-    this._handleEnds = [linearMap$1(range[0], [0, 100], viewExtent, true), linearMap$1(range[1], [0, 100], viewExtent, true)];
-  },
-
-  /**
-   * @private
-   * @param {(number|string)} handleIndex 0 or 1 or 'all'
-   * @param {number} delta
-   * @return {boolean} changed
-   */
-  _updateInterval: function (handleIndex, delta) {
-    var dataZoomModel = this.dataZoomModel;
-    var handleEnds = this._handleEnds;
-
-    var viewExtend = this._getViewExtent();
-
-    var minMaxSpan = dataZoomModel.findRepresentativeAxisProxy().getMinMaxSpan();
-    var percentExtent = [0, 100];
-    sliderMove(delta, handleEnds, viewExtend, dataZoomModel.get('zoomLock') ? 'all' : handleIndex, minMaxSpan.minSpan != null ? linearMap$1(minMaxSpan.minSpan, percentExtent, viewExtend, true) : null, minMaxSpan.maxSpan != null ? linearMap$1(minMaxSpan.maxSpan, percentExtent, viewExtend, true) : null);
-    var lastRange = this._range;
-    var range = this._range = asc$2([linearMap$1(handleEnds[0], viewExtend, percentExtent, true), linearMap$1(handleEnds[1], viewExtend, percentExtent, true)]);
-    return !lastRange || lastRange[0] !== range[0] || lastRange[1] !== range[1];
-  },
-
-  /**
-   * @private
-   */
-  _updateView: function (nonRealtime) {
-    var displaybles = this._displayables;
-    var handleEnds = this._handleEnds;
-    var handleInterval = asc$2(handleEnds.slice());
-    var size = this._size;
-    each$15([0, 1], function (handleIndex) {
-      // Handles
-      var handle = displaybles.handles[handleIndex];
-      var handleHeight = this._handleHeight;
-      handle.attr({
-        scale: [handleHeight / 2, handleHeight / 2],
-        position: [handleEnds[handleIndex], size[1] / 2 - handleHeight / 2]
-      });
-    }, this); // Filler
-
-    displaybles.filler.setShape({
-      x: handleInterval[0],
-      y: 0,
-      width: handleInterval[1] - handleInterval[0],
-      height: size[1]
-    });
-
-    this._updateDataInfo(nonRealtime);
-  },
-
-  /**
-   * @private
-   */
-  _updateDataInfo: function (nonRealtime) {
-    var dataZoomModel = this.dataZoomModel;
-    var displaybles = this._displayables;
-    var handleLabels = displaybles.handleLabels;
-    var orient = this._orient;
-    var labelTexts = ['', '']; // FIXME
-    // date型，支持formatter，autoformatter（ec2 date.getAutoFormatter）
-
-    if (dataZoomModel.get('showDetail')) {
-      var axisProxy = dataZoomModel.findRepresentativeAxisProxy();
-
-      if (axisProxy) {
-        var axis = axisProxy.getAxisModel().axis;
-        var range = this._range;
-        var dataInterval = nonRealtime // See #4434, data and axis are not processed and reset yet in non-realtime mode.
-        ? axisProxy.calculateDataWindow({
-          start: range[0],
-          end: range[1]
-        }).valueWindow : axisProxy.getDataValueWindow();
-        labelTexts = [this._formatLabel(dataInterval[0], axis), this._formatLabel(dataInterval[1], axis)];
-      }
-    }
-
-    var orderedHandleEnds = asc$2(this._handleEnds.slice());
-    setLabel.call(this, 0);
-    setLabel.call(this, 1);
-
-    function setLabel(handleIndex) {
-      // Label
-      // Text should not transform by barGroup.
-      // Ignore handlers transform
-      var barTransform = getTransform(displaybles.handles[handleIndex].parent, this.group);
-      var direction = transformDirection(handleIndex === 0 ? 'right' : 'left', barTransform);
-      var offset = this._handleWidth / 2 + LABEL_GAP;
-      var textPoint = applyTransform$1([orderedHandleEnds[handleIndex] + (handleIndex === 0 ? -offset : offset), this._size[1] / 2], barTransform);
-      handleLabels[handleIndex].setStyle({
-        x: textPoint[0],
-        y: textPoint[1],
-        textVerticalAlign: orient === HORIZONTAL ? 'middle' : direction,
-        textAlign: orient === HORIZONTAL ? direction : 'center',
-        text: labelTexts[handleIndex]
-      });
-    }
-  },
-
-  /**
-   * @private
-   */
-  _formatLabel: function (value, axis) {
-    var dataZoomModel = this.dataZoomModel;
-    var labelFormatter = dataZoomModel.get('labelFormatter');
-    var labelPrecision = dataZoomModel.get('labelPrecision');
-
-    if (labelPrecision == null || labelPrecision === 'auto') {
-      labelPrecision = axis.getPixelPrecision();
-    }
-
-    var valueStr = value == null || isNaN(value) ? '' // FIXME Glue code
-    : axis.type === 'category' || axis.type === 'time' ? axis.scale.getLabel(Math.round(value)) // param of toFixed should less then 20.
-    : value.toFixed(Math.min(labelPrecision, 20));
-    return isFunction$1(labelFormatter) ? labelFormatter(value, valueStr) : isString(labelFormatter) ? labelFormatter.replace('{value}', valueStr) : valueStr;
-  },
-
-  /**
-   * @private
-   * @param {boolean} showOrHide true: show, false: hide
-   */
-  _showDataInfo: function (showOrHide) {
-    // Always show when drgging.
-    showOrHide = this._dragging || showOrHide;
-    var handleLabels = this._displayables.handleLabels;
-    handleLabels[0].attr('invisible', !showOrHide);
-    handleLabels[1].attr('invisible', !showOrHide);
-  },
-  _onDragMove: function (handleIndex, dx, dy) {
-    this._dragging = true; // Transform dx, dy to bar coordination.
-
-    var barTransform = this._displayables.barGroup.getLocalTransform();
-
-    var vertex = applyTransform$1([dx, dy], barTransform, true);
-
-    var changed = this._updateInterval(handleIndex, vertex[0]);
-
-    var realtime = this.dataZoomModel.get('realtime');
-
-    this._updateView(!realtime); // Avoid dispatch dataZoom repeatly but range not changed,
-    // which cause bad visual effect when progressive enabled.
-
-
-    changed && realtime && this._dispatchZoomAction();
-  },
-  _onDragEnd: function () {
-    this._dragging = false;
-
-    this._showDataInfo(false); // While in realtime mode and stream mode, dispatch action when
-    // drag end will cause the whole view rerender, which is unnecessary.
-
-
-    var realtime = this.dataZoomModel.get('realtime');
-    !realtime && this._dispatchZoomAction();
-  },
-  _onClickPanelClick: function (e) {
-    var size = this._size;
-
-    var localPoint = this._displayables.barGroup.transformCoordToLocal(e.offsetX, e.offsetY);
-
-    if (localPoint[0] < 0 || localPoint[0] > size[0] || localPoint[1] < 0 || localPoint[1] > size[1]) {
-      return;
-    }
-
-    var handleEnds = this._handleEnds;
-    var center = (handleEnds[0] + handleEnds[1]) / 2;
-
-    var changed = this._updateInterval('all', localPoint[0] - center);
-
-    this._updateView();
-
-    changed && this._dispatchZoomAction();
-  },
-
-  /**
-   * This action will be throttled.
-   * @private
-   */
-  _dispatchZoomAction: function () {
-    var range = this._range;
-    this.api.dispatchAction({
-      type: 'dataZoom',
-      from: this.uid,
-      dataZoomId: this.dataZoomModel.id,
-      start: range[0],
-      end: range[1]
-    });
-  },
-
-  /**
-   * @private
-   */
-  _findCoordRect: function () {
-    // Find the grid coresponding to the first axis referred by dataZoom.
-    var rect;
-    each$15(this.getTargetCoordInfo(), function (coordInfoList) {
-      if (!rect && coordInfoList.length) {
-        var coordSys = coordInfoList[0].model.coordinateSystem;
-        rect = coordSys.getRect && coordSys.getRect();
-      }
-    });
-
-    if (!rect) {
-      var width = this.api.getWidth();
-      var height = this.api.getHeight();
-      rect = {
-        x: width * 0.2,
-        y: height * 0.2,
-        width: width * 0.6,
-        height: height * 0.6
-      };
-    }
-
-    return rect;
-  }
-});
-
-function getOtherDim(thisDim) {
-  // FIXME
-  // 这个逻辑和getOtherAxis里一致，但是写在这里是否不好
-  var map$$1 = {
-    x: 'y',
-    y: 'x',
-    radius: 'angle',
-    angle: 'radius'
-  };
-  return map$$1[thisDim];
-}
-
-function getCursor(orient) {
-  return orient === 'vertical' ? 'ns-resize' : 'ew-resize';
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-DataZoomModel.extend({
-  type: 'dataZoom.inside',
-
-  /**
-   * @protected
-   */
-  defaultOption: {
-    disabled: false,
-    // Whether disable this inside zoom.
-    zoomLock: false,
-    // Whether disable zoom but only pan.
-    zoomOnMouseWheel: true,
-    // Can be: true / false / 'shift' / 'ctrl' / 'alt'.
-    moveOnMouseMove: true,
-    // Can be: true / false / 'shift' / 'ctrl' / 'alt'.
-    moveOnMouseWheel: false,
-    // Can be: true / false / 'shift' / 'ctrl' / 'alt'.
-    preventDefaultMouseMove: true
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var ATTR$1 = '\0_ec_interaction_mutex';
-function take(zr, resourceKey, userKey) {
-  var store = getStore(zr);
-  store[resourceKey] = userKey;
-}
-function release(zr, resourceKey, userKey) {
-  var store = getStore(zr);
-  var uKey = store[resourceKey];
-
-  if (uKey === userKey) {
-    store[resourceKey] = null;
-  }
-}
-function isTaken(zr, resourceKey) {
-  return !!getStore(zr)[resourceKey];
-}
-
-function getStore(zr) {
-  return zr[ATTR$1] || (zr[ATTR$1] = {});
-}
-/**
- * payload: {
- *     type: 'takeGlobalCursor',
- *     key: 'dataZoomSelect', or 'brush', or ...,
- *         If no userKey, release global cursor.
- * }
- */
-
-
-registerAction({
-  type: 'takeGlobalCursor',
-  event: 'globalCursorTaken',
-  update: 'update'
-}, function () {});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * @alias module:echarts/component/helper/RoamController
- * @constructor
- * @mixin {module:zrender/mixin/Eventful}
- *
- * @param {module:zrender/zrender~ZRender} zr
- */
-
-function RoamController(zr) {
-  /**
-   * @type {Function}
-   */
-  this.pointerChecker;
-  /**
-   * @type {module:zrender}
-   */
-
-  this._zr = zr;
-  /**
-   * @type {Object}
-   */
-
-  this._opt = {}; // Avoid two roamController bind the same handler
-
-  var bind$$1 = bind;
-  var mousedownHandler = bind$$1(mousedown, this);
-  var mousemoveHandler = bind$$1(mousemove, this);
-  var mouseupHandler = bind$$1(mouseup, this);
-  var mousewheelHandler = bind$$1(mousewheel, this);
-  var pinchHandler = bind$$1(pinch, this);
-  Eventful.call(this);
-  /**
-   * @param {Function} pointerChecker
-   *                   input: x, y
-   *                   output: boolean
-   */
-
-  this.setPointerChecker = function (pointerChecker) {
-    this.pointerChecker = pointerChecker;
-  };
-  /**
-   * Notice: only enable needed types. For example, if 'zoom'
-   * is not needed, 'zoom' should not be enabled, otherwise
-   * default mousewheel behaviour (scroll page) will be disabled.
-   *
-   * @param  {boolean|string} [controlType=true] Specify the control type,
-   *                          which can be null/undefined or true/false
-   *                          or 'pan/move' or 'zoom'/'scale'
-   * @param {Object} [opt]
-   * @param {Object} [opt.zoomOnMouseWheel=true] The value can be: true / false / 'shift' / 'ctrl' / 'alt'.
-   * @param {Object} [opt.moveOnMouseMove=true] The value can be: true / false / 'shift' / 'ctrl' / 'alt'.
-   * @param {Object} [opt.moveOnMouseWheel=false] The value can be: true / false / 'shift' / 'ctrl' / 'alt'.
-   * @param {Object} [opt.preventDefaultMouseMove=true] When pan.
-   */
-
-
-  this.enable = function (controlType, opt) {
-    // Disable previous first
-    this.disable();
-    this._opt = defaults(clone(opt) || {}, {
-      zoomOnMouseWheel: true,
-      moveOnMouseMove: true,
-      // By default, wheel do not trigger move.
-      moveOnMouseWheel: false,
-      preventDefaultMouseMove: true
-    });
-
-    if (controlType == null) {
-      controlType = true;
-    }
-
-    if (controlType === true || controlType === 'move' || controlType === 'pan') {
-      zr.on('mousedown', mousedownHandler);
-      zr.on('mousemove', mousemoveHandler);
-      zr.on('mouseup', mouseupHandler);
-    }
-
-    if (controlType === true || controlType === 'scale' || controlType === 'zoom') {
-      zr.on('mousewheel', mousewheelHandler);
-      zr.on('pinch', pinchHandler);
-    }
-  };
-
-  this.disable = function () {
-    zr.off('mousedown', mousedownHandler);
-    zr.off('mousemove', mousemoveHandler);
-    zr.off('mouseup', mouseupHandler);
-    zr.off('mousewheel', mousewheelHandler);
-    zr.off('pinch', pinchHandler);
-  };
-
-  this.dispose = this.disable;
-
-  this.isDragging = function () {
-    return this._dragging;
-  };
-
-  this.isPinching = function () {
-    return this._pinching;
-  };
-}
-
-mixin(RoamController, Eventful);
-
-function mousedown(e) {
-  if (isMiddleOrRightButtonOnMouseUpDown(e) || e.target && e.target.draggable) {
-    return;
-  }
-
-  var x = e.offsetX;
-  var y = e.offsetY; // Only check on mosedown, but not mousemove.
-  // Mouse can be out of target when mouse moving.
-
-  if (this.pointerChecker && this.pointerChecker(e, x, y)) {
-    this._x = x;
-    this._y = y;
-    this._dragging = true;
-  }
-}
-
-function mousemove(e) {
-  if (!this._dragging || !isAvailableBehavior('moveOnMouseMove', e, this._opt) || e.gestureEvent === 'pinch' || isTaken(this._zr, 'globalPan')) {
-    return;
-  }
-
-  var x = e.offsetX;
-  var y = e.offsetY;
-  var oldX = this._x;
-  var oldY = this._y;
-  var dx = x - oldX;
-  var dy = y - oldY;
-  this._x = x;
-  this._y = y;
-  this._opt.preventDefaultMouseMove && stop(e.event);
-  trigger(this, 'pan', 'moveOnMouseMove', e, {
-    dx: dx,
-    dy: dy,
-    oldX: oldX,
-    oldY: oldY,
-    newX: x,
-    newY: y
-  });
-}
-
-function mouseup(e) {
-  if (!isMiddleOrRightButtonOnMouseUpDown(e)) {
-    this._dragging = false;
-  }
-}
-
-function mousewheel(e) {
-  var shouldZoom = isAvailableBehavior('zoomOnMouseWheel', e, this._opt);
-  var shouldMove = isAvailableBehavior('moveOnMouseWheel', e, this._opt);
-  var wheelDelta = e.wheelDelta;
-  var absWheelDeltaDelta = Math.abs(wheelDelta);
-  var originX = e.offsetX;
-  var originY = e.offsetY; // wheelDelta maybe -0 in chrome mac.
-
-  if (wheelDelta === 0 || !shouldZoom && !shouldMove) {
-    return;
-  } // If both `shouldZoom` and `shouldMove` is true, trigger
-  // their event both, and the final behavior is determined
-  // by event listener themselves.
-
-
-  if (shouldZoom) {
-    // Convenience:
-    // Mac and VM Windows on Mac: scroll up: zoom out.
-    // Windows: scroll up: zoom in.
-    // FIXME: Should do more test in different environment.
-    // wheelDelta is too complicated in difference nvironment
-    // (https://developer.mozilla.org/en-US/docs/Web/Events/mousewheel),
-    // although it has been normallized by zrender.
-    // wheelDelta of mouse wheel is bigger than touch pad.
-    var factor = absWheelDeltaDelta > 3 ? 1.4 : absWheelDeltaDelta > 1 ? 1.2 : 1.1;
-    var scale = wheelDelta > 0 ? factor : 1 / factor;
-    checkPointerAndTrigger(this, 'zoom', 'zoomOnMouseWheel', e, {
-      scale: scale,
-      originX: originX,
-      originY: originY
-    });
-  }
-
-  if (shouldMove) {
-    // FIXME: Should do more test in different environment.
-    var absDelta = Math.abs(wheelDelta); // wheelDelta of mouse wheel is bigger than touch pad.
-
-    var scrollDelta = (wheelDelta > 0 ? 1 : -1) * (absDelta > 3 ? 0.4 : absDelta > 1 ? 0.15 : 0.05);
-    checkPointerAndTrigger(this, 'scrollMove', 'moveOnMouseWheel', e, {
-      scrollDelta: scrollDelta,
-      originX: originX,
-      originY: originY
-    });
-  }
-}
-
-function pinch(e) {
-  if (isTaken(this._zr, 'globalPan')) {
-    return;
-  }
-
-  var scale = e.pinchScale > 1 ? 1.1 : 1 / 1.1;
-  checkPointerAndTrigger(this, 'zoom', null, e, {
-    scale: scale,
-    originX: e.pinchX,
-    originY: e.pinchY
-  });
-}
-
-function checkPointerAndTrigger(controller, eventName, behaviorToCheck, e, contollerEvent) {
-  if (controller.pointerChecker && controller.pointerChecker(e, contollerEvent.originX, contollerEvent.originY)) {
-    // When mouse is out of roamController rect,
-    // default befavoius should not be be disabled, otherwise
-    // page sliding is disabled, contrary to expectation.
-    stop(e.event);
-    trigger(controller, eventName, behaviorToCheck, e, contollerEvent);
-  }
-}
-
-function trigger(controller, eventName, behaviorToCheck, e, contollerEvent) {
-  // Also provide behavior checker for event listener, for some case that
-  // multiple components share one listener.
-  contollerEvent.isAvailableBehavior = bind(isAvailableBehavior, null, behaviorToCheck, e);
-  controller.trigger(eventName, contollerEvent);
-} // settings: {
-//     zoomOnMouseWheel
-//     moveOnMouseMove
-//     moveOnMouseWheel
-// }
-// The value can be: true / false / 'shift' / 'ctrl' / 'alt'.
-
-
-function isAvailableBehavior(behaviorToCheck, e, settings) {
-  var setting = settings[behaviorToCheck];
-  return !behaviorToCheck || setting && (!isString(setting) || e.event[setting + 'Key']);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Only create one roam controller for each coordinate system.
-// one roam controller might be refered by two inside data zoom
-// components (for example, one for x and one for y). When user
-// pan or zoom, only dispatch one action for those data zoom
-// components.
-var ATTR = '\0_ec_dataZoom_roams';
-/**
- * @public
- * @param {module:echarts/ExtensionAPI} api
- * @param {Object} dataZoomInfo
- * @param {string} dataZoomInfo.coordId
- * @param {Function} dataZoomInfo.containsPoint
- * @param {Array.<string>} dataZoomInfo.allCoordIds
- * @param {string} dataZoomInfo.dataZoomId
- * @param {Object} dataZoomInfo.getRange
- * @param {Function} dataZoomInfo.getRange.pan
- * @param {Function} dataZoomInfo.getRange.zoom
- * @param {Function} dataZoomInfo.getRange.scrollMove
- * @param {boolean} dataZoomInfo.dataZoomModel
- */
-
-function register$1(api, dataZoomInfo) {
-  var store = giveStore(api);
-  var theDataZoomId = dataZoomInfo.dataZoomId;
-  var theCoordId = dataZoomInfo.coordId; // Do clean when a dataZoom changes its target coordnate system.
-  // Avoid memory leak, dispose all not-used-registered.
-
-  each$1(store, function (record, coordId) {
-    var dataZoomInfos = record.dataZoomInfos;
-
-    if (dataZoomInfos[theDataZoomId] && indexOf(dataZoomInfo.allCoordIds, theCoordId) < 0) {
-      delete dataZoomInfos[theDataZoomId];
-      record.count--;
-    }
-  });
-  cleanStore(store);
-  var record = store[theCoordId]; // Create if needed.
-
-  if (!record) {
-    record = store[theCoordId] = {
-      coordId: theCoordId,
-      dataZoomInfos: {},
-      count: 0
-    };
-    record.controller = createController(api, record);
-    record.dispatchAction = curry(dispatchAction, api);
-  } // Update reference of dataZoom.
-
-
-  !record.dataZoomInfos[theDataZoomId] && record.count++;
-  record.dataZoomInfos[theDataZoomId] = dataZoomInfo;
-  var controllerParams = mergeControllerParams(record.dataZoomInfos);
-  record.controller.enable(controllerParams.controlType, controllerParams.opt); // Consider resize, area should be always updated.
-
-  record.controller.setPointerChecker(dataZoomInfo.containsPoint); // Update throttle.
-
-  createOrUpdate(record, 'dispatchAction', dataZoomInfo.dataZoomModel.get('throttle', true), 'fixRate');
-}
-/**
- * @public
- * @param {module:echarts/ExtensionAPI} api
- * @param {string} dataZoomId
- */
-
-function unregister$1(api, dataZoomId) {
-  var store = giveStore(api);
-  each$1(store, function (record) {
-    record.controller.dispose();
-    var dataZoomInfos = record.dataZoomInfos;
-
-    if (dataZoomInfos[dataZoomId]) {
-      delete dataZoomInfos[dataZoomId];
-      record.count--;
-    }
-  });
-  cleanStore(store);
-}
-/**
- * @public
- */
-
-function generateCoordId(coordModel) {
-  return coordModel.type + '\0_' + coordModel.id;
-}
-/**
- * Key: coordId, value: {dataZoomInfos: [], count, controller}
- * @type {Array.<Object>}
- */
-
-function giveStore(api) {
-  // Mount store on zrender instance, so that we do not
-  // need to worry about dispose.
-  var zr = api.getZr();
-  return zr[ATTR] || (zr[ATTR] = {});
-}
-
-function createController(api, newRecord) {
-  var controller = new RoamController(api.getZr());
-  each$1(['pan', 'zoom', 'scrollMove'], function (eventName) {
-    controller.on(eventName, function (event) {
-      var batch = [];
-      each$1(newRecord.dataZoomInfos, function (info) {
-        // Check whether the behaviors (zoomOnMouseWheel, moveOnMouseMove,
-        // moveOnMouseWheel, ...) enabled.
-        if (!event.isAvailableBehavior(info.dataZoomModel.option)) {
-          return;
-        }
-
-        var method = (info.getRange || {})[eventName];
-        var range = method && method(newRecord.controller, event);
-        !info.dataZoomModel.get('disabled', true) && range && batch.push({
-          dataZoomId: info.dataZoomId,
-          start: range[0],
-          end: range[1]
-        });
-      });
-      batch.length && newRecord.dispatchAction(batch);
-    });
-  });
-  return controller;
-}
-
-function cleanStore(store) {
-  each$1(store, function (record, coordId) {
-    if (!record.count) {
-      record.controller.dispose();
-      delete store[coordId];
-    }
-  });
-}
-/**
- * This action will be throttled.
- */
-
-
-function dispatchAction(api, batch) {
-  api.dispatchAction({
-    type: 'dataZoom',
-    batch: batch
-  });
-}
-/**
- * Merge roamController settings when multiple dataZooms share one roamController.
- */
-
-
-function mergeControllerParams(dataZoomInfos) {
-  var controlType; // DO NOT use reserved word (true, false, undefined) as key literally. Even if encapsulated
-  // as string, it is probably revert to reserved word by compress tool. See #7411.
-
-  var prefix = 'type_';
-  var typePriority = {
-    'type_true': 2,
-    'type_move': 1,
-    'type_false': 0,
-    'type_undefined': -1
-  };
-  var preventDefaultMouseMove = true;
-  each$1(dataZoomInfos, function (dataZoomInfo) {
-    var dataZoomModel = dataZoomInfo.dataZoomModel;
-    var oneType = dataZoomModel.get('disabled', true) ? false : dataZoomModel.get('zoomLock', true) ? 'move' : true;
-
-    if (typePriority[prefix + oneType] > typePriority[prefix + controlType]) {
-      controlType = oneType;
-    } // Prevent default move event by default. If one false, do not prevent. Otherwise
-    // users may be confused why it does not work when multiple insideZooms exist.
-
-
-    preventDefaultMouseMove &= dataZoomModel.get('preventDefaultMouseMove', true);
-  });
-  return {
-    controlType: controlType,
-    opt: {
-      // RoamController will enable all of these functionalities,
-      // and the final behavior is determined by its event listener
-      // provided by each inside zoom.
-      zoomOnMouseWheel: true,
-      moveOnMouseMove: true,
-      moveOnMouseWheel: true,
-      preventDefaultMouseMove: !!preventDefaultMouseMove
-    }
-  };
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var bind$5 = bind;
-var InsideZoomView = DataZoomView.extend({
-  type: 'dataZoom.inside',
-
-  /**
-   * @override
-   */
-  init: function (ecModel, api) {
-    /**
-     * 'throttle' is used in this.dispatchAction, so we save range
-     * to avoid missing some 'pan' info.
-     * @private
-     * @type {Array.<number>}
-     */
-    this._range;
-  },
-
-  /**
-   * @override
-   */
-  render: function (dataZoomModel, ecModel, api, payload) {
-    InsideZoomView.superApply(this, 'render', arguments); // Hance the `throttle` util ensures to preserve command order,
-    // here simply updating range all the time will not cause missing
-    // any of the the roam change.
-
-    this._range = dataZoomModel.getPercentRange(); // Reset controllers.
-
-    each$1(this.getTargetCoordInfo(), function (coordInfoList, coordSysName) {
-      var allCoordIds = map(coordInfoList, function (coordInfo) {
-        return generateCoordId(coordInfo.model);
-      });
-      each$1(coordInfoList, function (coordInfo) {
-        var coordModel = coordInfo.model;
-        var getRange = {};
-        each$1(['pan', 'zoom', 'scrollMove'], function (eventName) {
-          getRange[eventName] = bind$5(roamHandlers[eventName], this, coordInfo, coordSysName);
-        }, this);
-        register$1(api, {
-          coordId: generateCoordId(coordModel),
-          allCoordIds: allCoordIds,
-          containsPoint: function (e, x, y) {
-            return coordModel.coordinateSystem.containPoint([x, y]);
-          },
-          dataZoomId: dataZoomModel.id,
-          dataZoomModel: dataZoomModel,
-          getRange: getRange
-        });
-      }, this);
-    }, this);
-  },
-
-  /**
-   * @override
-   */
-  dispose: function () {
-    unregister$1(this.api, this.dataZoomModel.id);
-    InsideZoomView.superApply(this, 'dispose', arguments);
-    this._range = null;
-  }
-});
-var roamHandlers = {
-  /**
-   * @this {module:echarts/component/dataZoom/InsideZoomView}
-   */
-  zoom: function (coordInfo, coordSysName, controller, e) {
-    var lastRange = this._range;
-    var range = lastRange.slice(); // Calculate transform by the first axis.
-
-    var axisModel = coordInfo.axisModels[0];
-
-    if (!axisModel) {
-      return;
-    }
-
-    var directionInfo = getDirectionInfo[coordSysName](null, [e.originX, e.originY], axisModel, controller, coordInfo);
-    var percentPoint = (directionInfo.signal > 0 ? directionInfo.pixelStart + directionInfo.pixelLength - directionInfo.pixel : directionInfo.pixel - directionInfo.pixelStart) / directionInfo.pixelLength * (range[1] - range[0]) + range[0];
-    var scale = Math.max(1 / e.scale, 0);
-    range[0] = (range[0] - percentPoint) * scale + percentPoint;
-    range[1] = (range[1] - percentPoint) * scale + percentPoint; // Restrict range.
-
-    var minMaxSpan = this.dataZoomModel.findRepresentativeAxisProxy().getMinMaxSpan();
-    sliderMove(0, range, [0, 100], 0, minMaxSpan.minSpan, minMaxSpan.maxSpan);
-    this._range = range;
-
-    if (lastRange[0] !== range[0] || lastRange[1] !== range[1]) {
-      return range;
-    }
-  },
-
-  /**
-   * @this {module:echarts/component/dataZoom/InsideZoomView}
-   */
-  pan: makeMover(function (range, axisModel, coordInfo, coordSysName, controller, e) {
-    var directionInfo = getDirectionInfo[coordSysName]([e.oldX, e.oldY], [e.newX, e.newY], axisModel, controller, coordInfo);
-    return directionInfo.signal * (range[1] - range[0]) * directionInfo.pixel / directionInfo.pixelLength;
-  }),
-
-  /**
-   * @this {module:echarts/component/dataZoom/InsideZoomView}
-   */
-  scrollMove: makeMover(function (range, axisModel, coordInfo, coordSysName, controller, e) {
-    var directionInfo = getDirectionInfo[coordSysName]([0, 0], [e.scrollDelta, e.scrollDelta], axisModel, controller, coordInfo);
-    return directionInfo.signal * (range[1] - range[0]) * e.scrollDelta;
-  })
-};
-
-function makeMover(getPercentDelta) {
-  return function (coordInfo, coordSysName, controller, e) {
-    var lastRange = this._range;
-    var range = lastRange.slice(); // Calculate transform by the first axis.
-
-    var axisModel = coordInfo.axisModels[0];
-
-    if (!axisModel) {
-      return;
-    }
-
-    var percentDelta = getPercentDelta(range, axisModel, coordInfo, coordSysName, controller, e);
-    sliderMove(percentDelta, range, [0, 100], 'all');
-    this._range = range;
-
-    if (lastRange[0] !== range[0] || lastRange[1] !== range[1]) {
-      return range;
-    }
-  };
-}
-
-var getDirectionInfo = {
-  grid: function (oldPoint, newPoint, axisModel, controller, coordInfo) {
-    var axis = axisModel.axis;
-    var ret = {};
-    var rect = coordInfo.model.coordinateSystem.getRect();
-    oldPoint = oldPoint || [0, 0];
-
-    if (axis.dim === 'x') {
-      ret.pixel = newPoint[0] - oldPoint[0];
-      ret.pixelLength = rect.width;
-      ret.pixelStart = rect.x;
-      ret.signal = axis.inverse ? 1 : -1;
-    } else {
-      // axis.dim === 'y'
-      ret.pixel = newPoint[1] - oldPoint[1];
-      ret.pixelLength = rect.height;
-      ret.pixelStart = rect.y;
-      ret.signal = axis.inverse ? -1 : 1;
-    }
-
-    return ret;
-  },
-  polar: function (oldPoint, newPoint, axisModel, controller, coordInfo) {
-    var axis = axisModel.axis;
-    var ret = {};
-    var polar = coordInfo.model.coordinateSystem;
-    var radiusExtent = polar.getRadiusAxis().getExtent();
-    var angleExtent = polar.getAngleAxis().getExtent();
-    oldPoint = oldPoint ? polar.pointToCoord(oldPoint) : [0, 0];
-    newPoint = polar.pointToCoord(newPoint);
-
-    if (axisModel.mainType === 'radiusAxis') {
-      ret.pixel = newPoint[0] - oldPoint[0]; // ret.pixelLength = Math.abs(radiusExtent[1] - radiusExtent[0]);
-      // ret.pixelStart = Math.min(radiusExtent[0], radiusExtent[1]);
-
-      ret.pixelLength = radiusExtent[1] - radiusExtent[0];
-      ret.pixelStart = radiusExtent[0];
-      ret.signal = axis.inverse ? 1 : -1;
-    } else {
-      // 'angleAxis'
-      ret.pixel = newPoint[1] - oldPoint[1]; // ret.pixelLength = Math.abs(angleExtent[1] - angleExtent[0]);
-      // ret.pixelStart = Math.min(angleExtent[0], angleExtent[1]);
-
-      ret.pixelLength = angleExtent[1] - angleExtent[0];
-      ret.pixelStart = angleExtent[0];
-      ret.signal = axis.inverse ? -1 : 1;
-    }
-
-    return ret;
-  },
-  singleAxis: function (oldPoint, newPoint, axisModel, controller, coordInfo) {
-    var axis = axisModel.axis;
-    var rect = coordInfo.model.coordinateSystem.getRect();
-    var ret = {};
-    oldPoint = oldPoint || [0, 0];
-
-    if (axis.orient === 'horizontal') {
-      ret.pixel = newPoint[0] - oldPoint[0];
-      ret.pixelLength = rect.width;
-      ret.pixelStart = rect.x;
-      ret.signal = axis.inverse ? 1 : -1;
-    } else {
-      // 'vertical'
-      ret.pixel = newPoint[1] - oldPoint[1];
-      ret.pixelLength = rect.height;
-      ret.pixelStart = rect.y;
-      ret.signal = axis.inverse ? -1 : 1;
-    }
-
-    return ret;
-  }
-};
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerProcessor({
-  // `dataZoomProcessor` will only be performed in needed series. Consider if
-  // there is a line series and a pie series, it is better not to update the
-  // line series if only pie series is needed to be updated.
-  getTargetSeries: function (ecModel) {
-    var seriesModelMap = createHashMap();
-    ecModel.eachComponent('dataZoom', function (dataZoomModel) {
-      dataZoomModel.eachTargetAxis(function (dimNames, axisIndex, dataZoomModel) {
-        var axisProxy = dataZoomModel.getAxisProxy(dimNames.name, axisIndex);
-        each$1(axisProxy.getTargetSeriesModels(), function (seriesModel) {
-          seriesModelMap.set(seriesModel.uid, seriesModel);
-        });
-      });
-    });
-    return seriesModelMap;
-  },
-  modifyOutputEnd: true,
-  // Consider appendData, where filter should be performed. Because data process is
-  // in block mode currently, it is not need to worry about that the overallProgress
-  // execute every frame.
-  overallReset: function (ecModel, api) {
-    ecModel.eachComponent('dataZoom', function (dataZoomModel) {
-      // We calculate window and reset axis here but not in model
-      // init stage and not after action dispatch handler, because
-      // reset should be called after seriesData.restoreData.
-      dataZoomModel.eachTargetAxis(function (dimNames, axisIndex, dataZoomModel) {
-        dataZoomModel.getAxisProxy(dimNames.name, axisIndex).reset(dataZoomModel, api);
-      }); // Caution: data zoom filtering is order sensitive when using
-      // percent range and no min/max/scale set on axis.
-      // For example, we have dataZoom definition:
-      // [
-      //      {xAxisIndex: 0, start: 30, end: 70},
-      //      {yAxisIndex: 0, start: 20, end: 80}
-      // ]
-      // In this case, [20, 80] of y-dataZoom should be based on data
-      // that have filtered by x-dataZoom using range of [30, 70],
-      // but should not be based on full raw data. Thus sliding
-      // x-dataZoom will change both ranges of xAxis and yAxis,
-      // while sliding y-dataZoom will only change the range of yAxis.
-      // So we should filter x-axis after reset x-axis immediately,
-      // and then reset y-axis and filter y-axis.
-
-      dataZoomModel.eachTargetAxis(function (dimNames, axisIndex, dataZoomModel) {
-        dataZoomModel.getAxisProxy(dimNames.name, axisIndex).filterData(dataZoomModel, api);
-      });
-    });
-    ecModel.eachComponent('dataZoom', function (dataZoomModel) {
-      // Fullfill all of the range props so that user
-      // is able to get them from chart.getOption().
-      var axisProxy = dataZoomModel.findRepresentativeAxisProxy();
-      var percentRange = axisProxy.getDataPercentWindow();
-      var valueRange = axisProxy.getDataValueWindow();
-      dataZoomModel.setRawRange({
-        start: percentRange[0],
-        end: percentRange[1],
-        startValue: valueRange[0],
-        endValue: valueRange[1]
-      }, true);
-    });
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-registerAction('dataZoom', function (payload, ecModel) {
-  var linkedNodesFinder = createLinkedNodesFinder(bind(ecModel.eachComponent, ecModel, 'dataZoom'), eachAxisDim$1, function (model, dimNames) {
-    return model.get(dimNames.axisIndex);
-  });
-  var effectedModels = [];
-  ecModel.eachComponent({
-    mainType: 'dataZoom',
-    query: payload
-  }, function (model, index) {
-    effectedModels.push.apply(effectedModels, linkedNodesFinder(model).nodes);
-  });
-  each$1(effectedModels, function (dataZoomModel, index) {
-    dataZoomModel.setRawRange({
-      start: payload.start,
-      end: payload.end,
-      startValue: payload.startValue,
-      endValue: payload.endValue
-    });
-  });
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * DataZoom component entry
- */
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var DEFAULT_TOOLBOX_BTNS = ['rect', 'polygon', 'keep', 'clear'];
-var preprocessor$1 = function (option, isNew) {
-  var brushComponents = option && option.brush;
-
-  if (!isArray(brushComponents)) {
-    brushComponents = brushComponents ? [brushComponents] : [];
-  }
-
-  if (!brushComponents.length) {
-    return;
-  }
-
-  var brushComponentSpecifiedBtns = [];
-  each$1(brushComponents, function (brushOpt) {
-    var tbs = brushOpt.hasOwnProperty('toolbox') ? brushOpt.toolbox : [];
-
-    if (tbs instanceof Array) {
-      brushComponentSpecifiedBtns = brushComponentSpecifiedBtns.concat(tbs);
-    }
-  });
-  var toolbox = option && option.toolbox;
-
-  if (isArray(toolbox)) {
-    toolbox = toolbox[0];
-  }
-
-  if (!toolbox) {
-    toolbox = {
-      feature: {}
-    };
-    option.toolbox = [toolbox];
-  }
-
-  var toolboxFeature = toolbox.feature || (toolbox.feature = {});
-  var toolboxBrush = toolboxFeature.brush || (toolboxFeature.brush = {});
-  var brushTypes = toolboxBrush.type || (toolboxBrush.type = []);
-  brushTypes.push.apply(brushTypes, brushComponentSpecifiedBtns);
-  removeDuplicate(brushTypes);
-
-  if (isNew && !brushTypes.length) {
-    brushTypes.push.apply(brushTypes, DEFAULT_TOOLBOX_BTNS);
-  }
-};
-
-function removeDuplicate(arr) {
-  var map$$1 = {};
-  each$1(arr, function (val) {
-    map$$1[val] = 1;
-  });
-  arr.length = 0;
-  each$1(map$$1, function (flag, val) {
-    arr.push(val);
-  });
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var each$17 = each$1;
 var isObject$5 = isObject$1;
 var CATEGORY_DEFAULT_VISUAL_INDEX = -1;
 /**
@@ -51086,7 +39552,7 @@ function preprocessForSpecifiedCategory(thisOption) {
   var categories = thisOption.categories;
   var visual = thisOption.visual;
   var categoryMap = thisOption.categoryMap = {};
-  each$17(categories, function (cate, index) {
+  each$13(categories, function (cate, index) {
     categoryMap[cate] = index;
   }); // Process visual map input.
 
@@ -51094,7 +39560,7 @@ function preprocessForSpecifiedCategory(thisOption) {
     var visualArr = [];
 
     if (isObject$1(visual)) {
-      each$17(visual, function (v, cate) {
+      each$13(visual, function (v, cate) {
         var index = categoryMap[cate];
         visualArr[index != null ? index : CATEGORY_DEFAULT_VISUAL_INDEX] = v;
       });
@@ -51121,7 +39587,7 @@ function normalizeVisualRange(thisOption, isCategory) {
   var visualArr = [];
 
   if (isObject$1(visual)) {
-    each$17(visual, function (v) {
+    each$13(visual, function (v) {
       visualArr.push(v);
     });
   } else if (visual != null) {
@@ -51306,7 +39772,7 @@ VisualMapping.mapVisual = function (visual, callback, context) {
 VisualMapping.retrieveVisuals = function (obj) {
   var ret = {};
   var hasVisual;
-  obj && each$17(visualHandlers, function (h, visualType) {
+  obj && each$13(visualHandlers, function (h, visualType) {
     if (obj.hasOwnProperty(visualType)) {
       ret[visualType] = obj[visualType];
       hasVisual = true;
@@ -51327,7 +39793,7 @@ VisualMapping.retrieveVisuals = function (obj) {
 VisualMapping.prepareVisualTypes = function (visualTypes) {
   if (isObject$5(visualTypes)) {
     var types = [];
-    each$17(visualTypes, function (item, type) {
+    each$13(visualTypes, function (item, type) {
       types.push(type);
     });
     visualTypes = types;
@@ -51451,7 +39917,7 @@ function littleThan(close, a, b) {
 /**
  * @file Visual solution, for consistent option specification.
  */
-var each$16 = each$1;
+var each$12 = each$1;
 
 function hasKeys(obj) {
   if (obj) {
@@ -51472,9 +39938,9 @@ function hasKeys(obj) {
 
 function createVisualMappings(option, stateList, supplementVisualOption) {
   var visualMappings = {};
-  each$16(stateList, function (state) {
+  each$12(stateList, function (state) {
     var mappings = visualMappings[state] = createMappings();
-    each$16(option[state], function (visualData, visualType) {
+    each$12(option[state], function (visualData, visualType) {
       if (!VisualMapping.isValidType(visualType)) {
         return;
       }
@@ -51541,46 +40007,7 @@ function replaceVisualOption(thisOption, newOption, keys) {
  */
 // ???! handle brush?
 
-function applyVisual(stateList, visualMappings, data, getValueState, scope, dimension) {
-  var visualTypesMap = {};
-  each$1(stateList, function (state) {
-    var visualTypes = VisualMapping.prepareVisualTypes(visualMappings[state]);
-    visualTypesMap[state] = visualTypes;
-  });
-  var dataIndex;
 
-  function getVisual(key) {
-    return data.getItemVisual(dataIndex, key);
-  }
-
-  function setVisual(key, value) {
-    data.setItemVisual(dataIndex, key, value);
-  }
-
-  if (dimension == null) {
-    data.each(eachItem);
-  } else {
-    data.each([dimension], eachItem);
-  }
-
-  function eachItem(valueOrIndex, index) {
-    dataIndex = dimension == null ? valueOrIndex : index;
-    var rawDataItem = data.getRawDataItem(dataIndex); // Consider performance
-
-    if (rawDataItem && rawDataItem.visualMap === false) {
-      return;
-    }
-
-    var valueState = getValueState.call(scope, valueOrIndex);
-    var mappings = visualMappings[valueState];
-    var visualTypes = visualTypesMap[valueState];
-
-    for (var i = 0, len = visualTypes.length; i < len; i++) {
-      var type = visualTypes[i];
-      mappings[type] && mappings[type].applyVisual(valueOrIndex, getVisual, setVisual);
-    }
-  }
-}
 /**
  * @param {module:echarts/data/List} data
  * @param {Array.<string>} stateList
@@ -51634,2331 +40061,6 @@ function incrementalApplyVisual(stateList, visualMappings, getValueState, dim) {
     progress: progress
   };
 }
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Key of the second level is chart element type: `point`, `rect`.
-// See moudule:echarts/component/helper/BrushController
-// function param:
-//      {Object} itemLayout fetch from data.getItemLayout(dataIndex)
-//      {Object} selectors {point: selector, rect: selector, ...}
-//      {Object} area {range: [[], [], ..], boudingRect}
-// function return:
-//      {boolean} Whether in the given brush.
-
-var selector = {
-  lineX: getLineSelectors(0),
-  lineY: getLineSelectors(1),
-  rect: {
-    point: function (itemLayout, selectors, area) {
-      return itemLayout && area.boundingRect.contain(itemLayout[0], itemLayout[1]);
-    },
-    rect: function (itemLayout, selectors, area) {
-      return itemLayout && area.boundingRect.intersect(itemLayout);
-    }
-  },
-  polygon: {
-    point: function (itemLayout, selectors, area) {
-      return itemLayout && area.boundingRect.contain(itemLayout[0], itemLayout[1]) && contain$1(area.range, itemLayout[0], itemLayout[1]);
-    },
-    rect: function (itemLayout, selectors, area) {
-      var points = area.range;
-
-      if (!itemLayout || points.length <= 1) {
-        return false;
-      }
-
-      var x = itemLayout.x;
-      var y = itemLayout.y;
-      var width = itemLayout.width;
-      var height = itemLayout.height;
-      var p = points[0];
-
-      if (contain$1(points, x, y) || contain$1(points, x + width, y) || contain$1(points, x, y + height) || contain$1(points, x + width, y + height) || BoundingRect.create(itemLayout).contain(p[0], p[1]) || lineIntersectPolygon(x, y, x + width, y, points) || lineIntersectPolygon(x, y, x, y + height, points) || lineIntersectPolygon(x + width, y, x + width, y + height, points) || lineIntersectPolygon(x, y + height, x + width, y + height, points)) {
-        return true;
-      }
-    }
-  }
-};
-
-function getLineSelectors(xyIndex) {
-  var xy = ['x', 'y'];
-  var wh = ['width', 'height'];
-  return {
-    point: function (itemLayout, selectors, area) {
-      if (itemLayout) {
-        var range = area.range;
-        var p = itemLayout[xyIndex];
-        return inLineRange(p, range);
-      }
-    },
-    rect: function (itemLayout, selectors, area) {
-      if (itemLayout) {
-        var range = area.range;
-        var layoutRange = [itemLayout[xy[xyIndex]], itemLayout[xy[xyIndex]] + itemLayout[wh[xyIndex]]];
-        layoutRange[1] < layoutRange[0] && layoutRange.reverse();
-        return inLineRange(layoutRange[0], range) || inLineRange(layoutRange[1], range) || inLineRange(range[0], layoutRange) || inLineRange(range[1], layoutRange);
-      }
-    }
-  };
-}
-
-function inLineRange(p, range) {
-  return range[0] <= p && p <= range[1];
-}
-
-function lineIntersectPolygon(lx, ly, l2x, l2y, points) {
-  for (var i = 0, p2 = points[points.length - 1]; i < points.length; i++) {
-    var p = points[i];
-
-    if (lineIntersect(lx, ly, l2x, l2y, p[0], p[1], p2[0], p2[1])) {
-      return true;
-    }
-
-    p2 = p;
-  }
-} // Code from <http://blog.csdn.net/rickliuxiao/article/details/6259322> with some fix.
-// See <https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection>
-
-
-function lineIntersect(a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y) {
-  var delta = determinant(a2x - a1x, b1x - b2x, a2y - a1y, b1y - b2y);
-
-  if (nearZero(delta)) {
-    // parallel
-    return false;
-  }
-
-  var namenda = determinant(b1x - a1x, b1x - b2x, b1y - a1y, b1y - b2y) / delta;
-
-  if (namenda < 0 || namenda > 1) {
-    return false;
-  }
-
-  var miu = determinant(a2x - a1x, b1x - a1x, a2y - a1y, b1y - a1y) / delta;
-
-  if (miu < 0 || miu > 1) {
-    return false;
-  }
-
-  return true;
-}
-
-function nearZero(val) {
-  return val <= 1e-6 && val >= -1e-6;
-}
-
-function determinant(v1, v2, v3, v4) {
-  return v1 * v4 - v2 * v3;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var IRRELEVANT_EXCLUDES = {
-  'axisPointer': 1,
-  'tooltip': 1,
-  'brush': 1
-};
-/**
- * Avoid that: mouse click on a elements that is over geo or graph,
- * but roam is triggered.
- */
-
-function onIrrelevantElement(e, api, targetCoordSysModel) {
-  var model = api.getComponentByElement(e.topTarget); // If model is axisModel, it works only if it is injected with coordinateSystem.
-
-  var coordSys = model && model.coordinateSystem;
-  return model && model !== targetCoordSysModel && !IRRELEVANT_EXCLUDES[model.mainType] && coordSys && coordSys.model !== targetCoordSysModel;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-function makeRectPanelClipPath(rect) {
-  rect = normalizeRect(rect);
-  return function (localPoints, transform) {
-    return clipPointsByRect(localPoints, rect);
-  };
-}
-function makeLinearBrushOtherExtent(rect, specifiedXYIndex) {
-  rect = normalizeRect(rect);
-  return function (xyIndex) {
-    var idx = specifiedXYIndex != null ? specifiedXYIndex : xyIndex;
-    var brushWidth = idx ? rect.width : rect.height;
-    var base = idx ? rect.x : rect.y;
-    return [base, base + (brushWidth || 0)];
-  };
-}
-function makeRectIsTargetByCursor(rect, api, targetModel) {
-  rect = normalizeRect(rect);
-  return function (e, localCursorPoint, transform) {
-    return rect.contain(localCursorPoint[0], localCursorPoint[1]) && !onIrrelevantElement(e, api, targetModel);
-  };
-} // Consider width/height is negative.
-
-function normalizeRect(rect) {
-  return BoundingRect.create(rect);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var each$18 = each$1;
-var indexOf$2 = indexOf;
-var curry$5 = curry;
-var COORD_CONVERTS = ['dataToPoint', 'pointToData']; // FIXME
-// how to genarialize to more coordinate systems.
-
-var INCLUDE_FINDER_MAIN_TYPES = ['grid', 'xAxis', 'yAxis', 'geo', 'graph', 'polar', 'radiusAxis', 'angleAxis', 'bmap'];
-/**
- * [option in constructor]:
- * {
- *     Index/Id/Name of geo, xAxis, yAxis, grid: See util/model#parseFinder.
- * }
- *
- *
- * [targetInfo]:
- *
- * There can be multiple axes in a single targetInfo. Consider the case
- * of `grid` component, a targetInfo represents a grid which contains one or more
- * cartesian and one or more axes. And consider the case of parallel system,
- * which has multiple axes in a coordinate system.
- * Can be {
- *     panelId: ...,
- *     coordSys: <a representitive cartesian in grid (first cartesian by default)>,
- *     coordSyses: all cartesians.
- *     gridModel: <grid component>
- *     xAxes: correspond to coordSyses on index
- *     yAxes: correspond to coordSyses on index
- * }
- * or {
- *     panelId: ...,
- *     coordSys: <geo coord sys>
- *     coordSyses: [<geo coord sys>]
- *     geoModel: <geo component>
- * }
- *
- *
- * [panelOpt]:
- *
- * Make from targetInfo. Input to BrushController.
- * {
- *     panelId: ...,
- *     rect: ...
- * }
- *
- *
- * [area]:
- *
- * Generated by BrushController or user input.
- * {
- *     panelId: Used to locate coordInfo directly. If user inpput, no panelId.
- *     brushType: determine how to convert to/from coord('rect' or 'polygon' or 'lineX/Y').
- *     Index/Id/Name of geo, xAxis, yAxis, grid: See util/model#parseFinder.
- *     range: pixel range.
- *     coordRange: representitive coord range (the first one of coordRanges).
- *     coordRanges: <Array> coord ranges, used in multiple cartesian in one grid.
- * }
- */
-
-/**
- * @param {Object} option contains Index/Id/Name of xAxis/yAxis/geo/grid
- *        Each can be {number|Array.<number>}. like: {xAxisIndex: [3, 4]}
- * @param {module:echarts/model/Global} ecModel
- * @param {Object} [opt]
- * @param {Array.<string>} [opt.include] include coordinate system types.
- */
-
-function BrushTargetManager(option, ecModel, opt) {
-  /**
-   * @private
-   * @type {Array.<Object>}
-   */
-  var targetInfoList = this._targetInfoList = [];
-  var info = {};
-  var foundCpts = parseFinder$1(ecModel, option);
-  each$18(targetInfoBuilders, function (builder, type) {
-    if (!opt || !opt.include || indexOf$2(opt.include, type) >= 0) {
-      builder(foundCpts, targetInfoList, info);
-    }
-  });
-}
-
-var proto$2 = BrushTargetManager.prototype;
-
-proto$2.setOutputRanges = function (areas, ecModel) {
-  this.matchOutputRanges(areas, ecModel, function (area, coordRange, coordSys) {
-    (area.coordRanges || (area.coordRanges = [])).push(coordRange); // area.coordRange is the first of area.coordRanges
-
-    if (!area.coordRange) {
-      area.coordRange = coordRange; // In 'category' axis, coord to pixel is not reversible, so we can not
-      // rebuild range by coordRange accrately, which may bring trouble when
-      // brushing only one item. So we use __rangeOffset to rebuilding range
-      // by coordRange. And this it only used in brush component so it is no
-      // need to be adapted to coordRanges.
-
-      var result = coordConvert[area.brushType](0, coordSys, coordRange);
-      area.__rangeOffset = {
-        offset: diffProcessor[area.brushType](result.values, area.range, [1, 1]),
-        xyMinMax: result.xyMinMax
-      };
-    }
-  });
-};
-
-proto$2.matchOutputRanges = function (areas, ecModel, cb) {
-  each$18(areas, function (area) {
-    var targetInfo = this.findTargetInfo(area, ecModel);
-
-    if (targetInfo && targetInfo !== true) {
-      each$1(targetInfo.coordSyses, function (coordSys) {
-        var result = coordConvert[area.brushType](1, coordSys, area.range);
-        cb(area, result.values, coordSys, ecModel);
-      });
-    }
-  }, this);
-};
-
-proto$2.setInputRanges = function (areas, ecModel) {
-  each$18(areas, function (area) {
-    var targetInfo = this.findTargetInfo(area, ecModel);
-    area.range = area.range || []; // convert coordRange to global range and set panelId.
-
-    if (targetInfo && targetInfo !== true) {
-      area.panelId = targetInfo.panelId; // (1) area.range shoule always be calculate from coordRange but does
-      // not keep its original value, for the sake of the dataZoom scenario,
-      // where area.coordRange remains unchanged but area.range may be changed.
-      // (2) Only support converting one coordRange to pixel range in brush
-      // component. So do not consider `coordRanges`.
-      // (3) About __rangeOffset, see comment above.
-
-      var result = coordConvert[area.brushType](0, targetInfo.coordSys, area.coordRange);
-      var rangeOffset = area.__rangeOffset;
-      area.range = rangeOffset ? diffProcessor[area.brushType](result.values, rangeOffset.offset, getScales(result.xyMinMax, rangeOffset.xyMinMax)) : result.values;
-    }
-  }, this);
-};
-
-proto$2.makePanelOpts = function (api, getDefaultBrushType) {
-  return map(this._targetInfoList, function (targetInfo) {
-    var rect = targetInfo.getPanelRect();
-    return {
-      panelId: targetInfo.panelId,
-      defaultBrushType: getDefaultBrushType && getDefaultBrushType(targetInfo),
-      clipPath: makeRectPanelClipPath(rect),
-      isTargetByCursor: makeRectIsTargetByCursor(rect, api, targetInfo.coordSysModel),
-      getLinearBrushOtherExtent: makeLinearBrushOtherExtent(rect)
-    };
-  });
-};
-
-proto$2.controlSeries = function (area, seriesModel, ecModel) {
-  // Check whether area is bound in coord, and series do not belong to that coord.
-  // If do not do this check, some brush (like lineX) will controll all axes.
-  var targetInfo = this.findTargetInfo(area, ecModel);
-  return targetInfo === true || targetInfo && indexOf$2(targetInfo.coordSyses, seriesModel.coordinateSystem) >= 0;
-};
-/**
- * If return Object, a coord found.
- * If reutrn true, global found.
- * Otherwise nothing found.
- *
- * @param {Object} area
- * @param {Array} targetInfoList
- * @return {Object|boolean}
- */
-
-
-proto$2.findTargetInfo = function (area, ecModel) {
-  var targetInfoList = this._targetInfoList;
-  var foundCpts = parseFinder$1(ecModel, area);
-
-  for (var i = 0; i < targetInfoList.length; i++) {
-    var targetInfo = targetInfoList[i];
-    var areaPanelId = area.panelId;
-
-    if (areaPanelId) {
-      if (targetInfo.panelId === areaPanelId) {
-        return targetInfo;
-      }
-    } else {
-      for (var i = 0; i < targetInfoMatchers.length; i++) {
-        if (targetInfoMatchers[i](foundCpts, targetInfo)) {
-          return targetInfo;
-        }
-      }
-    }
-  }
-
-  return true;
-};
-
-function formatMinMax(minMax) {
-  minMax[0] > minMax[1] && minMax.reverse();
-  return minMax;
-}
-
-function parseFinder$1(ecModel, option) {
-  return parseFinder(ecModel, option, {
-    includeMainTypes: INCLUDE_FINDER_MAIN_TYPES
-  });
-}
-
-var targetInfoBuilders = {
-  grid: function (foundCpts, targetInfoList) {
-    var xAxisModels = foundCpts.xAxisModels;
-    var yAxisModels = foundCpts.yAxisModels;
-    var gridModels = foundCpts.gridModels; // Remove duplicated.
-
-    var gridModelMap = createHashMap();
-    var xAxesHas = {};
-    var yAxesHas = {};
-
-    if (!xAxisModels && !yAxisModels && !gridModels) {
-      return;
-    }
-
-    each$18(xAxisModels, function (axisModel) {
-      var gridModel = axisModel.axis.grid.model;
-      gridModelMap.set(gridModel.id, gridModel);
-      xAxesHas[gridModel.id] = true;
-    });
-    each$18(yAxisModels, function (axisModel) {
-      var gridModel = axisModel.axis.grid.model;
-      gridModelMap.set(gridModel.id, gridModel);
-      yAxesHas[gridModel.id] = true;
-    });
-    each$18(gridModels, function (gridModel) {
-      gridModelMap.set(gridModel.id, gridModel);
-      xAxesHas[gridModel.id] = true;
-      yAxesHas[gridModel.id] = true;
-    });
-    gridModelMap.each(function (gridModel) {
-      var grid = gridModel.coordinateSystem;
-      var cartesians = [];
-      each$18(grid.getCartesians(), function (cartesian, index) {
-        if (indexOf$2(xAxisModels, cartesian.getAxis('x').model) >= 0 || indexOf$2(yAxisModels, cartesian.getAxis('y').model) >= 0) {
-          cartesians.push(cartesian);
-        }
-      });
-      targetInfoList.push({
-        panelId: 'grid--' + gridModel.id,
-        gridModel: gridModel,
-        coordSysModel: gridModel,
-        // Use the first one as the representitive coordSys.
-        coordSys: cartesians[0],
-        coordSyses: cartesians,
-        getPanelRect: panelRectBuilder.grid,
-        xAxisDeclared: xAxesHas[gridModel.id],
-        yAxisDeclared: yAxesHas[gridModel.id]
-      });
-    });
-  },
-  geo: function (foundCpts, targetInfoList) {
-    each$18(foundCpts.geoModels, function (geoModel) {
-      var coordSys = geoModel.coordinateSystem;
-      targetInfoList.push({
-        panelId: 'geo--' + geoModel.id,
-        geoModel: geoModel,
-        coordSysModel: geoModel,
-        coordSys: coordSys,
-        coordSyses: [coordSys],
-        getPanelRect: panelRectBuilder.geo
-      });
-    });
-  }
-};
-var targetInfoMatchers = [// grid
-function (foundCpts, targetInfo) {
-  var xAxisModel = foundCpts.xAxisModel;
-  var yAxisModel = foundCpts.yAxisModel;
-  var gridModel = foundCpts.gridModel;
-  !gridModel && xAxisModel && (gridModel = xAxisModel.axis.grid.model);
-  !gridModel && yAxisModel && (gridModel = yAxisModel.axis.grid.model);
-  return gridModel && gridModel === targetInfo.gridModel;
-}, // geo
-function (foundCpts, targetInfo) {
-  var geoModel = foundCpts.geoModel;
-  return geoModel && geoModel === targetInfo.geoModel;
-}];
-var panelRectBuilder = {
-  grid: function () {
-    // grid is not Transformable.
-    return this.coordSys.grid.getRect().clone();
-  },
-  geo: function () {
-    var coordSys = this.coordSys;
-    var rect = coordSys.getBoundingRect().clone(); // geo roam and zoom transform
-
-    rect.applyTransform(getTransform(coordSys));
-    return rect;
-  }
-};
-var coordConvert = {
-  lineX: curry$5(axisConvert, 0),
-  lineY: curry$5(axisConvert, 1),
-  rect: function (to, coordSys, rangeOrCoordRange) {
-    var xminymin = coordSys[COORD_CONVERTS[to]]([rangeOrCoordRange[0][0], rangeOrCoordRange[1][0]]);
-    var xmaxymax = coordSys[COORD_CONVERTS[to]]([rangeOrCoordRange[0][1], rangeOrCoordRange[1][1]]);
-    var values = [formatMinMax([xminymin[0], xmaxymax[0]]), formatMinMax([xminymin[1], xmaxymax[1]])];
-    return {
-      values: values,
-      xyMinMax: values
-    };
-  },
-  polygon: function (to, coordSys, rangeOrCoordRange) {
-    var xyMinMax = [[Infinity, -Infinity], [Infinity, -Infinity]];
-    var values = map(rangeOrCoordRange, function (item) {
-      var p = coordSys[COORD_CONVERTS[to]](item);
-      xyMinMax[0][0] = Math.min(xyMinMax[0][0], p[0]);
-      xyMinMax[1][0] = Math.min(xyMinMax[1][0], p[1]);
-      xyMinMax[0][1] = Math.max(xyMinMax[0][1], p[0]);
-      xyMinMax[1][1] = Math.max(xyMinMax[1][1], p[1]);
-      return p;
-    });
-    return {
-      values: values,
-      xyMinMax: xyMinMax
-    };
-  }
-};
-
-function axisConvert(axisNameIndex, to, coordSys, rangeOrCoordRange) {
-  var axis = coordSys.getAxis(['x', 'y'][axisNameIndex]);
-  var values = formatMinMax(map([0, 1], function (i) {
-    return to ? axis.coordToData(axis.toLocalCoord(rangeOrCoordRange[i])) : axis.toGlobalCoord(axis.dataToCoord(rangeOrCoordRange[i]));
-  }));
-  var xyMinMax = [];
-  xyMinMax[axisNameIndex] = values;
-  xyMinMax[1 - axisNameIndex] = [NaN, NaN];
-  return {
-    values: values,
-    xyMinMax: xyMinMax
-  };
-}
-
-var diffProcessor = {
-  lineX: curry$5(axisDiffProcessor, 0),
-  lineY: curry$5(axisDiffProcessor, 1),
-  rect: function (values, refer, scales) {
-    return [[values[0][0] - scales[0] * refer[0][0], values[0][1] - scales[0] * refer[0][1]], [values[1][0] - scales[1] * refer[1][0], values[1][1] - scales[1] * refer[1][1]]];
-  },
-  polygon: function (values, refer, scales) {
-    return map(values, function (item, idx) {
-      return [item[0] - scales[0] * refer[idx][0], item[1] - scales[1] * refer[idx][1]];
-    });
-  }
-};
-
-function axisDiffProcessor(axisNameIndex, values, refer, scales) {
-  return [values[0] - scales[axisNameIndex] * refer[0], values[1] - scales[axisNameIndex] * refer[1]];
-} // We have to process scale caused by dataZoom manually,
-// although it might be not accurate.
-
-
-function getScales(xyMinMaxCurr, xyMinMaxOrigin) {
-  var sizeCurr = getSize(xyMinMaxCurr);
-  var sizeOrigin = getSize(xyMinMaxOrigin);
-  var scales = [sizeCurr[0] / sizeOrigin[0], sizeCurr[1] / sizeOrigin[1]];
-  isNaN(scales[0]) && (scales[0] = 1);
-  isNaN(scales[1]) && (scales[1] = 1);
-  return scales;
-}
-
-function getSize(xyMinMax) {
-  return xyMinMax ? [xyMinMax[0][1] - xyMinMax[0][0], xyMinMax[1][1] - xyMinMax[1][0]] : [NaN, NaN];
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var STATE_LIST = ['inBrush', 'outOfBrush'];
-var DISPATCH_METHOD = '__ecBrushSelect';
-var DISPATCH_FLAG = '__ecInBrushSelectEvent';
-var PRIORITY_BRUSH = PRIORITY.VISUAL.BRUSH;
-/**
- * Layout for visual, the priority higher than other layout, and before brush visual.
- */
-
-registerLayout(PRIORITY_BRUSH, function (ecModel, api, payload) {
-  ecModel.eachComponent({
-    mainType: 'brush'
-  }, function (brushModel) {
-    payload && payload.type === 'takeGlobalCursor' && brushModel.setBrushOption(payload.key === 'brush' ? payload.brushOption : {
-      brushType: false
-    });
-    var brushTargetManager = brushModel.brushTargetManager = new BrushTargetManager(brushModel.option, ecModel);
-    brushTargetManager.setInputRanges(brushModel.areas, ecModel);
-  });
-});
-/**
- * Register the visual encoding if this modules required.
- */
-
-registerVisual(PRIORITY_BRUSH, function (ecModel, api, payload) {
-  var brushSelected = [];
-  var throttleType;
-  var throttleDelay;
-  ecModel.eachComponent({
-    mainType: 'brush'
-  }, function (brushModel, brushIndex) {
-    var thisBrushSelected = {
-      brushId: brushModel.id,
-      brushIndex: brushIndex,
-      brushName: brushModel.name,
-      areas: clone(brushModel.areas),
-      selected: []
-    }; // Every brush component exists in event params, convenient
-    // for user to find by index.
-
-    brushSelected.push(thisBrushSelected);
-    var brushOption = brushModel.option;
-    var brushLink = brushOption.brushLink;
-    var linkedSeriesMap = [];
-    var selectedDataIndexForLink = [];
-    var rangeInfoBySeries = [];
-    var hasBrushExists = 0;
-
-    if (!brushIndex) {
-      // Only the first throttle setting works.
-      throttleType = brushOption.throttleType;
-      throttleDelay = brushOption.throttleDelay;
-    } // Add boundingRect and selectors to range.
-
-
-    var areas = map(brushModel.areas, function (area) {
-      return bindSelector(defaults({
-        boundingRect: boundingRectBuilders[area.brushType](area)
-      }, area));
-    });
-    var visualMappings = createVisualMappings(brushModel.option, STATE_LIST, function (mappingOption) {
-      mappingOption.mappingMethod = 'fixed';
-    });
-    isArray(brushLink) && each$1(brushLink, function (seriesIndex) {
-      linkedSeriesMap[seriesIndex] = 1;
-    });
-
-    function linkOthers(seriesIndex) {
-      return brushLink === 'all' || linkedSeriesMap[seriesIndex];
-    } // If no supported brush or no brush on the series,
-    // all visuals should be in original state.
-
-
-    function brushed(rangeInfoList) {
-      return !!rangeInfoList.length;
-    }
-    /**
-     * Logic for each series: (If the logic has to be modified one day, do it carefully!)
-     *
-     * ( brushed ┬ && ┬hasBrushExist ┬ && linkOthers  ) => StepA: ┬record, ┬ StepB: ┬visualByRecord.
-     *   !brushed┘    ├hasBrushExist ┤                            └nothing,┘        ├visualByRecord.
-     *                └!hasBrushExist┘                                              └nothing.
-     * ( !brushed  && ┬hasBrushExist ┬ && linkOthers  ) => StepA:  nothing,  StepB: ┬visualByRecord.
-     *                └!hasBrushExist┘                                              └nothing.
-     * ( brushed ┬ &&                     !linkOthers ) => StepA:  nothing,  StepB: ┬visualByCheck.
-     *   !brushed┘                                                                  └nothing.
-     * ( !brushed  &&                     !linkOthers ) => StepA:  nothing,  StepB:  nothing.
-     */
-    // Step A
-
-
-    ecModel.eachSeries(function (seriesModel, seriesIndex) {
-      var rangeInfoList = rangeInfoBySeries[seriesIndex] = [];
-      seriesModel.subType === 'parallel' ? stepAParallel(seriesModel, seriesIndex, rangeInfoList) : stepAOthers(seriesModel, seriesIndex, rangeInfoList);
-    });
-
-    function stepAParallel(seriesModel, seriesIndex) {
-      var coordSys = seriesModel.coordinateSystem;
-      hasBrushExists |= coordSys.hasAxisBrushed();
-      linkOthers(seriesIndex) && coordSys.eachActiveState(seriesModel.getData(), function (activeState, dataIndex) {
-        activeState === 'active' && (selectedDataIndexForLink[dataIndex] = 1);
-      });
-    }
-
-    function stepAOthers(seriesModel, seriesIndex, rangeInfoList) {
-      var selectorsByBrushType = getSelectorsByBrushType(seriesModel);
-
-      if (!selectorsByBrushType || brushModelNotControll(brushModel, seriesIndex)) {
-        return;
-      }
-
-      each$1(areas, function (area) {
-        selectorsByBrushType[area.brushType] && brushModel.brushTargetManager.controlSeries(area, seriesModel, ecModel) && rangeInfoList.push(area);
-        hasBrushExists |= brushed(rangeInfoList);
-      });
-
-      if (linkOthers(seriesIndex) && brushed(rangeInfoList)) {
-        var data = seriesModel.getData();
-        data.each(function (dataIndex) {
-          if (checkInRange(selectorsByBrushType, rangeInfoList, data, dataIndex)) {
-            selectedDataIndexForLink[dataIndex] = 1;
-          }
-        });
-      }
-    } // Step B
-
-
-    ecModel.eachSeries(function (seriesModel, seriesIndex) {
-      var seriesBrushSelected = {
-        seriesId: seriesModel.id,
-        seriesIndex: seriesIndex,
-        seriesName: seriesModel.name,
-        dataIndex: []
-      }; // Every series exists in event params, convenient
-      // for user to find series by seriesIndex.
-
-      thisBrushSelected.selected.push(seriesBrushSelected);
-      var selectorsByBrushType = getSelectorsByBrushType(seriesModel);
-      var rangeInfoList = rangeInfoBySeries[seriesIndex];
-      var data = seriesModel.getData();
-      var getValueState = linkOthers(seriesIndex) ? function (dataIndex) {
-        return selectedDataIndexForLink[dataIndex] ? (seriesBrushSelected.dataIndex.push(data.getRawIndex(dataIndex)), 'inBrush') : 'outOfBrush';
-      } : function (dataIndex) {
-        return checkInRange(selectorsByBrushType, rangeInfoList, data, dataIndex) ? (seriesBrushSelected.dataIndex.push(data.getRawIndex(dataIndex)), 'inBrush') : 'outOfBrush';
-      }; // If no supported brush or no brush, all visuals are in original state.
-
-      (linkOthers(seriesIndex) ? hasBrushExists : brushed(rangeInfoList)) && applyVisual(STATE_LIST, visualMappings, data, getValueState);
-    });
-  });
-  dispatchAction$1(api, throttleType, throttleDelay, brushSelected, payload);
-});
-
-function dispatchAction$1(api, throttleType, throttleDelay, brushSelected, payload) {
-  // This event will not be triggered when `setOpion`, otherwise dead lock may
-  // triggered when do `setOption` in event listener, which we do not find
-  // satisfactory way to solve yet. Some considered resolutions:
-  // (a) Diff with prevoius selected data ant only trigger event when changed.
-  // But store previous data and diff precisely (i.e., not only by dataIndex, but
-  // also detect value changes in selected data) might bring complexity or fragility.
-  // (b) Use spectial param like `silent` to suppress event triggering.
-  // But such kind of volatile param may be weird in `setOption`.
-  if (!payload) {
-    return;
-  }
-
-  var zr = api.getZr();
-
-  if (zr[DISPATCH_FLAG]) {
-    return;
-  }
-
-  if (!zr[DISPATCH_METHOD]) {
-    zr[DISPATCH_METHOD] = doDispatch;
-  }
-
-  var fn = createOrUpdate(zr, DISPATCH_METHOD, throttleDelay, throttleType);
-  fn(api, brushSelected);
-}
-
-function doDispatch(api, brushSelected) {
-  if (!api.isDisposed()) {
-    var zr = api.getZr();
-    zr[DISPATCH_FLAG] = true;
-    api.dispatchAction({
-      type: 'brushSelect',
-      batch: brushSelected
-    });
-    zr[DISPATCH_FLAG] = false;
-  }
-}
-
-function checkInRange(selectorsByBrushType, rangeInfoList, data, dataIndex) {
-  for (var i = 0, len = rangeInfoList.length; i < len; i++) {
-    var area = rangeInfoList[i];
-
-    if (selectorsByBrushType[area.brushType](dataIndex, data, area.selectors, area)) {
-      return true;
-    }
-  }
-}
-
-function getSelectorsByBrushType(seriesModel) {
-  var brushSelector = seriesModel.brushSelector;
-
-  if (isString(brushSelector)) {
-    var sels = [];
-    each$1(selector, function (selectorsByElementType, brushType) {
-      sels[brushType] = function (dataIndex, data, selectors, area) {
-        var itemLayout = data.getItemLayout(dataIndex);
-        return selectorsByElementType[brushSelector](itemLayout, selectors, area);
-      };
-    });
-    return sels;
-  } else if (isFunction$1(brushSelector)) {
-    var bSelector = {};
-    each$1(selector, function (sel, brushType) {
-      bSelector[brushType] = brushSelector;
-    });
-    return bSelector;
-  }
-
-  return brushSelector;
-}
-
-function brushModelNotControll(brushModel, seriesIndex) {
-  var seriesIndices = brushModel.option.seriesIndex;
-  return seriesIndices != null && seriesIndices !== 'all' && (isArray(seriesIndices) ? indexOf(seriesIndices, seriesIndex) < 0 : seriesIndex !== seriesIndices);
-}
-
-function bindSelector(area) {
-  var selectors = area.selectors = {};
-  each$1(selector[area.brushType], function (selFn, elType) {
-    // Do not use function binding or curry for performance.
-    selectors[elType] = function (itemLayout) {
-      return selFn(itemLayout, selectors, area);
-    };
-  });
-  return area;
-}
-
-var boundingRectBuilders = {
-  lineX: noop,
-  lineY: noop,
-  rect: function (area) {
-    return getBoundingRectFromMinMax(area.range);
-  },
-  polygon: function (area) {
-    var minMax;
-    var range = area.range;
-
-    for (var i = 0, len = range.length; i < len; i++) {
-      minMax = minMax || [[Infinity, -Infinity], [Infinity, -Infinity]];
-      var rg = range[i];
-      rg[0] < minMax[0][0] && (minMax[0][0] = rg[0]);
-      rg[0] > minMax[0][1] && (minMax[0][1] = rg[0]);
-      rg[1] < minMax[1][0] && (minMax[1][0] = rg[1]);
-      rg[1] > minMax[1][1] && (minMax[1][1] = rg[1]);
-    }
-
-    return minMax && getBoundingRectFromMinMax(minMax);
-  }
-};
-
-function getBoundingRectFromMinMax(minMax) {
-  return new BoundingRect(minMax[0][0], minMax[1][0], minMax[0][1] - minMax[0][0], minMax[1][1] - minMax[1][0]);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var DEFAULT_OUT_OF_BRUSH_COLOR = ['#ddd'];
-var BrushModel = extendComponentModel({
-  type: 'brush',
-  dependencies: ['geo', 'grid', 'xAxis', 'yAxis', 'parallel', 'series'],
-
-  /**
-   * @protected
-   */
-  defaultOption: {
-    // inBrush: null,
-    // outOfBrush: null,
-    toolbox: null,
-    // Default value see preprocessor.
-    brushLink: null,
-    // Series indices array, broadcast using dataIndex.
-    // or 'all', which means all series. 'none' or null means no series.
-    seriesIndex: 'all',
-    // seriesIndex array, specify series controlled by this brush component.
-    geoIndex: null,
-    //
-    xAxisIndex: null,
-    yAxisIndex: null,
-    brushType: 'rect',
-    // Default brushType, see BrushController.
-    brushMode: 'single',
-    // Default brushMode, 'single' or 'multiple'
-    transformable: true,
-    // Default transformable.
-    brushStyle: {
-      // Default brushStyle
-      borderWidth: 1,
-      color: 'rgba(120,140,180,0.3)',
-      borderColor: 'rgba(120,140,180,0.8)'
-    },
-    throttleType: 'fixRate',
-    // Throttle in brushSelected event. 'fixRate' or 'debounce'.
-    // If null, no throttle. Valid only in the first brush component
-    throttleDelay: 0,
-    // Unit: ms, 0 means every event will be triggered.
-    // FIXME
-    // 试验效果
-    removeOnClick: true,
-    z: 10000
-  },
-
-  /**
-   * @readOnly
-   * @type {Array.<Object>}
-   */
-  areas: [],
-
-  /**
-   * Current activated brush type.
-   * If null, brush is inactived.
-   * see module:echarts/component/helper/BrushController
-   * @readOnly
-   * @type {string}
-   */
-  brushType: null,
-
-  /**
-   * Current brush opt.
-   * see module:echarts/component/helper/BrushController
-   * @readOnly
-   * @type {Object}
-   */
-  brushOption: {},
-
-  /**
-   * @readOnly
-   * @type {Array.<Object>}
-   */
-  coordInfoList: [],
-  optionUpdated: function (newOption, isInit) {
-    var thisOption = this.option;
-    !isInit && replaceVisualOption(thisOption, newOption, ['inBrush', 'outOfBrush']);
-    var inBrush = thisOption.inBrush = thisOption.inBrush || {}; // Always give default visual, consider setOption at the second time.
-
-    thisOption.outOfBrush = thisOption.outOfBrush || {
-      color: DEFAULT_OUT_OF_BRUSH_COLOR
-    };
-
-    if (!inBrush.hasOwnProperty('liftZ')) {
-      // Bigger than the highlight z lift, otherwise it will
-      // be effected by the highlight z when brush.
-      inBrush.liftZ = 5;
-    }
-  },
-
-  /**
-   * If ranges is null/undefined, range state remain.
-   *
-   * @param {Array.<Object>} [ranges]
-   */
-  setAreas: function (areas) {
-    // If ranges is null/undefined, range state remain.
-    // This helps user to dispatchAction({type: 'brush'}) with no areas
-    // set but just want to get the current brush select info from a `brush` event.
-    if (!areas) {
-      return;
-    }
-
-    this.areas = map(areas, function (area) {
-      return generateBrushOption(this.option, area);
-    }, this);
-  },
-
-  /**
-   * see module:echarts/component/helper/BrushController
-   * @param {Object} brushOption
-   */
-  setBrushOption: function (brushOption) {
-    this.brushOption = generateBrushOption(this.option, brushOption);
-    this.brushType = this.brushOption.brushType;
-  }
-});
-
-function generateBrushOption(option, brushOption) {
-  return merge({
-    brushType: option.brushType,
-    brushMode: option.brushMode,
-    transformable: option.transformable,
-    brushStyle: new Model(option.brushStyle).getItemStyle(),
-    removeOnClick: option.removeOnClick,
-    z: option.z
-  }, brushOption, true);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var curry$6 = curry;
-var each$19 = each$1;
-var map$2 = map;
-var mathMin$4 = Math.min;
-var mathMax$4 = Math.max;
-var mathPow$2 = Math.pow;
-var COVER_Z = 10000;
-var UNSELECT_THRESHOLD = 6;
-var MIN_RESIZE_LINE_WIDTH = 6;
-var MUTEX_RESOURCE_KEY = 'globalPan';
-var DIRECTION_MAP = {
-  w: [0, 0],
-  e: [0, 1],
-  n: [1, 0],
-  s: [1, 1]
-};
-var CURSOR_MAP = {
-  w: 'ew',
-  e: 'ew',
-  n: 'ns',
-  s: 'ns',
-  ne: 'nesw',
-  sw: 'nesw',
-  nw: 'nwse',
-  se: 'nwse'
-};
-var DEFAULT_BRUSH_OPT = {
-  brushStyle: {
-    lineWidth: 2,
-    stroke: 'rgba(0,0,0,0.3)',
-    fill: 'rgba(0,0,0,0.1)'
-  },
-  transformable: true,
-  brushMode: 'single',
-  removeOnClick: false
-};
-var baseUID = 0;
-/**
- * @alias module:echarts/component/helper/BrushController
- * @constructor
- * @mixin {module:zrender/mixin/Eventful}
- * @event module:echarts/component/helper/BrushController#brush
- *        params:
- *            areas: Array.<Array>, coord relates to container group,
- *                                    If no container specified, to global.
- *            opt {
- *                isEnd: boolean,
- *                removeOnClick: boolean
- *            }
- *
- * @param {module:zrender/zrender~ZRender} zr
- */
-
-function BrushController(zr) {
-  Eventful.call(this);
-  /**
-   * @type {module:zrender/zrender~ZRender}
-   * @private
-   */
-
-  this._zr = zr;
-  /**
-   * @type {module:zrender/container/Group}
-   * @readOnly
-   */
-
-  this.group = new Group();
-  /**
-   * Only for drawing (after enabledBrush).
-   *     'line', 'rect', 'polygon' or false
-   *     If passing false/null/undefined, disable brush.
-   *     If passing 'auto', determined by panel.defaultBrushType
-   * @private
-   * @type {string}
-   */
-
-  this._brushType;
-  /**
-   * Only for drawing (after enabledBrush).
-   *
-   * @private
-   * @type {Object}
-   */
-
-  this._brushOption;
-  /**
-   * @private
-   * @type {Object}
-   */
-
-  this._panels;
-  /**
-   * @private
-   * @type {Array.<nubmer>}
-   */
-
-  this._track = [];
-  /**
-   * @private
-   * @type {boolean}
-   */
-
-  this._dragging;
-  /**
-   * @private
-   * @type {Array}
-   */
-
-  this._covers = [];
-  /**
-   * @private
-   * @type {moudule:zrender/container/Group}
-   */
-
-  this._creatingCover;
-  /**
-   * `true` means global panel
-   * @private
-   * @type {module:zrender/container/Group|boolean}
-   */
-
-  this._creatingPanel;
-  /**
-   * @private
-   * @type {boolean}
-   */
-
-  this._enableGlobalPan;
-  /**
-   * @private
-   * @type {boolean}
-   */
-
-  /**
-   * @private
-   * @type {string}
-   */
-  this._uid = 'brushController_' + baseUID++;
-  /**
-   * @private
-   * @type {Object}
-   */
-
-  this._handlers = {};
-  each$19(mouseHandlers, function (handler, eventName) {
-    this._handlers[eventName] = bind(handler, this);
-  }, this);
-}
-
-BrushController.prototype = {
-  constructor: BrushController,
-
-  /**
-   * If set to null/undefined/false, select disabled.
-   * @param {Object} brushOption
-   * @param {string|boolean} brushOption.brushType 'line', 'rect', 'polygon' or false
-   *                          If passing false/null/undefined, disable brush.
-   *                          If passing 'auto', determined by panel.defaultBrushType.
-   *                              ('auto' can not be used in global panel)
-   * @param {number} [brushOption.brushMode='single'] 'single' or 'multiple'
-   * @param {boolean} [brushOption.transformable=true]
-   * @param {boolean} [brushOption.removeOnClick=false]
-   * @param {Object} [brushOption.brushStyle]
-   * @param {number} [brushOption.brushStyle.width]
-   * @param {number} [brushOption.brushStyle.lineWidth]
-   * @param {string} [brushOption.brushStyle.stroke]
-   * @param {string} [brushOption.brushStyle.fill]
-   * @param {number} [brushOption.z]
-   */
-  enableBrush: function (brushOption) {
-    this._brushType && doDisableBrush(this);
-    brushOption.brushType && doEnableBrush(this, brushOption);
-    return this;
-  },
-
-  /**
-   * @param {Array.<Object>} panelOpts If not pass, it is global brush.
-   *        Each items: {
-   *            panelId, // mandatory.
-   *            clipPath, // mandatory. function.
-   *            isTargetByCursor, // mandatory. function.
-   *            defaultBrushType, // optional, only used when brushType is 'auto'.
-   *            getLinearBrushOtherExtent, // optional. function.
-   *        }
-   */
-  setPanels: function (panelOpts) {
-    if (panelOpts && panelOpts.length) {
-      var panels = this._panels = {};
-      each$1(panelOpts, function (panelOpts) {
-        panels[panelOpts.panelId] = clone(panelOpts);
-      });
-    } else {
-      this._panels = null;
-    }
-
-    return this;
-  },
-
-  /**
-   * @param {Object} [opt]
-   * @return {boolean} [opt.enableGlobalPan=false]
-   */
-  mount: function (opt) {
-    opt = opt || {};
-    this._enableGlobalPan = opt.enableGlobalPan;
-    var thisGroup = this.group;
-
-    this._zr.add(thisGroup);
-
-    thisGroup.attr({
-      position: opt.position || [0, 0],
-      rotation: opt.rotation || 0,
-      scale: opt.scale || [1, 1]
-    });
-    this._transform = thisGroup.getLocalTransform();
-    return this;
-  },
-  eachCover: function (cb, context) {
-    each$19(this._covers, cb, context);
-  },
-
-  /**
-   * Update covers.
-   * @param {Array.<Object>} brushOptionList Like:
-   *        [
-   *            {id: 'xx', brushType: 'line', range: [23, 44], brushStyle, transformable},
-   *            {id: 'yy', brushType: 'rect', range: [[23, 44], [23, 54]]},
-   *            ...
-   *        ]
-   *        `brushType` is required in each cover info. (can not be 'auto')
-   *        `id` is not mandatory.
-   *        `brushStyle`, `transformable` is not mandatory, use DEFAULT_BRUSH_OPT by default.
-   *        If brushOptionList is null/undefined, all covers removed.
-   */
-  updateCovers: function (brushOptionList) {
-    brushOptionList = map(brushOptionList, function (brushOption) {
-      return merge(clone(DEFAULT_BRUSH_OPT), brushOption, true);
-    });
-    var tmpIdPrefix = '\0-brush-index-';
-    var oldCovers = this._covers;
-    var newCovers = this._covers = [];
-    var controller = this;
-    var creatingCover = this._creatingCover;
-    new DataDiffer(oldCovers, brushOptionList, oldGetKey, getKey).add(addOrUpdate).update(addOrUpdate).remove(remove).execute();
-    return this;
-
-    function getKey(brushOption, index) {
-      return (brushOption.id != null ? brushOption.id : tmpIdPrefix + index) + '-' + brushOption.brushType;
-    }
-
-    function oldGetKey(cover, index) {
-      return getKey(cover.__brushOption, index);
-    }
-
-    function addOrUpdate(newIndex, oldIndex) {
-      var newBrushOption = brushOptionList[newIndex]; // Consider setOption in event listener of brushSelect,
-      // where updating cover when creating should be forbiden.
-
-      if (oldIndex != null && oldCovers[oldIndex] === creatingCover) {
-        newCovers[newIndex] = oldCovers[oldIndex];
-      } else {
-        var cover = newCovers[newIndex] = oldIndex != null ? (oldCovers[oldIndex].__brushOption = newBrushOption, oldCovers[oldIndex]) : endCreating(controller, createCover(controller, newBrushOption));
-        updateCoverAfterCreation(controller, cover);
-      }
-    }
-
-    function remove(oldIndex) {
-      if (oldCovers[oldIndex] !== creatingCover) {
-        controller.group.remove(oldCovers[oldIndex]);
-      }
-    }
-  },
-  unmount: function () {
-    this.enableBrush(false); // container may 'removeAll' outside.
-
-    clearCovers(this);
-
-    this._zr.remove(this.group);
-
-    return this;
-  },
-  dispose: function () {
-    this.unmount();
-    this.off();
-  }
-};
-mixin(BrushController, Eventful);
-
-function doEnableBrush(controller, brushOption) {
-  var zr = controller._zr; // Consider roam, which takes globalPan too.
-
-  if (!controller._enableGlobalPan) {
-    take(zr, MUTEX_RESOURCE_KEY, controller._uid);
-  }
-
-  each$19(controller._handlers, function (handler, eventName) {
-    zr.on(eventName, handler);
-  });
-  controller._brushType = brushOption.brushType;
-  controller._brushOption = merge(clone(DEFAULT_BRUSH_OPT), brushOption, true);
-}
-
-function doDisableBrush(controller) {
-  var zr = controller._zr;
-  release(zr, MUTEX_RESOURCE_KEY, controller._uid);
-  each$19(controller._handlers, function (handler, eventName) {
-    zr.off(eventName, handler);
-  });
-  controller._brushType = controller._brushOption = null;
-}
-
-function createCover(controller, brushOption) {
-  var cover = coverRenderers[brushOption.brushType].createCover(controller, brushOption);
-  cover.__brushOption = brushOption;
-  updateZ$1(cover, brushOption);
-  controller.group.add(cover);
-  return cover;
-}
-
-function endCreating(controller, creatingCover) {
-  var coverRenderer = getCoverRenderer(creatingCover);
-
-  if (coverRenderer.endCreating) {
-    coverRenderer.endCreating(controller, creatingCover);
-    updateZ$1(creatingCover, creatingCover.__brushOption);
-  }
-
-  return creatingCover;
-}
-
-function updateCoverShape(controller, cover) {
-  var brushOption = cover.__brushOption;
-  getCoverRenderer(cover).updateCoverShape(controller, cover, brushOption.range, brushOption);
-}
-
-function updateZ$1(cover, brushOption) {
-  var z = brushOption.z;
-  z == null && (z = COVER_Z);
-  cover.traverse(function (el) {
-    el.z = z;
-    el.z2 = z; // Consider in given container.
-  });
-}
-
-function updateCoverAfterCreation(controller, cover) {
-  getCoverRenderer(cover).updateCommon(controller, cover);
-  updateCoverShape(controller, cover);
-}
-
-function getCoverRenderer(cover) {
-  return coverRenderers[cover.__brushOption.brushType];
-} // return target panel or `true` (means global panel)
-
-
-function getPanelByPoint(controller, e, localCursorPoint) {
-  var panels = controller._panels;
-
-  if (!panels) {
-    return true; // Global panel
-  }
-
-  var panel;
-  var transform = controller._transform;
-  each$19(panels, function (pn) {
-    pn.isTargetByCursor(e, localCursorPoint, transform) && (panel = pn);
-  });
-  return panel;
-} // Return a panel or true
-
-
-function getPanelByCover(controller, cover) {
-  var panels = controller._panels;
-
-  if (!panels) {
-    return true; // Global panel
-  }
-
-  var panelId = cover.__brushOption.panelId; // User may give cover without coord sys info,
-  // which is then treated as global panel.
-
-  return panelId != null ? panels[panelId] : true;
-}
-
-function clearCovers(controller) {
-  var covers = controller._covers;
-  var originalLength = covers.length;
-  each$19(covers, function (cover) {
-    controller.group.remove(cover);
-  }, controller);
-  covers.length = 0;
-  return !!originalLength;
-}
-
-function trigger$1(controller, opt) {
-  var areas = map$2(controller._covers, function (cover) {
-    var brushOption = cover.__brushOption;
-    var range = clone(brushOption.range);
-    return {
-      brushType: brushOption.brushType,
-      panelId: brushOption.panelId,
-      range: range
-    };
-  });
-  controller.trigger('brush', areas, {
-    isEnd: !!opt.isEnd,
-    removeOnClick: !!opt.removeOnClick
-  });
-}
-
-function shouldShowCover(controller) {
-  var track = controller._track;
-
-  if (!track.length) {
-    return false;
-  }
-
-  var p2 = track[track.length - 1];
-  var p1 = track[0];
-  var dx = p2[0] - p1[0];
-  var dy = p2[1] - p1[1];
-  var dist = mathPow$2(dx * dx + dy * dy, 0.5);
-  return dist > UNSELECT_THRESHOLD;
-}
-
-function getTrackEnds(track) {
-  var tail = track.length - 1;
-  tail < 0 && (tail = 0);
-  return [track[0], track[tail]];
-}
-
-function createBaseRectCover(doDrift, controller, brushOption, edgeNames) {
-  var cover = new Group();
-  cover.add(new Rect({
-    name: 'main',
-    style: makeStyle(brushOption),
-    silent: true,
-    draggable: true,
-    cursor: 'move',
-    drift: curry$6(doDrift, controller, cover, 'nswe'),
-    ondragend: curry$6(trigger$1, controller, {
-      isEnd: true
-    })
-  }));
-  each$19(edgeNames, function (name) {
-    cover.add(new Rect({
-      name: name,
-      style: {
-        opacity: 0
-      },
-      draggable: true,
-      silent: true,
-      invisible: true,
-      drift: curry$6(doDrift, controller, cover, name),
-      ondragend: curry$6(trigger$1, controller, {
-        isEnd: true
-      })
-    }));
-  });
-  return cover;
-}
-
-function updateBaseRect(controller, cover, localRange, brushOption) {
-  var lineWidth = brushOption.brushStyle.lineWidth || 0;
-  var handleSize = mathMax$4(lineWidth, MIN_RESIZE_LINE_WIDTH);
-  var x = localRange[0][0];
-  var y = localRange[1][0];
-  var xa = x - lineWidth / 2;
-  var ya = y - lineWidth / 2;
-  var x2 = localRange[0][1];
-  var y2 = localRange[1][1];
-  var x2a = x2 - handleSize + lineWidth / 2;
-  var y2a = y2 - handleSize + lineWidth / 2;
-  var width = x2 - x;
-  var height = y2 - y;
-  var widtha = width + lineWidth;
-  var heighta = height + lineWidth;
-  updateRectShape(controller, cover, 'main', x, y, width, height);
-
-  if (brushOption.transformable) {
-    updateRectShape(controller, cover, 'w', xa, ya, handleSize, heighta);
-    updateRectShape(controller, cover, 'e', x2a, ya, handleSize, heighta);
-    updateRectShape(controller, cover, 'n', xa, ya, widtha, handleSize);
-    updateRectShape(controller, cover, 's', xa, y2a, widtha, handleSize);
-    updateRectShape(controller, cover, 'nw', xa, ya, handleSize, handleSize);
-    updateRectShape(controller, cover, 'ne', x2a, ya, handleSize, handleSize);
-    updateRectShape(controller, cover, 'sw', xa, y2a, handleSize, handleSize);
-    updateRectShape(controller, cover, 'se', x2a, y2a, handleSize, handleSize);
-  }
-}
-
-function updateCommon(controller, cover) {
-  var brushOption = cover.__brushOption;
-  var transformable = brushOption.transformable;
-  var mainEl = cover.childAt(0);
-  mainEl.useStyle(makeStyle(brushOption));
-  mainEl.attr({
-    silent: !transformable,
-    cursor: transformable ? 'move' : 'default'
-  });
-  each$19(['w', 'e', 'n', 's', 'se', 'sw', 'ne', 'nw'], function (name) {
-    var el = cover.childOfName(name);
-    var globalDir = getGlobalDirection(controller, name);
-    el && el.attr({
-      silent: !transformable,
-      invisible: !transformable,
-      cursor: transformable ? CURSOR_MAP[globalDir] + '-resize' : null
-    });
-  });
-}
-
-function updateRectShape(controller, cover, name, x, y, w, h) {
-  var el = cover.childOfName(name);
-  el && el.setShape(pointsToRect(clipByPanel(controller, cover, [[x, y], [x + w, y + h]])));
-}
-
-function makeStyle(brushOption) {
-  return defaults({
-    strokeNoScale: true
-  }, brushOption.brushStyle);
-}
-
-function formatRectRange(x, y, x2, y2) {
-  var min = [mathMin$4(x, x2), mathMin$4(y, y2)];
-  var max = [mathMax$4(x, x2), mathMax$4(y, y2)];
-  return [[min[0], max[0]], // x range
-  [min[1], max[1]] // y range
-  ];
-}
-
-function getTransform$1(controller) {
-  return getTransform(controller.group);
-}
-
-function getGlobalDirection(controller, localDirection) {
-  if (localDirection.length > 1) {
-    localDirection = localDirection.split('');
-    var globalDir = [getGlobalDirection(controller, localDirection[0]), getGlobalDirection(controller, localDirection[1])];
-    (globalDir[0] === 'e' || globalDir[0] === 'w') && globalDir.reverse();
-    return globalDir.join('');
-  } else {
-    var map$$1 = {
-      w: 'left',
-      e: 'right',
-      n: 'top',
-      s: 'bottom'
-    };
-    var inverseMap = {
-      left: 'w',
-      right: 'e',
-      top: 'n',
-      bottom: 's'
-    };
-    var globalDir = transformDirection(map$$1[localDirection], getTransform$1(controller));
-    return inverseMap[globalDir];
-  }
-}
-
-function driftRect(toRectRange, fromRectRange, controller, cover, name, dx, dy, e) {
-  var brushOption = cover.__brushOption;
-  var rectRange = toRectRange(brushOption.range);
-  var localDelta = toLocalDelta(controller, dx, dy);
-  each$19(name.split(''), function (namePart) {
-    var ind = DIRECTION_MAP[namePart];
-    rectRange[ind[0]][ind[1]] += localDelta[ind[0]];
-  });
-  brushOption.range = fromRectRange(formatRectRange(rectRange[0][0], rectRange[1][0], rectRange[0][1], rectRange[1][1]));
-  updateCoverAfterCreation(controller, cover);
-  trigger$1(controller, {
-    isEnd: false
-  });
-}
-
-function driftPolygon(controller, cover, dx, dy, e) {
-  var range = cover.__brushOption.range;
-  var localDelta = toLocalDelta(controller, dx, dy);
-  each$19(range, function (point) {
-    point[0] += localDelta[0];
-    point[1] += localDelta[1];
-  });
-  updateCoverAfterCreation(controller, cover);
-  trigger$1(controller, {
-    isEnd: false
-  });
-}
-
-function toLocalDelta(controller, dx, dy) {
-  var thisGroup = controller.group;
-  var localD = thisGroup.transformCoordToLocal(dx, dy);
-  var localZero = thisGroup.transformCoordToLocal(0, 0);
-  return [localD[0] - localZero[0], localD[1] - localZero[1]];
-}
-
-function clipByPanel(controller, cover, data) {
-  var panel = getPanelByCover(controller, cover);
-  return panel && panel !== true ? panel.clipPath(data, controller._transform) : clone(data);
-}
-
-function pointsToRect(points) {
-  var xmin = mathMin$4(points[0][0], points[1][0]);
-  var ymin = mathMin$4(points[0][1], points[1][1]);
-  var xmax = mathMax$4(points[0][0], points[1][0]);
-  var ymax = mathMax$4(points[0][1], points[1][1]);
-  return {
-    x: xmin,
-    y: ymin,
-    width: xmax - xmin,
-    height: ymax - ymin
-  };
-}
-
-function resetCursor(controller, e, localCursorPoint) {
-  // Check active
-  if (!controller._brushType) {
-    return;
-  }
-
-  var zr = controller._zr;
-  var covers = controller._covers;
-  var currPanel = getPanelByPoint(controller, e, localCursorPoint); // Check whether in covers.
-
-  if (!controller._dragging) {
-    for (var i = 0; i < covers.length; i++) {
-      var brushOption = covers[i].__brushOption;
-
-      if (currPanel && (currPanel === true || brushOption.panelId === currPanel.panelId) && coverRenderers[brushOption.brushType].contain(covers[i], localCursorPoint[0], localCursorPoint[1])) {
-        // Use cursor style set on cover.
-        return;
-      }
-    }
-  }
-
-  currPanel && zr.setCursorStyle('crosshair');
-}
-
-function preventDefault(e) {
-  var rawE = e.event;
-  rawE.preventDefault && rawE.preventDefault();
-}
-
-function mainShapeContain(cover, x, y) {
-  return cover.childOfName('main').contain(x, y);
-}
-
-function updateCoverByMouse(controller, e, localCursorPoint, isEnd) {
-  var creatingCover = controller._creatingCover;
-  var panel = controller._creatingPanel;
-  var thisBrushOption = controller._brushOption;
-  var eventParams;
-
-  controller._track.push(localCursorPoint.slice());
-
-  if (shouldShowCover(controller) || creatingCover) {
-    if (panel && !creatingCover) {
-      thisBrushOption.brushMode === 'single' && clearCovers(controller);
-      var brushOption = clone(thisBrushOption);
-      brushOption.brushType = determineBrushType(brushOption.brushType, panel);
-      brushOption.panelId = panel === true ? null : panel.panelId;
-      creatingCover = controller._creatingCover = createCover(controller, brushOption);
-
-      controller._covers.push(creatingCover);
-    }
-
-    if (creatingCover) {
-      var coverRenderer = coverRenderers[determineBrushType(controller._brushType, panel)];
-      var coverBrushOption = creatingCover.__brushOption;
-      coverBrushOption.range = coverRenderer.getCreatingRange(clipByPanel(controller, creatingCover, controller._track));
-
-      if (isEnd) {
-        endCreating(controller, creatingCover);
-        coverRenderer.updateCommon(controller, creatingCover);
-      }
-
-      updateCoverShape(controller, creatingCover);
-      eventParams = {
-        isEnd: isEnd
-      };
-    }
-  } else if (isEnd && thisBrushOption.brushMode === 'single' && thisBrushOption.removeOnClick) {
-    // Help user to remove covers easily, only by a tiny drag, in 'single' mode.
-    // But a single click do not clear covers, because user may have casual
-    // clicks (for example, click on other component and do not expect covers
-    // disappear).
-    // Only some cover removed, trigger action, but not every click trigger action.
-    if (getPanelByPoint(controller, e, localCursorPoint) && clearCovers(controller)) {
-      eventParams = {
-        isEnd: isEnd,
-        removeOnClick: true
-      };
-    }
-  }
-
-  return eventParams;
-}
-
-function determineBrushType(brushType, panel) {
-  if (brushType === 'auto') {
-    return panel.defaultBrushType;
-  }
-
-  return brushType;
-}
-
-var mouseHandlers = {
-  mousedown: function (e) {
-    if (this._dragging) {
-      // In case some browser do not support globalOut,
-      // and release mose out side the browser.
-      handleDragEnd.call(this, e);
-    } else if (!e.target || !e.target.draggable) {
-      preventDefault(e);
-      var localCursorPoint = this.group.transformCoordToLocal(e.offsetX, e.offsetY);
-      this._creatingCover = null;
-      var panel = this._creatingPanel = getPanelByPoint(this, e, localCursorPoint);
-
-      if (panel) {
-        this._dragging = true;
-        this._track = [localCursorPoint.slice()];
-      }
-    }
-  },
-  mousemove: function (e) {
-    var localCursorPoint = this.group.transformCoordToLocal(e.offsetX, e.offsetY);
-    resetCursor(this, e, localCursorPoint);
-
-    if (this._dragging) {
-      preventDefault(e);
-      var eventParams = updateCoverByMouse(this, e, localCursorPoint, false);
-      eventParams && trigger$1(this, eventParams);
-    }
-  },
-  mouseup: handleDragEnd //,
-  // FIXME
-  // in tooltip, globalout should not be triggered.
-  // globalout: handleDragEnd
-
-};
-
-function handleDragEnd(e) {
-  if (this._dragging) {
-    preventDefault(e);
-    var localCursorPoint = this.group.transformCoordToLocal(e.offsetX, e.offsetY);
-    var eventParams = updateCoverByMouse(this, e, localCursorPoint, true);
-    this._dragging = false;
-    this._track = [];
-    this._creatingCover = null; // trigger event shoule be at final, after procedure will be nested.
-
-    eventParams && trigger$1(this, eventParams);
-  }
-}
-/**
- * key: brushType
- * @type {Object}
- */
-
-
-var coverRenderers = {
-  lineX: getLineRenderer(0),
-  lineY: getLineRenderer(1),
-  rect: {
-    createCover: function (controller, brushOption) {
-      return createBaseRectCover(curry$6(driftRect, function (range) {
-        return range;
-      }, function (range) {
-        return range;
-      }), controller, brushOption, ['w', 'e', 'n', 's', 'se', 'sw', 'ne', 'nw']);
-    },
-    getCreatingRange: function (localTrack) {
-      var ends = getTrackEnds(localTrack);
-      return formatRectRange(ends[1][0], ends[1][1], ends[0][0], ends[0][1]);
-    },
-    updateCoverShape: function (controller, cover, localRange, brushOption) {
-      updateBaseRect(controller, cover, localRange, brushOption);
-    },
-    updateCommon: updateCommon,
-    contain: mainShapeContain
-  },
-  polygon: {
-    createCover: function (controller, brushOption) {
-      var cover = new Group(); // Do not use graphic.Polygon because graphic.Polyline do not close the
-      // border of the shape when drawing, which is a better experience for user.
-
-      cover.add(new Polyline({
-        name: 'main',
-        style: makeStyle(brushOption),
-        silent: true
-      }));
-      return cover;
-    },
-    getCreatingRange: function (localTrack) {
-      return localTrack;
-    },
-    endCreating: function (controller, cover) {
-      cover.remove(cover.childAt(0)); // Use graphic.Polygon close the shape.
-
-      cover.add(new Polygon({
-        name: 'main',
-        draggable: true,
-        drift: curry$6(driftPolygon, controller, cover),
-        ondragend: curry$6(trigger$1, controller, {
-          isEnd: true
-        })
-      }));
-    },
-    updateCoverShape: function (controller, cover, localRange, brushOption) {
-      cover.childAt(0).setShape({
-        points: clipByPanel(controller, cover, localRange)
-      });
-    },
-    updateCommon: updateCommon,
-    contain: mainShapeContain
-  }
-};
-
-function getLineRenderer(xyIndex) {
-  return {
-    createCover: function (controller, brushOption) {
-      return createBaseRectCover(curry$6(driftRect, function (range) {
-        var rectRange = [range, [0, 100]];
-        xyIndex && rectRange.reverse();
-        return rectRange;
-      }, function (rectRange) {
-        return rectRange[xyIndex];
-      }), controller, brushOption, [['w', 'e'], ['n', 's']][xyIndex]);
-    },
-    getCreatingRange: function (localTrack) {
-      var ends = getTrackEnds(localTrack);
-      var min = mathMin$4(ends[0][xyIndex], ends[1][xyIndex]);
-      var max = mathMax$4(ends[0][xyIndex], ends[1][xyIndex]);
-      return [min, max];
-    },
-    updateCoverShape: function (controller, cover, localRange, brushOption) {
-      var otherExtent; // If brushWidth not specified, fit the panel.
-
-      var panel = getPanelByCover(controller, cover);
-
-      if (panel !== true && panel.getLinearBrushOtherExtent) {
-        otherExtent = panel.getLinearBrushOtherExtent(xyIndex, controller._transform);
-      } else {
-        var zr = controller._zr;
-        otherExtent = [0, [zr.getWidth(), zr.getHeight()][1 - xyIndex]];
-      }
-
-      var rectRange = [localRange, otherExtent];
-      xyIndex && rectRange.reverse();
-      updateBaseRect(controller, cover, rectRange, brushOption);
-    },
-    updateCommon: updateCommon,
-    contain: mainShapeContain
-  };
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-extendComponentView({
-  type: 'brush',
-  init: function (ecModel, api) {
-    /**
-     * @readOnly
-     * @type {module:echarts/model/Global}
-     */
-    this.ecModel = ecModel;
-    /**
-     * @readOnly
-     * @type {module:echarts/ExtensionAPI}
-     */
-
-    this.api = api;
-    /**
-     * @readOnly
-     * @type {module:echarts/component/brush/BrushModel}
-     */
-
-    this.model;
-    /**
-     * @private
-     * @type {module:echarts/component/helper/BrushController}
-     */
-
-    (this._brushController = new BrushController(api.getZr())).on('brush', bind(this._onBrush, this)).mount();
-  },
-
-  /**
-   * @override
-   */
-  render: function (brushModel) {
-    this.model = brushModel;
-    return updateController.apply(this, arguments);
-  },
-
-  /**
-   * @override
-   */
-  updateTransform: updateController,
-
-  /**
-   * @override
-   */
-  updateView: updateController,
-  // /**
-  //  * @override
-  //  */
-  // updateLayout: updateController,
-  // /**
-  //  * @override
-  //  */
-  // updateVisual: updateController,
-
-  /**
-   * @override
-   */
-  dispose: function () {
-    this._brushController.dispose();
-  },
-
-  /**
-   * @private
-   */
-  _onBrush: function (areas, opt) {
-    var modelId = this.model.id;
-    this.model.brushTargetManager.setOutputRanges(areas, this.ecModel); // Action is not dispatched on drag end, because the drag end
-    // emits the same params with the last drag move event, and
-    // may have some delay when using touch pad, which makes
-    // animation not smooth (when using debounce).
-
-    (!opt.isEnd || opt.removeOnClick) && this.api.dispatchAction({
-      type: 'brush',
-      brushId: modelId,
-      areas: clone(areas),
-      $from: modelId
-    });
-  }
-});
-
-function updateController(brushModel, ecModel, api, payload) {
-  // Do not update controller when drawing.
-  (!payload || payload.$from !== brushModel.id) && this._brushController.setPanels(brushModel.brushTargetManager.makePanelOpts(api)).enableBrush(brushModel.brushOption).updateCovers(brushModel.areas.slice());
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-/**
- * payload: {
- *      brushIndex: number, or,
- *      brushId: string, or,
- *      brushName: string,
- *      globalRanges: Array
- * }
- */
-
-registerAction({
-  type: 'brush',
-  event: 'brush'
-  /*, update: 'updateView' */
-
-}, function (payload, ecModel) {
-  ecModel.eachComponent({
-    mainType: 'brush',
-    query: payload
-  }, function (brushModel) {
-    brushModel.setAreas(payload.areas);
-  });
-});
-/**
- * payload: {
- *      brushComponents: [
- *          {
- *              brushId,
- *              brushIndex,
- *              brushName,
- *              series: [
- *                  {
- *                      seriesId,
- *                      seriesIndex,
- *                      seriesName,
- *                      rawIndices: [21, 34, ...]
- *                  },
- *                  ...
- *              ]
- *          },
- *          ...
- *      ]
- * }
- */
-
-registerAction({
-  type: 'brushSelect',
-  event: 'brushSelected',
-  update: 'none'
-}, function () {});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var features = {};
-function register$2(name, ctor) {
-  features[name] = ctor;
-}
-function get$1(name) {
-  return features[name];
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var brushLang = lang.toolbox.brush;
-
-function Brush(model, ecModel, api) {
-  this.model = model;
-  this.ecModel = ecModel;
-  this.api = api;
-  /**
-   * @private
-   * @type {string}
-   */
-
-  this._brushType;
-  /**
-   * @private
-   * @type {string}
-   */
-
-  this._brushMode;
-}
-
-Brush.defaultOption = {
-  show: true,
-  type: ['rect', 'polygon', 'lineX', 'lineY', 'keep', 'clear'],
-  icon: {
-    /* eslint-disable */
-    rect: 'M7.3,34.7 M0.4,10V-0.2h9.8 M89.6,10V-0.2h-9.8 M0.4,60v10.2h9.8 M89.6,60v10.2h-9.8 M12.3,22.4V10.5h13.1 M33.6,10.5h7.8 M49.1,10.5h7.8 M77.5,22.4V10.5h-13 M12.3,31.1v8.2 M77.7,31.1v8.2 M12.3,47.6v11.9h13.1 M33.6,59.5h7.6 M49.1,59.5 h7.7 M77.5,47.6v11.9h-13',
-    // jshint ignore:line
-    polygon: 'M55.2,34.9c1.7,0,3.1,1.4,3.1,3.1s-1.4,3.1-3.1,3.1 s-3.1-1.4-3.1-3.1S53.5,34.9,55.2,34.9z M50.4,51c1.7,0,3.1,1.4,3.1,3.1c0,1.7-1.4,3.1-3.1,3.1c-1.7,0-3.1-1.4-3.1-3.1 C47.3,52.4,48.7,51,50.4,51z M55.6,37.1l1.5-7.8 M60.1,13.5l1.6-8.7l-7.8,4 M59,19l-1,5.3 M24,16.1l6.4,4.9l6.4-3.3 M48.5,11.6 l-5.9,3.1 M19.1,12.8L9.7,5.1l1.1,7.7 M13.4,29.8l1,7.3l6.6,1.6 M11.6,18.4l1,6.1 M32.8,41.9 M26.6,40.4 M27.3,40.2l6.1,1.6 M49.9,52.1l-5.6-7.6l-4.9-1.2',
-    // jshint ignore:line
-    lineX: 'M15.2,30 M19.7,15.6V1.9H29 M34.8,1.9H40.4 M55.3,15.6V1.9H45.9 M19.7,44.4V58.1H29 M34.8,58.1H40.4 M55.3,44.4 V58.1H45.9 M12.5,20.3l-9.4,9.6l9.6,9.8 M3.1,29.9h16.5 M62.5,20.3l9.4,9.6L62.3,39.7 M71.9,29.9H55.4',
-    // jshint ignore:line
-    lineY: 'M38.8,7.7 M52.7,12h13.2v9 M65.9,26.6V32 M52.7,46.3h13.2v-9 M24.9,12H11.8v9 M11.8,26.6V32 M24.9,46.3H11.8v-9 M48.2,5.1l-9.3-9l-9.4,9.2 M38.9-3.9V12 M48.2,53.3l-9.3,9l-9.4-9.2 M38.9,62.3V46.4',
-    // jshint ignore:line
-    keep: 'M4,10.5V1h10.3 M20.7,1h6.1 M33,1h6.1 M55.4,10.5V1H45.2 M4,17.3v6.6 M55.6,17.3v6.6 M4,30.5V40h10.3 M20.7,40 h6.1 M33,40h6.1 M55.4,30.5V40H45.2 M21,18.9h62.9v48.6H21V18.9z',
-    // jshint ignore:line
-    clear: 'M22,14.7l30.9,31 M52.9,14.7L22,45.7 M4.7,16.8V4.2h13.1 M26,4.2h7.8 M41.6,4.2h7.8 M70.3,16.8V4.2H57.2 M4.7,25.9v8.6 M70.3,25.9v8.6 M4.7,43.2v12.6h13.1 M26,55.8h7.8 M41.6,55.8h7.8 M70.3,43.2v12.6H57.2' // jshint ignore:line
-
-    /* eslint-enable */
-
-  },
-  // `rect`, `polygon`, `lineX`, `lineY`, `keep`, `clear`
-  title: clone(brushLang.title)
-};
-var proto$3 = Brush.prototype; // proto.updateLayout = function (featureModel, ecModel, api) {
-
-/* eslint-disable */
-
-proto$3.render =
-/* eslint-enable */
-proto$3.updateView = function (featureModel, ecModel, api) {
-  var brushType;
-  var brushMode;
-  var isBrushed;
-  ecModel.eachComponent({
-    mainType: 'brush'
-  }, function (brushModel) {
-    brushType = brushModel.brushType;
-    brushMode = brushModel.brushOption.brushMode || 'single';
-    isBrushed |= brushModel.areas.length;
-  });
-  this._brushType = brushType;
-  this._brushMode = brushMode;
-  each$1(featureModel.get('type', true), function (type) {
-    featureModel.setIconStatus(type, (type === 'keep' ? brushMode === 'multiple' : type === 'clear' ? isBrushed : type === brushType) ? 'emphasis' : 'normal');
-  });
-};
-
-proto$3.getIcons = function () {
-  var model = this.model;
-  var availableIcons = model.get('icon', true);
-  var icons = {};
-  each$1(model.get('type', true), function (type) {
-    if (availableIcons[type]) {
-      icons[type] = availableIcons[type];
-    }
-  });
-  return icons;
-};
-
-proto$3.onclick = function (ecModel, api, type) {
-  var brushType = this._brushType;
-  var brushMode = this._brushMode;
-
-  if (type === 'clear') {
-    // Trigger parallel action firstly
-    api.dispatchAction({
-      type: 'axisAreaSelect',
-      intervals: []
-    });
-    api.dispatchAction({
-      type: 'brush',
-      command: 'clear',
-      // Clear all areas of all brush components.
-      areas: []
-    });
-  } else {
-    api.dispatchAction({
-      type: 'takeGlobalCursor',
-      key: 'brush',
-      brushOption: {
-        brushType: type === 'keep' ? brushType : brushType === type ? false : type,
-        brushMode: type === 'keep' ? brushMode === 'multiple' ? 'single' : 'multiple' : brushMode
-      }
-    });
-  }
-};
-
-register$2('brush', Brush);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * Brush component entry
- */
-registerPreprocessor(preprocessor$1);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var each$20 = each$1;
-var preprocessor$2 = function (option) {
-  var visualMap = option && option.visualMap;
-
-  if (!isArray(visualMap)) {
-    visualMap = visualMap ? [visualMap] : [];
-  }
-
-  each$20(visualMap, function (opt) {
-    if (!opt) {
-      return;
-    } // rename splitList to pieces
-
-
-    if (has$2(opt, 'splitList') && !has$2(opt, 'pieces')) {
-      opt.pieces = opt.splitList;
-      delete opt.splitList;
-    }
-
-    var pieces = opt.pieces;
-
-    if (pieces && isArray(pieces)) {
-      each$20(pieces, function (piece) {
-        if (isObject$1(piece)) {
-          if (has$2(piece, 'start') && !has$2(piece, 'min')) {
-            piece.min = piece.start;
-          }
-
-          if (has$2(piece, 'end') && !has$2(piece, 'max')) {
-            piece.max = piece.end;
-          }
-        }
-      });
-    }
-  });
-};
-
-function has$2(obj, name) {
-  return obj && obj.hasOwnProperty && obj.hasOwnProperty(name);
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-ComponentModel.registerSubTypeDefaulter('visualMap', function (option) {
-  // Compatible with ec2, when splitNumber === 0, continuous visualMap will be used.
-  return !option.categories && (!(option.pieces ? option.pieces.length > 0 : option.splitNumber > 0) || option.calculable) ? 'continuous' : 'piecewise';
-});
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -54076,11 +40178,11 @@ var visualDefault = {
    * @public
    */
   get: function (visualType, key, isCategory) {
-    var value = clone((defaultOption$1[visualType] || {})[key]);
+    var value = clone((defaultOption[visualType] || {})[key]);
     return isCategory ? isArray(value) ? value[value.length - 1] : value : value;
   }
 };
-var defaultOption$1 = {
+var defaultOption = {
   color: {
     active: ['#006edd', '#e0ffff'],
     inactive: ['rgba(0,0,0,0)']
@@ -54136,9 +40238,9 @@ var defaultOption$1 = {
 var mapVisual = VisualMapping.mapVisual;
 var eachVisual = VisualMapping.eachVisual;
 var isArray$2 = isArray;
-var each$21 = each$1;
-var asc$3 = asc;
-var linearMap$2 = linearMap;
+var each$14 = each$1;
+var asc$1 = asc;
+var linearMap$1 = linearMap;
 var noop$1 = noop;
 var VisualMapModel = extendComponentModel({
   type: 'visualMap',
@@ -54398,7 +40500,7 @@ var VisualMapModel = extendComponentModel({
     // Because series and data may be modified in processing stage.
     // So we do not support the feature "auto min/max".
 
-    var extent = asc$3([thisOption.min, thisOption.max]);
+    var extent = asc$1([thisOption.min, thisOption.max]);
     this._dataExtent = extent;
   },
 
@@ -54486,7 +40588,7 @@ var VisualMapModel = extendComponentModel({
         color: ecModel.get('gradientColor')
       }; // If using shortcut like: {inRange: 'symbol'}, complete default value.
 
-      each$21(this.stateList, function (state) {
+      each$14(this.stateList, function (state) {
         var visualType = base[state];
 
         if (isString(visualType)) {
@@ -54509,7 +40611,7 @@ var VisualMapModel = extendComponentModel({
 
       if (optExist && !optAbsent) {
         optAbsent = base[stateAbsent] = {};
-        each$21(optExist, function (visualData, visualType) {
+        each$14(optExist, function (visualData, visualType) {
           if (!VisualMapping.isValidType(visualType)) {
             return;
           }
@@ -54533,7 +40635,7 @@ var VisualMapModel = extendComponentModel({
       var symbolExists = (controller.inRange || {}).symbol || (controller.outOfRange || {}).symbol;
       var symbolSizeExists = (controller.inRange || {}).symbolSize || (controller.outOfRange || {}).symbolSize;
       var inactiveColor = this.get('inactiveColor');
-      each$21(this.stateList, function (state) {
+      each$14(this.stateList, function (state) {
         var itemSize = this.itemSize;
         var visuals = controller[state]; // Set inactive color for controller if no other color
         // attr (like colorAlpha) specified.
@@ -54567,7 +40669,7 @@ var VisualMapModel = extendComponentModel({
             value > max && (max = value);
           });
           visuals.symbolSize = mapVisual(symbolSize, function (value) {
-            return linearMap$2(value, [0, max], [0, itemSize[0]], true);
+            return linearMap$1(value, [0, max], [0, itemSize[0]], true);
           });
         }
       }, this);
@@ -55042,6 +41144,105 @@ var VisualMapView = extendComponentView({
 * specific language governing permissions and limitations
 * under the License.
 */
+
+/**
+ * Calculate slider move result.
+ * Usage:
+ * (1) If both handle0 and handle1 are needed to be moved, set minSpan the same as
+ * maxSpan and the same as `Math.abs(handleEnd[1] - handleEnds[0])`.
+ * (2) If handle0 is forbidden to cross handle1, set minSpan as `0`.
+ *
+ * @param {number} delta Move length.
+ * @param {Array.<number>} handleEnds handleEnds[0] can be bigger then handleEnds[1].
+ *              handleEnds will be modified in this method.
+ * @param {Array.<number>} extent handleEnds is restricted by extent.
+ *              extent[0] should less or equals than extent[1].
+ * @param {number|string} handleIndex Can be 'all', means that both move the two handleEnds.
+ * @param {number} [minSpan] The range of dataZoom can not be smaller than that.
+ *              If not set, handle0 and cross handle1. If set as a non-negative
+ *              number (including `0`), handles will push each other when reaching
+ *              the minSpan.
+ * @param {number} [maxSpan] The range of dataZoom can not be larger than that.
+ * @return {Array.<number>} The input handleEnds.
+ */
+var sliderMove = function (delta, handleEnds, extent, handleIndex, minSpan, maxSpan) {
+  delta = delta || 0;
+  var extentSpan = extent[1] - extent[0]; // Notice maxSpan and minSpan can be null/undefined.
+
+  if (minSpan != null) {
+    minSpan = restrict(minSpan, [0, extentSpan]);
+  }
+
+  if (maxSpan != null) {
+    maxSpan = Math.max(maxSpan, minSpan != null ? minSpan : 0);
+  }
+
+  if (handleIndex === 'all') {
+    var handleSpan = Math.abs(handleEnds[1] - handleEnds[0]);
+    handleSpan = restrict(handleSpan, [0, extentSpan]);
+    minSpan = maxSpan = restrict(handleSpan, [minSpan, maxSpan]);
+    handleIndex = 0;
+  }
+
+  handleEnds[0] = restrict(handleEnds[0], extent);
+  handleEnds[1] = restrict(handleEnds[1], extent);
+  var originalDistSign = getSpanSign(handleEnds, handleIndex);
+  handleEnds[handleIndex] += delta; // Restrict in extent.
+
+  var extentMinSpan = minSpan || 0;
+  var realExtent = extent.slice();
+  originalDistSign.sign < 0 ? realExtent[0] += extentMinSpan : realExtent[1] -= extentMinSpan;
+  handleEnds[handleIndex] = restrict(handleEnds[handleIndex], realExtent); // Expand span.
+
+  var currDistSign = getSpanSign(handleEnds, handleIndex);
+
+  if (minSpan != null && (currDistSign.sign !== originalDistSign.sign || currDistSign.span < minSpan)) {
+    // If minSpan exists, 'cross' is forbidden.
+    handleEnds[1 - handleIndex] = handleEnds[handleIndex] + originalDistSign.sign * minSpan;
+  } // Shrink span.
+
+
+  var currDistSign = getSpanSign(handleEnds, handleIndex);
+
+  if (maxSpan != null && currDistSign.span > maxSpan) {
+    handleEnds[1 - handleIndex] = handleEnds[handleIndex] + currDistSign.sign * maxSpan;
+  }
+
+  return handleEnds;
+};
+
+function getSpanSign(handleEnds, handleIndex) {
+  var dist = handleEnds[handleIndex] - handleEnds[1 - handleIndex]; // If `handleEnds[0] === handleEnds[1]`, always believe that handleEnd[0]
+  // is at left of handleEnds[1] for non-cross case.
+
+  return {
+    span: Math.abs(dist),
+    sign: dist > 0 ? -1 : dist < 0 ? 1 : handleIndex ? -1 : 1
+  };
+}
+
+function restrict(value, extend) {
+  return Math.min(extend[1] != null ? extend[1] : Infinity, Math.max(extend[0] != null ? extend[0] : -Infinity, value));
+}
+
+/*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*/
 /**
  * @param {module:echarts/component/visualMap/VisualMapModel} visualMapModel\
  * @param {module:echarts/ExtensionAPI} api
@@ -55082,12 +41283,14 @@ function getItemAlign(visualMapModel, api, itemSize) {
  * dataIndexInside means filtered index.
  */
 
-function convertDataIndex(batch) {
+function makeHighDownBatch(batch, visualMapModel) {
   each$1(batch || [], function (batchItem) {
-    if (batch.dataIndex != null) {
-      batch.dataIndexInside = batch.dataIndex;
-      batch.dataIndex = null;
+    if (batchItem.dataIndex != null) {
+      batchItem.dataIndexInside = batchItem.dataIndex;
+      batchItem.dataIndex = null;
     }
+
+    batchItem.highlightKey = 'visualMap' + (visualMapModel ? visualMapModel.componentIndex : '');
   });
   return batch;
 }
@@ -55110,10 +41313,10 @@ function convertDataIndex(batch) {
 * specific language governing permissions and limitations
 * under the License.
 */
-var linearMap$3 = linearMap;
-var each$22 = each$1;
-var mathMin$5 = Math.min;
-var mathMax$5 = Math.max; // Arbitrary value
+var linearMap$2 = linearMap;
+var each$15 = each$1;
+var mathMin$4 = Math.min;
+var mathMax$4 = Math.max; // Arbitrary value
 
 var HOVER_LINK_SIZE = 12;
 var HOVER_LINK_OUT = 6; // Notice:
@@ -55270,9 +41473,9 @@ var ContinuousView = VisualMapView.extend({
 
 
     barGroup.add(shapes.outOfRange = createPolygon());
-    barGroup.add(shapes.inRange = createPolygon(null, useHandle ? getCursor$1(this._orient) : null, bind(this._dragHandle, this, 'all', false), bind(this._dragHandle, this, 'all', true)));
+    barGroup.add(shapes.inRange = createPolygon(null, useHandle ? getCursor(this._orient) : null, bind(this._dragHandle, this, 'all', false), bind(this._dragHandle, this, 'all', true)));
     var textRect = visualMapModel.textStyleModel.getTextRect('国');
-    var textSize = mathMax$5(textRect.width, textRect.height); // Handle
+    var textSize = mathMax$4(textRect.width, textRect.height); // Handle
 
     if (useHandle) {
       shapes.handleThumbs = [];
@@ -55295,7 +41498,7 @@ var ContinuousView = VisualMapView.extend({
   _createHandle: function (barGroup, handleIndex, itemSize, textSize, orient) {
     var onDrift = bind(this._dragHandle, this, handleIndex, false);
     var onDragEnd = bind(this._dragHandle, this, handleIndex, true);
-    var handleThumb = createPolygon(createHandlePoints(handleIndex, textSize), getCursor$1(this._orient), onDrift, onDragEnd);
+    var handleThumb = createPolygon(createHandlePoints(handleIndex, textSize), getCursor(this._orient), onDrift, onDragEnd);
     handleThumb.position[0] = itemSize[0];
     barGroup.add(handleThumb); // Text is always horizontal layout but should not be effected by
     // transform (orient/inverse). So label is built separately but not
@@ -55405,7 +41608,7 @@ var ContinuousView = VisualMapView.extend({
     var dataInterval = this._dataInterval = visualMapModel.getSelected();
     var dataExtent = visualMapModel.getExtent();
     var sizeExtent = [0, visualMapModel.itemSize[1]];
-    this._handleEnds = [linearMap$3(dataInterval[0], dataExtent, sizeExtent, true), linearMap$3(dataInterval[1], dataExtent, sizeExtent, true)];
+    this._handleEnds = [linearMap$2(dataInterval[0], dataExtent, sizeExtent, true), linearMap$2(dataInterval[1], dataExtent, sizeExtent, true)];
   },
 
   /**
@@ -55423,7 +41626,7 @@ var ContinuousView = VisualMapView.extend({
     0);
     var dataExtent = visualMapModel.getExtent(); // Update data interval.
 
-    this._dataInterval = [linearMap$3(handleEnds[0], sizeExtent, dataExtent, true), linearMap$3(handleEnds[1], sizeExtent, dataExtent, true)];
+    this._dataInterval = [linearMap$2(handleEnds[0], sizeExtent, dataExtent, true), linearMap$2(handleEnds[1], sizeExtent, dataExtent, true)];
   },
 
   /**
@@ -55549,7 +41752,7 @@ var ContinuousView = VisualMapView.extend({
     var visualMapModel = this.visualMapModel;
     var handleThumbs = shapes.handleThumbs;
     var handleLabels = shapes.handleLabels;
-    each$22([0, 1], function (handleIndex) {
+    each$15([0, 1], function (handleIndex) {
       var handleThumb = handleThumbs[handleIndex];
       handleThumb.setStyle('fill', visualInRange.handlesColor[handleIndex]);
       handleThumb.position[1] = handleEnds[handleIndex]; // Update handle label position.
@@ -55577,7 +41780,7 @@ var ContinuousView = VisualMapView.extend({
     var dataExtent = visualMapModel.getExtent();
     var itemSize = visualMapModel.itemSize;
     var sizeExtent = [0, itemSize[1]];
-    var pos = linearMap$3(cursorValue, dataExtent, sizeExtent, true);
+    var pos = linearMap$2(cursorValue, dataExtent, sizeExtent, true);
     var shapes = this._shapes;
     var indicator = shapes.indicator;
 
@@ -55626,7 +41829,7 @@ var ContinuousView = VisualMapView.extend({
         // below or upper than sizeExtent.
 
 
-        pos[1] = mathMin$5(mathMax$5(0, pos[1]), itemSize[1]);
+        pos[1] = mathMin$4(mathMax$4(0, pos[1]), itemSize[1]);
 
         self._doHoverLinkToSeries(pos[1], 0 <= pos[0] && pos[0] <= itemSize[0]);
       }
@@ -55666,11 +41869,11 @@ var ContinuousView = VisualMapView.extend({
     var sizeExtent = [0, itemSize[1]];
     var dataExtent = visualMapModel.getExtent(); // For hover link show when hover handle, which might be below or upper than sizeExtent.
 
-    cursorPos = mathMin$5(mathMax$5(sizeExtent[0], cursorPos), sizeExtent[1]);
+    cursorPos = mathMin$4(mathMax$4(sizeExtent[0], cursorPos), sizeExtent[1]);
     var halfHoverLinkSize = getHalfHoverLinkSize(visualMapModel, dataExtent, sizeExtent);
     var hoverRange = [cursorPos - halfHoverLinkSize, cursorPos + halfHoverLinkSize];
-    var cursorValue = linearMap$3(cursorPos, sizeExtent, dataExtent, true);
-    var valueRange = [linearMap$3(hoverRange[0], sizeExtent, dataExtent, true), linearMap$3(hoverRange[1], sizeExtent, dataExtent, true)]; // Consider data range is out of visualMap range, see test/visualMap-continuous.html,
+    var cursorValue = linearMap$2(cursorPos, sizeExtent, dataExtent, true);
+    var valueRange = [linearMap$2(hoverRange[0], sizeExtent, dataExtent, true), linearMap$2(hoverRange[1], sizeExtent, dataExtent, true)]; // Consider data range is out of visualMap range, see test/visualMap-continuous.html,
     // where china and india has very large population.
 
     hoverRange[0] < sizeExtent[0] && (valueRange[0] = -Infinity);
@@ -55702,9 +41905,9 @@ var ContinuousView = VisualMapView.extend({
 
     var resultBatches = compressBatches(oldBatch, newBatch);
 
-    this._dispatchHighDown('downplay', convertDataIndex(resultBatches[0]));
+    this._dispatchHighDown('downplay', makeHighDownBatch(resultBatches[0], visualMapModel));
 
-    this._dispatchHighDown('highlight', convertDataIndex(resultBatches[1]));
+    this._dispatchHighDown('highlight', makeHighDownBatch(resultBatches[1], visualMapModel));
   },
 
   /**
@@ -55749,7 +41952,7 @@ var ContinuousView = VisualMapView.extend({
 
     var indices = this._hoverLinkDataIndices;
 
-    this._dispatchHighDown('downplay', convertDataIndex(indices));
+    this._dispatchHighDown('downplay', makeHighDownBatch(indices, this.visualMapModel));
 
     indices.length = 0;
   },
@@ -55770,7 +41973,7 @@ var ContinuousView = VisualMapView.extend({
    */
   _applyTransform: function (vertex, element, inverse, global) {
     var transform = getTransform(element, global ? null : this.group);
-    return graphicUtil[isArray(vertex) ? 'applyTransform' : 'transformDirection'](vertex, transform, inverse);
+    return graphic[isArray(vertex) ? 'applyTransform' : 'transformDirection'](vertex, transform, inverse);
   },
 
   /**
@@ -55824,7 +42027,7 @@ function createHandlePoints(handleIndex, textSize) {
 
 function createIndicatorPoints(isRange, halfHoverLinkSize, pos, extentMax) {
   return isRange ? [// indicate range
-  [0, -mathMin$5(halfHoverLinkSize, mathMax$5(pos, 0))], [HOVER_LINK_OUT, 0], [0, mathMin$5(halfHoverLinkSize, mathMax$5(extentMax - pos, 0))]] : [// indicate single value
+  [0, -mathMin$4(halfHoverLinkSize, mathMax$4(pos, 0))], [HOVER_LINK_OUT, 0], [0, mathMin$4(halfHoverLinkSize, mathMax$4(extentMax - pos, 0))]] : [// indicate single value
   [0, 0], [5, -5], [5, 5]];
 }
 
@@ -55833,7 +42036,7 @@ function getHalfHoverLinkSize(visualMapModel, dataExtent, sizeExtent) {
   var hoverLinkDataSize = visualMapModel.get('hoverLinkDataSize');
 
   if (hoverLinkDataSize) {
-    halfHoverLinkSize = linearMap$3(hoverLinkDataSize, dataExtent, sizeExtent, true) / 2;
+    halfHoverLinkSize = linearMap$2(hoverLinkDataSize, dataExtent, sizeExtent, true) / 2;
   }
 
   return halfHoverLinkSize;
@@ -55844,7 +42047,7 @@ function useHoverLinkOnHandle(visualMapModel) {
   return !!(hoverLinkOnHandle == null ? visualMapModel.get('realtime') : hoverLinkOnHandle);
 }
 
-function getCursor$1(orient) {
+function getCursor(orient) {
   return orient === 'vertical' ? 'ns-resize' : 'ew-resize';
 }
 
@@ -55903,7 +42106,7 @@ registerAction(actionInfo, function (payload, ecModel) {
 /**
  * DataZoom component entry
  */
-registerPreprocessor(preprocessor$2);
+registerPreprocessor(preprocessor);
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -56153,7 +42356,7 @@ var PiecewiseModel = VisualMapModel.extend({
   /**
    * @public
    * @params {number} pieceIndex piece index in visualMapModel.getPieceList()
-   * @return {Array.<Object>} [{seriesId, dataIndices: <Array.<number>>}, ...]
+   * @return {Array.<Object>} [{seriesId, dataIndex: <Array.<number>>}, ...]
    */
   findTargetDataIndices: function (pieceIndex) {
     var result = [];
@@ -56500,7 +42703,7 @@ var PiecewiseVisualMapView = VisualMapView.extend({
       var visualMapModel = this.visualMapModel;
       visualMapModel.option.hoverLink && this.api.dispatchAction({
         type: method,
-        batch: convertDataIndex(visualMapModel.findTargetDataIndices(pieceIndex))
+        batch: makeHighDownBatch(visualMapModel.findTargetDataIndices(pieceIndex), visualMapModel)
       });
     }
   },
@@ -56636,7 +42839,7 @@ var PiecewiseVisualMapView = VisualMapView.extend({
 /**
  * DataZoom component entry
  */
-registerPreprocessor(preprocessor$2);
+registerPreprocessor(preprocessor);
 
 /*
 * Licensed to the Apache Software Foundation (ASF) under one
@@ -56660,2052 +42863,6 @@ registerPreprocessor(preprocessor$2);
 /**
  * visualMap component entry
  */
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var ToolboxModel = extendComponentModel({
-  type: 'toolbox',
-  layoutMode: {
-    type: 'box',
-    ignoreSize: true
-  },
-  optionUpdated: function () {
-    ToolboxModel.superApply(this, 'optionUpdated', arguments);
-    each$1(this.option.feature, function (featureOpt, featureName) {
-      var Feature = get$1(featureName);
-      Feature && merge(featureOpt, Feature.defaultOption);
-    });
-  },
-  defaultOption: {
-    show: true,
-    z: 6,
-    zlevel: 0,
-    orient: 'horizontal',
-    left: 'right',
-    top: 'top',
-    // right
-    // bottom
-    backgroundColor: 'transparent',
-    borderColor: '#ccc',
-    borderRadius: 0,
-    borderWidth: 0,
-    padding: 5,
-    itemSize: 15,
-    itemGap: 8,
-    showTitle: true,
-    iconStyle: {
-      borderColor: '#666',
-      color: 'none'
-    },
-    emphasis: {
-      iconStyle: {
-        borderColor: '#3E98C5'
-      } // textStyle: {},
-      // feature
-
-    }
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-extendComponentView({
-  type: 'toolbox',
-  render: function (toolboxModel, ecModel, api, payload) {
-    var group = this.group;
-    group.removeAll();
-
-    if (!toolboxModel.get('show')) {
-      return;
-    }
-
-    var itemSize = +toolboxModel.get('itemSize');
-    var featureOpts = toolboxModel.get('feature') || {};
-    var features = this._features || (this._features = {});
-    var featureNames = [];
-    each$1(featureOpts, function (opt, name) {
-      featureNames.push(name);
-    });
-    new DataDiffer(this._featureNames || [], featureNames).add(processFeature).update(processFeature).remove(curry(processFeature, null)).execute(); // Keep for diff.
-
-    this._featureNames = featureNames;
-
-    function processFeature(newIndex, oldIndex) {
-      var featureName = featureNames[newIndex];
-      var oldName = featureNames[oldIndex];
-      var featureOpt = featureOpts[featureName];
-      var featureModel = new Model(featureOpt, toolboxModel, toolboxModel.ecModel);
-      var feature;
-
-      if (featureName && !oldName) {
-        // Create
-        if (isUserFeatureName(featureName)) {
-          feature = {
-            model: featureModel,
-            onclick: featureModel.option.onclick,
-            featureName: featureName
-          };
-        } else {
-          var Feature = get$1(featureName);
-
-          if (!Feature) {
-            return;
-          }
-
-          feature = new Feature(featureModel, ecModel, api);
-        }
-
-        features[featureName] = feature;
-      } else {
-        feature = features[oldName]; // If feature does not exsit.
-
-        if (!feature) {
-          return;
-        }
-
-        feature.model = featureModel;
-        feature.ecModel = ecModel;
-        feature.api = api;
-      }
-
-      if (!featureName && oldName) {
-        feature.dispose && feature.dispose(ecModel, api);
-        return;
-      }
-
-      if (!featureModel.get('show') || feature.unusable) {
-        feature.remove && feature.remove(ecModel, api);
-        return;
-      }
-
-      createIconPaths(featureModel, feature, featureName);
-
-      featureModel.setIconStatus = function (iconName, status) {
-        var option = this.option;
-        var iconPaths = this.iconPaths;
-        option.iconStatus = option.iconStatus || {};
-        option.iconStatus[iconName] = status; // FIXME
-
-        iconPaths[iconName] && iconPaths[iconName].trigger(status);
-      };
-
-      if (feature.render) {
-        feature.render(featureModel, ecModel, api, payload);
-      }
-    }
-
-    function createIconPaths(featureModel, feature, featureName) {
-      var iconStyleModel = featureModel.getModel('iconStyle');
-      var iconStyleEmphasisModel = featureModel.getModel('emphasis.iconStyle'); // If one feature has mutiple icon. they are orginaized as
-      // {
-      //     icon: {
-      //         foo: '',
-      //         bar: ''
-      //     },
-      //     title: {
-      //         foo: '',
-      //         bar: ''
-      //     }
-      // }
-
-      var icons = feature.getIcons ? feature.getIcons() : featureModel.get('icon');
-      var titles = featureModel.get('title') || {};
-
-      if (typeof icons === 'string') {
-        var icon = icons;
-        var title = titles;
-        icons = {};
-        titles = {};
-        icons[featureName] = icon;
-        titles[featureName] = title;
-      }
-
-      var iconPaths = featureModel.iconPaths = {};
-      each$1(icons, function (iconStr, iconName) {
-        var path = createIcon(iconStr, {}, {
-          x: -itemSize / 2,
-          y: -itemSize / 2,
-          width: itemSize,
-          height: itemSize
-        });
-        path.setStyle(iconStyleModel.getItemStyle());
-        path.hoverStyle = iconStyleEmphasisModel.getItemStyle();
-        setHoverStyle(path);
-
-        if (toolboxModel.get('showTitle')) {
-          path.__title = titles[iconName];
-          path.on('mouseover', function () {
-            // Should not reuse above hoverStyle, which might be modified.
-            var hoverStyle = iconStyleEmphasisModel.getItemStyle();
-            path.setStyle({
-              text: titles[iconName],
-              textPosition: hoverStyle.textPosition || 'bottom',
-              textFill: hoverStyle.fill || hoverStyle.stroke || '#000',
-              textAlign: hoverStyle.textAlign || 'center'
-            });
-          }).on('mouseout', function () {
-            path.setStyle({
-              textFill: null
-            });
-          });
-        }
-
-        path.trigger(featureModel.get('iconStatus.' + iconName) || 'normal');
-        group.add(path);
-        path.on('click', bind(feature.onclick, feature, ecModel, api, iconName));
-        iconPaths[iconName] = path;
-      });
-    }
-
-    layout$2(group, toolboxModel, api); // Render background after group is layout
-    // FIXME
-
-    group.add(makeBackground(group.getBoundingRect(), toolboxModel)); // Adjust icon title positions to avoid them out of screen
-
-    group.eachChild(function (icon) {
-      var titleText = icon.__title;
-      var hoverStyle = icon.hoverStyle; // May be background element
-
-      if (hoverStyle && titleText) {
-        var rect = getBoundingRect(titleText, makeFont(hoverStyle));
-        var offsetX = icon.position[0] + group.position[0];
-        var offsetY = icon.position[1] + group.position[1] + itemSize;
-        var needPutOnTop = false;
-
-        if (offsetY + rect.height > api.getHeight()) {
-          hoverStyle.textPosition = 'top';
-          needPutOnTop = true;
-        }
-
-        var topOffset = needPutOnTop ? -5 - rect.height : itemSize + 8;
-
-        if (offsetX + rect.width / 2 > api.getWidth()) {
-          hoverStyle.textPosition = ['100%', topOffset];
-          hoverStyle.textAlign = 'right';
-        } else if (offsetX - rect.width / 2 < 0) {
-          hoverStyle.textPosition = [0, topOffset];
-          hoverStyle.textAlign = 'left';
-        }
-      }
-    });
-  },
-  updateView: function (toolboxModel, ecModel, api, payload) {
-    each$1(this._features, function (feature) {
-      feature.updateView && feature.updateView(feature.model, ecModel, api, payload);
-    });
-  },
-  // updateLayout: function (toolboxModel, ecModel, api, payload) {
-  //     zrUtil.each(this._features, function (feature) {
-  //         feature.updateLayout && feature.updateLayout(feature.model, ecModel, api, payload);
-  //     });
-  // },
-  remove: function (ecModel, api) {
-    each$1(this._features, function (feature) {
-      feature.remove && feature.remove(ecModel, api);
-    });
-    this.group.removeAll();
-  },
-  dispose: function (ecModel, api) {
-    each$1(this._features, function (feature) {
-      feature.dispose && feature.dispose(ecModel, api);
-    });
-  }
-});
-
-function isUserFeatureName(featureName) {
-  return featureName.indexOf('my') === 0;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/* global Uint8Array */
-var saveAsImageLang = lang.toolbox.saveAsImage;
-
-function SaveAsImage(model) {
-  this.model = model;
-}
-
-SaveAsImage.defaultOption = {
-  show: true,
-  icon: 'M4.7,22.9L29.3,45.5L54.7,23.4M4.6,43.6L4.6,58L53.8,58L53.8,43.6M29.2,45.1L29.2,0',
-  title: saveAsImageLang.title,
-  type: 'png',
-  // Default use option.backgroundColor
-  // backgroundColor: '#fff',
-  name: '',
-  excludeComponents: ['toolbox'],
-  pixelRatio: 1,
-  lang: saveAsImageLang.lang.slice()
-};
-SaveAsImage.prototype.unusable = !env$1.canvasSupported;
-var proto$4 = SaveAsImage.prototype;
-
-proto$4.onclick = function (ecModel, api) {
-  var model = this.model;
-  var title = model.get('name') || ecModel.get('title.0.text') || 'echarts';
-  var $a = document.createElement('a');
-  var type = model.get('type', true) || 'png';
-  $a.download = title + '.' + type;
-  $a.target = '_blank';
-  var url = api.getConnectedDataURL({
-    type: type,
-    backgroundColor: model.get('backgroundColor', true) || ecModel.get('backgroundColor') || '#fff',
-    excludeComponents: model.get('excludeComponents'),
-    pixelRatio: model.get('pixelRatio')
-  });
-  $a.href = url; // Chrome and Firefox
-
-  if (typeof MouseEvent === 'function' && !env$1.browser.ie && !env$1.browser.edge) {
-    var evt = new MouseEvent('click', {
-      view: window,
-      bubbles: true,
-      cancelable: false
-    });
-    $a.dispatchEvent(evt);
-  } // IE
-  else {
-      if (window.navigator.msSaveOrOpenBlob) {
-        var bstr = atob(url.split(',')[1]);
-        var n = bstr.length;
-        var u8arr = new Uint8Array(n);
-
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
-        }
-
-        var blob = new Blob([u8arr]);
-        window.navigator.msSaveOrOpenBlob(blob, title + '.' + type);
-      } else {
-        var lang$$1 = model.get('lang');
-        var html = '' + '<body style="margin:0;">' + '<img src="' + url + '" style="max-width:100%;" title="' + (lang$$1 && lang$$1[0] || '') + '" />' + '</body>';
-        var tab = window.open();
-        tab.document.write(html);
-      }
-    }
-};
-
-register$2('saveAsImage', SaveAsImage);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var magicTypeLang = lang.toolbox.magicType;
-
-function MagicType(model) {
-  this.model = model;
-}
-
-MagicType.defaultOption = {
-  show: true,
-  type: [],
-  // Icon group
-  icon: {
-    /* eslint-disable */
-    line: 'M4.1,28.9h7.1l9.3-22l7.4,38l9.7-19.7l3,12.8h14.9M4.1,58h51.4',
-    bar: 'M6.7,22.9h10V48h-10V22.9zM24.9,13h10v35h-10V13zM43.2,2h10v46h-10V2zM3.1,58h53.7',
-    stack: 'M8.2,38.4l-8.4,4.1l30.6,15.3L60,42.5l-8.1-4.1l-21.5,11L8.2,38.4z M51.9,30l-8.1,4.2l-13.4,6.9l-13.9-6.9L8.2,30l-8.4,4.2l8.4,4.2l22.2,11l21.5-11l8.1-4.2L51.9,30z M51.9,21.7l-8.1,4.2L35.7,30l-5.3,2.8L24.9,30l-8.4-4.1l-8.3-4.2l-8.4,4.2L8.2,30l8.3,4.2l13.9,6.9l13.4-6.9l8.1-4.2l8.1-4.1L51.9,21.7zM30.4,2.2L-0.2,17.5l8.4,4.1l8.3,4.2l8.4,4.2l5.5,2.7l5.3-2.7l8.1-4.2l8.1-4.2l8.1-4.1L30.4,2.2z',
-    // jshint ignore:line
-    tiled: 'M2.3,2.2h22.8V25H2.3V2.2z M35,2.2h22.8V25H35V2.2zM2.3,35h22.8v22.8H2.3V35z M35,35h22.8v22.8H35V35z'
-    /* eslint-enable */
-
-  },
-  // `line`, `bar`, `stack`, `tiled`
-  title: clone(magicTypeLang.title),
-  option: {},
-  seriesIndex: {}
-};
-var proto$5 = MagicType.prototype;
-
-proto$5.getIcons = function () {
-  var model = this.model;
-  var availableIcons = model.get('icon');
-  var icons = {};
-  each$1(model.get('type'), function (type) {
-    if (availableIcons[type]) {
-      icons[type] = availableIcons[type];
-    }
-  });
-  return icons;
-};
-
-var seriesOptGenreator = {
-  'line': function (seriesType, seriesId, seriesModel, model) {
-    if (seriesType === 'bar') {
-      return merge({
-        id: seriesId,
-        type: 'line',
-        // Preserve data related option
-        data: seriesModel.get('data'),
-        stack: seriesModel.get('stack'),
-        markPoint: seriesModel.get('markPoint'),
-        markLine: seriesModel.get('markLine')
-      }, model.get('option.line') || {}, true);
-    }
-  },
-  'bar': function (seriesType, seriesId, seriesModel, model) {
-    if (seriesType === 'line') {
-      return merge({
-        id: seriesId,
-        type: 'bar',
-        // Preserve data related option
-        data: seriesModel.get('data'),
-        stack: seriesModel.get('stack'),
-        markPoint: seriesModel.get('markPoint'),
-        markLine: seriesModel.get('markLine')
-      }, model.get('option.bar') || {}, true);
-    }
-  },
-  'stack': function (seriesType, seriesId, seriesModel, model) {
-    if (seriesType === 'line' || seriesType === 'bar') {
-      return merge({
-        id: seriesId,
-        stack: '__ec_magicType_stack__'
-      }, model.get('option.stack') || {}, true);
-    }
-  },
-  'tiled': function (seriesType, seriesId, seriesModel, model) {
-    if (seriesType === 'line' || seriesType === 'bar') {
-      return merge({
-        id: seriesId,
-        stack: ''
-      }, model.get('option.tiled') || {}, true);
-    }
-  }
-};
-var radioTypes = [['line', 'bar'], ['stack', 'tiled']];
-
-proto$5.onclick = function (ecModel, api, type) {
-  var model = this.model;
-  var seriesIndex = model.get('seriesIndex.' + type); // Not supported magicType
-
-  if (!seriesOptGenreator[type]) {
-    return;
-  }
-
-  var newOption = {
-    series: []
-  };
-
-  var generateNewSeriesTypes = function (seriesModel) {
-    var seriesType = seriesModel.subType;
-    var seriesId = seriesModel.id;
-    var newSeriesOpt = seriesOptGenreator[type](seriesType, seriesId, seriesModel, model);
-
-    if (newSeriesOpt) {
-      // PENDING If merge original option?
-      defaults(newSeriesOpt, seriesModel.option);
-      newOption.series.push(newSeriesOpt);
-    } // Modify boundaryGap
-
-
-    var coordSys = seriesModel.coordinateSystem;
-
-    if (coordSys && coordSys.type === 'cartesian2d' && (type === 'line' || type === 'bar')) {
-      var categoryAxis = coordSys.getAxesByScale('ordinal')[0];
-
-      if (categoryAxis) {
-        var axisDim = categoryAxis.dim;
-        var axisType = axisDim + 'Axis';
-        var axisModel = ecModel.queryComponents({
-          mainType: axisType,
-          index: seriesModel.get(name + 'Index'),
-          id: seriesModel.get(name + 'Id')
-        })[0];
-        var axisIndex = axisModel.componentIndex;
-        newOption[axisType] = newOption[axisType] || [];
-
-        for (var i = 0; i <= axisIndex; i++) {
-          newOption[axisType][axisIndex] = newOption[axisType][axisIndex] || {};
-        }
-
-        newOption[axisType][axisIndex].boundaryGap = type === 'bar';
-      }
-    }
-  };
-
-  each$1(radioTypes, function (radio) {
-    if (indexOf(radio, type) >= 0) {
-      each$1(radio, function (item) {
-        model.setIconStatus(item, 'normal');
-      });
-    }
-  });
-  model.setIconStatus(type, 'emphasis');
-  ecModel.eachComponent({
-    mainType: 'series',
-    query: seriesIndex == null ? null : {
-      seriesIndex: seriesIndex
-    }
-  }, generateNewSeriesTypes);
-  api.dispatchAction({
-    type: 'changeMagicType',
-    currentType: type,
-    newOption: newOption
-  });
-};
-
-registerAction({
-  type: 'changeMagicType',
-  event: 'magicTypeChanged',
-  update: 'prepareAndUpdate'
-}, function (payload, ecModel) {
-  ecModel.mergeOption(payload.newOption);
-});
-register$2('magicType', MagicType);
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var dataViewLang = lang.toolbox.dataView;
-var BLOCK_SPLITER = new Array(60).join('-');
-var ITEM_SPLITER = '\t';
-/**
- * Group series into two types
- *  1. on category axis, like line, bar
- *  2. others, like scatter, pie
- * @param {module:echarts/model/Global} ecModel
- * @return {Object}
- * @inner
- */
-
-function groupSeries(ecModel) {
-  var seriesGroupByCategoryAxis = {};
-  var otherSeries = [];
-  var meta = [];
-  ecModel.eachRawSeries(function (seriesModel) {
-    var coordSys = seriesModel.coordinateSystem;
-
-    if (coordSys && (coordSys.type === 'cartesian2d' || coordSys.type === 'polar')) {
-      var baseAxis = coordSys.getBaseAxis();
-
-      if (baseAxis.type === 'category') {
-        var key = baseAxis.dim + '_' + baseAxis.index;
-
-        if (!seriesGroupByCategoryAxis[key]) {
-          seriesGroupByCategoryAxis[key] = {
-            categoryAxis: baseAxis,
-            valueAxis: coordSys.getOtherAxis(baseAxis),
-            series: []
-          };
-          meta.push({
-            axisDim: baseAxis.dim,
-            axisIndex: baseAxis.index
-          });
-        }
-
-        seriesGroupByCategoryAxis[key].series.push(seriesModel);
-      } else {
-        otherSeries.push(seriesModel);
-      }
-    } else {
-      otherSeries.push(seriesModel);
-    }
-  });
-  return {
-    seriesGroupByCategoryAxis: seriesGroupByCategoryAxis,
-    other: otherSeries,
-    meta: meta
-  };
-}
-/**
- * Assemble content of series on cateogory axis
- * @param {Array.<module:echarts/model/Series>} series
- * @return {string}
- * @inner
- */
-
-
-function assembleSeriesWithCategoryAxis(series) {
-  var tables = [];
-  each$1(series, function (group, key) {
-    var categoryAxis = group.categoryAxis;
-    var valueAxis = group.valueAxis;
-    var valueAxisDim = valueAxis.dim;
-    var headers = [' '].concat(map(group.series, function (series) {
-      return series.name;
-    }));
-    var columns = [categoryAxis.model.getCategories()];
-    each$1(group.series, function (series) {
-      columns.push(series.getRawData().mapArray(valueAxisDim, function (val) {
-        return val;
-      }));
-    }); // Assemble table content
-
-    var lines = [headers.join(ITEM_SPLITER)];
-
-    for (var i = 0; i < columns[0].length; i++) {
-      var items = [];
-
-      for (var j = 0; j < columns.length; j++) {
-        items.push(columns[j][i]);
-      }
-
-      lines.push(items.join(ITEM_SPLITER));
-    }
-
-    tables.push(lines.join('\n'));
-  });
-  return tables.join('\n\n' + BLOCK_SPLITER + '\n\n');
-}
-/**
- * Assemble content of other series
- * @param {Array.<module:echarts/model/Series>} series
- * @return {string}
- * @inner
- */
-
-
-function assembleOtherSeries(series) {
-  return map(series, function (series) {
-    var data = series.getRawData();
-    var lines = [series.name];
-    var vals = [];
-    data.each(data.dimensions, function () {
-      var argLen = arguments.length;
-      var dataIndex = arguments[argLen - 1];
-      var name = data.getName(dataIndex);
-
-      for (var i = 0; i < argLen - 1; i++) {
-        vals[i] = arguments[i];
-      }
-
-      lines.push((name ? name + ITEM_SPLITER : '') + vals.join(ITEM_SPLITER));
-    });
-    return lines.join('\n');
-  }).join('\n\n' + BLOCK_SPLITER + '\n\n');
-}
-/**
- * @param {module:echarts/model/Global}
- * @return {Object}
- * @inner
- */
-
-
-function getContentFromModel(ecModel) {
-  var result = groupSeries(ecModel);
-  return {
-    value: filter([assembleSeriesWithCategoryAxis(result.seriesGroupByCategoryAxis), assembleOtherSeries(result.other)], function (str) {
-      return str.replace(/[\n\t\s]/g, '');
-    }).join('\n\n' + BLOCK_SPLITER + '\n\n'),
-    meta: result.meta
-  };
-}
-
-function trim$1(str) {
-  return str.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
-}
-/**
- * If a block is tsv format
- */
-
-
-function isTSVFormat(block) {
-  // Simple method to find out if a block is tsv format
-  var firstLine = block.slice(0, block.indexOf('\n'));
-
-  if (firstLine.indexOf(ITEM_SPLITER) >= 0) {
-    return true;
-  }
-}
-
-var itemSplitRegex = new RegExp('[' + ITEM_SPLITER + ']+', 'g');
-/**
- * @param {string} tsv
- * @return {Object}
- */
-
-function parseTSVContents(tsv) {
-  var tsvLines = tsv.split(/\n+/g);
-  var headers = trim$1(tsvLines.shift()).split(itemSplitRegex);
-  var categories = [];
-  var series = map(headers, function (header) {
-    return {
-      name: header,
-      data: []
-    };
-  });
-
-  for (var i = 0; i < tsvLines.length; i++) {
-    var items = trim$1(tsvLines[i]).split(itemSplitRegex);
-    categories.push(items.shift());
-
-    for (var j = 0; j < items.length; j++) {
-      series[j] && (series[j].data[i] = items[j]);
-    }
-  }
-
-  return {
-    series: series,
-    categories: categories
-  };
-}
-/**
- * @param {string} str
- * @return {Array.<Object>}
- * @inner
- */
-
-
-function parseListContents(str) {
-  var lines = str.split(/\n+/g);
-  var seriesName = trim$1(lines.shift());
-  var data = [];
-
-  for (var i = 0; i < lines.length; i++) {
-    var items = trim$1(lines[i]).split(itemSplitRegex);
-    var name = '';
-    var value;
-    var hasName = false;
-
-    if (isNaN(items[0])) {
-      // First item is name
-      hasName = true;
-      name = items[0];
-      items = items.slice(1);
-      data[i] = {
-        name: name,
-        value: []
-      };
-      value = data[i].value;
-    } else {
-      value = data[i] = [];
-    }
-
-    for (var j = 0; j < items.length; j++) {
-      value.push(+items[j]);
-    }
-
-    if (value.length === 1) {
-      hasName ? data[i].value = value[0] : data[i] = value[0];
-    }
-  }
-
-  return {
-    name: seriesName,
-    data: data
-  };
-}
-/**
- * @param {string} str
- * @param {Array.<Object>} blockMetaList
- * @return {Object}
- * @inner
- */
-
-
-function parseContents(str, blockMetaList) {
-  var blocks = str.split(new RegExp('\n*' + BLOCK_SPLITER + '\n*', 'g'));
-  var newOption = {
-    series: []
-  };
-  each$1(blocks, function (block, idx) {
-    if (isTSVFormat(block)) {
-      var result = parseTSVContents(block);
-      var blockMeta = blockMetaList[idx];
-      var axisKey = blockMeta.axisDim + 'Axis';
-
-      if (blockMeta) {
-        newOption[axisKey] = newOption[axisKey] || [];
-        newOption[axisKey][blockMeta.axisIndex] = {
-          data: result.categories
-        };
-        newOption.series = newOption.series.concat(result.series);
-      }
-    } else {
-      var result = parseListContents(block);
-      newOption.series.push(result);
-    }
-  });
-  return newOption;
-}
-/**
- * @alias {module:echarts/component/toolbox/feature/DataView}
- * @constructor
- * @param {module:echarts/model/Model} model
- */
-
-
-function DataView(model) {
-  this._dom = null;
-  this.model = model;
-}
-
-DataView.defaultOption = {
-  show: true,
-  readOnly: false,
-  optionToContent: null,
-  contentToOption: null,
-  icon: 'M17.5,17.3H33 M17.5,17.3H33 M45.4,29.5h-28 M11.5,2v56H51V14.8L38.4,2H11.5z M38.4,2.2v12.7H51 M45.4,41.7h-28',
-  title: clone(dataViewLang.title),
-  lang: clone(dataViewLang.lang),
-  backgroundColor: '#fff',
-  textColor: '#000',
-  textareaColor: '#fff',
-  textareaBorderColor: '#333',
-  buttonColor: '#c23531',
-  buttonTextColor: '#fff'
-};
-
-DataView.prototype.onclick = function (ecModel, api) {
-  var container = api.getDom();
-  var model = this.model;
-
-  if (this._dom) {
-    container.removeChild(this._dom);
-  }
-
-  var root = document.createElement('div');
-  root.style.cssText = 'position:absolute;left:5px;top:5px;bottom:5px;right:5px;';
-  root.style.backgroundColor = model.get('backgroundColor') || '#fff'; // Create elements
-
-  var header = document.createElement('h4');
-  var lang$$1 = model.get('lang') || [];
-  header.innerHTML = lang$$1[0] || model.get('title');
-  header.style.cssText = 'margin: 10px 20px;';
-  header.style.color = model.get('textColor');
-  var viewMain = document.createElement('div');
-  var textarea = document.createElement('textarea');
-  viewMain.style.cssText = 'display:block;width:100%;overflow:auto;';
-  var optionToContent = model.get('optionToContent');
-  var contentToOption = model.get('contentToOption');
-  var result = getContentFromModel(ecModel);
-
-  if (typeof optionToContent === 'function') {
-    var htmlOrDom = optionToContent(api.getOption());
-
-    if (typeof htmlOrDom === 'string') {
-      viewMain.innerHTML = htmlOrDom;
-    } else if (isDom(htmlOrDom)) {
-      viewMain.appendChild(htmlOrDom);
-    }
-  } else {
-    // Use default textarea
-    viewMain.appendChild(textarea);
-    textarea.readOnly = model.get('readOnly');
-    textarea.style.cssText = 'width:100%;height:100%;font-family:monospace;font-size:14px;line-height:1.6rem;';
-    textarea.style.color = model.get('textColor');
-    textarea.style.borderColor = model.get('textareaBorderColor');
-    textarea.style.backgroundColor = model.get('textareaColor');
-    textarea.value = result.value;
-  }
-
-  var blockMetaList = result.meta;
-  var buttonContainer = document.createElement('div');
-  buttonContainer.style.cssText = 'position:absolute;bottom:0;left:0;right:0;';
-  var buttonStyle = 'float:right;margin-right:20px;border:none;' + 'cursor:pointer;padding:2px 5px;font-size:12px;border-radius:3px';
-  var closeButton = document.createElement('div');
-  var refreshButton = document.createElement('div');
-  buttonStyle += ';background-color:' + model.get('buttonColor');
-  buttonStyle += ';color:' + model.get('buttonTextColor');
-  var self = this;
-
-  function close() {
-    container.removeChild(root);
-    self._dom = null;
-  }
-
-  addEventListener(closeButton, 'click', close);
-  addEventListener(refreshButton, 'click', function () {
-    var newOption;
-
-    try {
-      if (typeof contentToOption === 'function') {
-        newOption = contentToOption(viewMain, api.getOption());
-      } else {
-        newOption = parseContents(textarea.value, blockMetaList);
-      }
-    } catch (e) {
-      close();
-      throw new Error('Data view format error ' + e);
-    }
-
-    if (newOption) {
-      api.dispatchAction({
-        type: 'changeDataView',
-        newOption: newOption
-      });
-    }
-
-    close();
-  });
-  closeButton.innerHTML = lang$$1[1];
-  refreshButton.innerHTML = lang$$1[2];
-  refreshButton.style.cssText = buttonStyle;
-  closeButton.style.cssText = buttonStyle;
-  !model.get('readOnly') && buttonContainer.appendChild(refreshButton);
-  buttonContainer.appendChild(closeButton); // http://stackoverflow.com/questions/6637341/use-tab-to-indent-in-textarea
-
-  addEventListener(textarea, 'keydown', function (e) {
-    if ((e.keyCode || e.which) === 9) {
-      // get caret position/selection
-      var val = this.value;
-      var start = this.selectionStart;
-      var end = this.selectionEnd; // set textarea value to: text before caret + tab + text after caret
-
-      this.value = val.substring(0, start) + ITEM_SPLITER + val.substring(end); // put caret at right position again
-
-      this.selectionStart = this.selectionEnd = start + 1; // prevent the focus lose
-
-      stop(e);
-    }
-  });
-  root.appendChild(header);
-  root.appendChild(viewMain);
-  root.appendChild(buttonContainer);
-  viewMain.style.height = container.clientHeight - 80 + 'px';
-  container.appendChild(root);
-  this._dom = root;
-};
-
-DataView.prototype.remove = function (ecModel, api) {
-  this._dom && api.getDom().removeChild(this._dom);
-};
-
-DataView.prototype.dispose = function (ecModel, api) {
-  this.remove(ecModel, api);
-};
-/**
- * @inner
- */
-
-
-function tryMergeDataOption(newData, originalData) {
-  return map(newData, function (newVal, idx) {
-    var original = originalData && originalData[idx];
-
-    if (isObject$1(original) && !isArray(original)) {
-      if (isObject$1(newVal) && !isArray(newVal)) {
-        newVal = newVal.value;
-      } // Original data has option
-
-
-      return defaults({
-        value: newVal
-      }, original);
-    } else {
-      return newVal;
-    }
-  });
-}
-
-register$2('dataView', DataView);
-registerAction({
-  type: 'changeDataView',
-  event: 'dataViewChanged',
-  update: 'prepareAndUpdate'
-}, function (payload, ecModel) {
-  var newSeriesOptList = [];
-  each$1(payload.newOption.series, function (seriesOpt) {
-    var seriesModel = ecModel.getSeriesByName(seriesOpt.name)[0];
-
-    if (!seriesModel) {
-      // New created series
-      // Geuss the series type
-      newSeriesOptList.push(extend({
-        // Default is scatter
-        type: 'scatter'
-      }, seriesOpt));
-    } else {
-      var originalData = seriesModel.get('data');
-      newSeriesOptList.push({
-        name: seriesOpt.name,
-        data: tryMergeDataOption(seriesOpt.data, originalData)
-      });
-    }
-  });
-  ecModel.mergeOption(defaults({
-    series: newSeriesOptList
-  }, payload.newOption));
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var each$24 = each$1;
-var ATTR$2 = '\0_ec_hist_store';
-/**
- * @param {module:echarts/model/Global} ecModel
- * @param {Object} newSnapshot {dataZoomId, batch: [payloadInfo, ...]}
- */
-
-function push(ecModel, newSnapshot) {
-  var store = giveStore$1(ecModel); // If previous dataZoom can not be found,
-  // complete an range with current range.
-
-  each$24(newSnapshot, function (batchItem, dataZoomId) {
-    var i = store.length - 1;
-
-    for (; i >= 0; i--) {
-      var snapshot = store[i];
-
-      if (snapshot[dataZoomId]) {
-        break;
-      }
-    }
-
-    if (i < 0) {
-      // No origin range set, create one by current range.
-      var dataZoomModel = ecModel.queryComponents({
-        mainType: 'dataZoom',
-        subType: 'select',
-        id: dataZoomId
-      })[0];
-
-      if (dataZoomModel) {
-        var percentRange = dataZoomModel.getPercentRange();
-        store[0][dataZoomId] = {
-          dataZoomId: dataZoomId,
-          start: percentRange[0],
-          end: percentRange[1]
-        };
-      }
-    }
-  });
-  store.push(newSnapshot);
-}
-/**
- * @param {module:echarts/model/Global} ecModel
- * @return {Object} snapshot
- */
-
-function pop(ecModel) {
-  var store = giveStore$1(ecModel);
-  var head = store[store.length - 1];
-  store.length > 1 && store.pop(); // Find top for all dataZoom.
-
-  var snapshot = {};
-  each$24(head, function (batchItem, dataZoomId) {
-    for (var i = store.length - 1; i >= 0; i--) {
-      var batchItem = store[i][dataZoomId];
-
-      if (batchItem) {
-        snapshot[dataZoomId] = batchItem;
-        break;
-      }
-    }
-  });
-  return snapshot;
-}
-/**
- * @param {module:echarts/model/Global} ecModel
- */
-
-function clear$1(ecModel) {
-  ecModel[ATTR$2] = null;
-}
-/**
- * @param {module:echarts/model/Global} ecModel
- * @return {number} records. always >= 1.
- */
-
-function count(ecModel) {
-  return giveStore$1(ecModel).length;
-}
-/**
- * [{key: dataZoomId, value: {dataZoomId, range}}, ...]
- * History length of each dataZoom may be different.
- * this._history[0] is used to store origin range.
- * @type {Array.<Object>}
- */
-
-function giveStore$1(ecModel) {
-  var store = ecModel[ATTR$2];
-
-  if (!store) {
-    store = ecModel[ATTR$2] = [{}];
-  }
-
-  return store;
-}
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-DataZoomModel.extend({
-  type: 'dataZoom.select'
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-DataZoomView.extend({
-  type: 'dataZoom.select'
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/**
- * DataZoom component entry
- */
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var dataZoomLang = lang.toolbox.dataZoom;
-var each$23 = each$1; // Spectial component id start with \0ec\0, see echarts/model/Global.js~hasInnerId
-
-var DATA_ZOOM_ID_BASE = '\0_ec_\0toolbox-dataZoom_';
-
-function DataZoom(model, ecModel, api) {
-  /**
-   * @private
-   * @type {module:echarts/component/helper/BrushController}
-   */
-  (this._brushController = new BrushController(api.getZr())).on('brush', bind(this._onBrush, this)).mount();
-  /**
-   * @private
-   * @type {boolean}
-   */
-
-  this._isZoomActive;
-}
-
-DataZoom.defaultOption = {
-  show: true,
-  // Icon group
-  icon: {
-    zoom: 'M0,13.5h26.9 M13.5,26.9V0 M32.1,13.5H58V58H13.5 V32.1',
-    back: 'M22,1.4L9.9,13.5l12.3,12.3 M10.3,13.5H54.9v44.6 H10.3v-26'
-  },
-  // `zoom`, `back`
-  title: clone(dataZoomLang.title)
-};
-var proto$6 = DataZoom.prototype;
-
-proto$6.render = function (featureModel, ecModel, api, payload) {
-  this.model = featureModel;
-  this.ecModel = ecModel;
-  this.api = api;
-  updateZoomBtnStatus(featureModel, ecModel, this, payload, api);
-  updateBackBtnStatus(featureModel, ecModel);
-};
-
-proto$6.onclick = function (ecModel, api, type) {
-  handlers[type].call(this);
-};
-
-proto$6.remove = function (ecModel, api) {
-  this._brushController.unmount();
-};
-
-proto$6.dispose = function (ecModel, api) {
-  this._brushController.dispose();
-};
-/**
- * @private
- */
-
-
-var handlers = {
-  zoom: function () {
-    var nextActive = !this._isZoomActive;
-    this.api.dispatchAction({
-      type: 'takeGlobalCursor',
-      key: 'dataZoomSelect',
-      dataZoomSelectActive: nextActive
-    });
-  },
-  back: function () {
-    this._dispatchZoomAction(pop(this.ecModel));
-  }
-};
-/**
- * @private
- */
-
-proto$6._onBrush = function (areas, opt) {
-  if (!opt.isEnd || !areas.length) {
-    return;
-  }
-
-  var snapshot = {};
-  var ecModel = this.ecModel;
-
-  this._brushController.updateCovers([]); // remove cover
-
-
-  var brushTargetManager = new BrushTargetManager(retrieveAxisSetting(this.model.option), ecModel, {
-    include: ['grid']
-  });
-  brushTargetManager.matchOutputRanges(areas, ecModel, function (area, coordRange, coordSys) {
-    if (coordSys.type !== 'cartesian2d') {
-      return;
-    }
-
-    var brushType = area.brushType;
-
-    if (brushType === 'rect') {
-      setBatch('x', coordSys, coordRange[0]);
-      setBatch('y', coordSys, coordRange[1]);
-    } else {
-      setBatch({
-        lineX: 'x',
-        lineY: 'y'
-      }[brushType], coordSys, coordRange);
-    }
-  });
-  push(ecModel, snapshot);
-
-  this._dispatchZoomAction(snapshot);
-
-  function setBatch(dimName, coordSys, minMax) {
-    var axis = coordSys.getAxis(dimName);
-    var axisModel = axis.model;
-    var dataZoomModel = findDataZoom(dimName, axisModel, ecModel); // Restrict range.
-
-    var minMaxSpan = dataZoomModel.findRepresentativeAxisProxy(axisModel).getMinMaxSpan();
-
-    if (minMaxSpan.minValueSpan != null || minMaxSpan.maxValueSpan != null) {
-      minMax = sliderMove(0, minMax.slice(), axis.scale.getExtent(), 0, minMaxSpan.minValueSpan, minMaxSpan.maxValueSpan);
-    }
-
-    dataZoomModel && (snapshot[dataZoomModel.id] = {
-      dataZoomId: dataZoomModel.id,
-      startValue: minMax[0],
-      endValue: minMax[1]
-    });
-  }
-
-  function findDataZoom(dimName, axisModel, ecModel) {
-    var found;
-    ecModel.eachComponent({
-      mainType: 'dataZoom',
-      subType: 'select'
-    }, function (dzModel) {
-      var has = dzModel.getAxisModel(dimName, axisModel.componentIndex);
-      has && (found = dzModel);
-    });
-    return found;
-  }
-};
-/**
- * @private
- */
-
-
-proto$6._dispatchZoomAction = function (snapshot) {
-  var batch = []; // Convert from hash map to array.
-
-  each$23(snapshot, function (batchItem, dataZoomId) {
-    batch.push(clone(batchItem));
-  });
-  batch.length && this.api.dispatchAction({
-    type: 'dataZoom',
-    from: this.uid,
-    batch: batch
-  });
-};
-
-function retrieveAxisSetting(option) {
-  var setting = {}; // Compatible with previous setting: null => all axis, false => no axis.
-
-  each$1(['xAxisIndex', 'yAxisIndex'], function (name) {
-    setting[name] = option[name];
-    setting[name] == null && (setting[name] = 'all');
-    (setting[name] === false || setting[name] === 'none') && (setting[name] = []);
-  });
-  return setting;
-}
-
-function updateBackBtnStatus(featureModel, ecModel) {
-  featureModel.setIconStatus('back', count(ecModel) > 1 ? 'emphasis' : 'normal');
-}
-
-function updateZoomBtnStatus(featureModel, ecModel, view, payload, api) {
-  var zoomActive = view._isZoomActive;
-
-  if (payload && payload.type === 'takeGlobalCursor') {
-    zoomActive = payload.key === 'dataZoomSelect' ? payload.dataZoomSelectActive : false;
-  }
-
-  view._isZoomActive = zoomActive;
-  featureModel.setIconStatus('zoom', zoomActive ? 'emphasis' : 'normal');
-  var brushTargetManager = new BrushTargetManager(retrieveAxisSetting(featureModel.option), ecModel, {
-    include: ['grid']
-  });
-
-  view._brushController.setPanels(brushTargetManager.makePanelOpts(api, function (targetInfo) {
-    return targetInfo.xAxisDeclared && !targetInfo.yAxisDeclared ? 'lineX' : !targetInfo.xAxisDeclared && targetInfo.yAxisDeclared ? 'lineY' : 'rect';
-  })).enableBrush(zoomActive ? {
-    brushType: 'auto',
-    brushStyle: {
-      // FIXME user customized?
-      lineWidth: 0,
-      fill: 'rgba(0,0,0,0.2)'
-    }
-  } : false);
-}
-
-register$2('dataZoom', DataZoom); // Create special dataZoom option for select
-// FIXME consider the case of merge option, where axes options are not exists.
-
-registerPreprocessor(function (option) {
-  if (!option) {
-    return;
-  }
-
-  var dataZoomOpts = option.dataZoom || (option.dataZoom = []);
-
-  if (!isArray(dataZoomOpts)) {
-    option.dataZoom = dataZoomOpts = [dataZoomOpts];
-  }
-
-  var toolboxOpt = option.toolbox;
-
-  if (toolboxOpt) {
-    // Assume there is only one toolbox
-    if (isArray(toolboxOpt)) {
-      toolboxOpt = toolboxOpt[0];
-    }
-
-    if (toolboxOpt && toolboxOpt.feature) {
-      var dataZoomOpt = toolboxOpt.feature.dataZoom; // FIXME: If add dataZoom when setOption in merge mode,
-      // no axis info to be added. See `test/dataZoom-extreme.html`
-
-      addForAxis('xAxis', dataZoomOpt);
-      addForAxis('yAxis', dataZoomOpt);
-    }
-  }
-
-  function addForAxis(axisName, dataZoomOpt) {
-    if (!dataZoomOpt) {
-      return;
-    } // Try not to modify model, because it is not merged yet.
-
-
-    var axisIndicesName = axisName + 'Index';
-    var givenAxisIndices = dataZoomOpt[axisIndicesName];
-
-    if (givenAxisIndices != null && givenAxisIndices !== 'all' && !isArray(givenAxisIndices)) {
-      givenAxisIndices = givenAxisIndices === false || givenAxisIndices === 'none' ? [] : [givenAxisIndices];
-    }
-
-    forEachComponent(axisName, function (axisOpt, axisIndex) {
-      if (givenAxisIndices != null && givenAxisIndices !== 'all' && indexOf(givenAxisIndices, axisIndex) === -1) {
-        return;
-      }
-
-      var newOpt = {
-        type: 'select',
-        $fromToolbox: true,
-        // Id for merge mapping.
-        id: DATA_ZOOM_ID_BASE + axisName + axisIndex
-      }; // FIXME
-      // Only support one axis now.
-
-      newOpt[axisIndicesName] = axisIndex;
-      dataZoomOpts.push(newOpt);
-    });
-  }
-
-  function forEachComponent(mainType, cb) {
-    var opts = option[mainType];
-
-    if (!isArray(opts)) {
-      opts = opts ? [opts] : [];
-    }
-
-    each$23(opts, cb);
-  }
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-var restoreLang = lang.toolbox.restore;
-
-function Restore(model) {
-  this.model = model;
-}
-
-Restore.defaultOption = {
-  show: true,
-
-  /* eslint-disable */
-  icon: 'M3.8,33.4 M47,18.9h9.8V8.7 M56.3,20.1 C52.1,9,40.5,0.6,26.8,2.1C12.6,3.7,1.6,16.2,2.1,30.6 M13,41.1H3.1v10.2 M3.7,39.9c4.2,11.1,15.8,19.5,29.5,18 c14.2-1.6,25.2-14.1,24.7-28.5',
-
-  /* eslint-enable */
-  title: restoreLang.title
-};
-var proto$7 = Restore.prototype;
-
-proto$7.onclick = function (ecModel, api, type) {
-  clear$1(ecModel);
-  api.dispatchAction({
-    type: 'restore',
-    from: this.uid
-  });
-};
-
-register$2('restore', Restore);
-registerAction({
-  type: 'restore',
-  event: 'restore',
-  update: 'prepareAndUpdate'
-}, function (payload, ecModel) {
-  ecModel.resetOption('recreate');
-});
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-* distributed with this work for additional information
-* regarding copyright ownership.  The ASF licenses this file
-* to you under the Apache License, Version 2.0 (the
-* "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-* KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-// Preprocessor
-// -------------
-
-registerPreprocessor(function (option) {
-  var graphicOption = option.graphic; // Convert
-  // {graphic: [{left: 10, type: 'circle'}, ...]}
-  // or
-  // {graphic: {left: 10, type: 'circle'}}
-  // to
-  // {graphic: [{elements: [{left: 10, type: 'circle'}, ...]}]}
-
-  if (isArray(graphicOption)) {
-    if (!graphicOption[0] || !graphicOption[0].elements) {
-      option.graphic = [{
-        elements: graphicOption
-      }];
-    } else {
-      // Only one graphic instance can be instantiated. (We dont
-      // want that too many views are created in echarts._viewMap)
-      option.graphic = [option.graphic[0]];
-    }
-  } else if (graphicOption && !graphicOption.elements) {
-    option.graphic = [{
-      elements: [graphicOption]
-    }];
-  }
-}); // ------
-// Model
-// ------
-
-var GraphicModel = extendComponentModel({
-  type: 'graphic',
-  defaultOption: {
-    // Extra properties for each elements:
-    //
-    // left/right/top/bottom: (like 12, '22%', 'center', default undefined)
-    //      If left/rigth is set, shape.x/shape.cx/position will not be used.
-    //      If top/bottom is set, shape.y/shape.cy/position will not be used.
-    //      This mechanism is useful when you want to position a group/element
-    //      against the right side or the center of this container.
-    //
-    // width/height: (can only be pixel value, default 0)
-    //      Only be used to specify contianer(group) size, if needed. And
-    //      can not be percentage value (like '33%'). See the reason in the
-    //      layout algorithm below.
-    //
-    // bounding: (enum: 'all' (default) | 'raw')
-    //      Specify how to calculate boundingRect when locating.
-    //      'all': Get uioned and transformed boundingRect
-    //          from both itself and its descendants.
-    //          This mode simplies confining a group of elements in the bounding
-    //          of their ancester container (e.g., using 'right: 0').
-    //      'raw': Only use the boundingRect of itself and before transformed.
-    //          This mode is similar to css behavior, which is useful when you
-    //          want an element to be able to overflow its container. (Consider
-    //          a rotated circle needs to be located in a corner.)
-    // info: custom info. enables user to mount some info on elements and use them
-    //      in event handlers. Update them only when user specified, otherwise, remain.
-    // Note: elements is always behind its ancestors in this elements array.
-    elements: [],
-    parentId: null
-  },
-
-  /**
-   * Save el options for the sake of the performance (only update modified graphics).
-   * The order is the same as those in option. (ancesters -> descendants)
-   *
-   * @private
-   * @type {Array.<Object>}
-   */
-  _elOptionsToUpdate: null,
-
-  /**
-   * @override
-   */
-  mergeOption: function (option) {
-    // Prevent default merge to elements
-    var elements = this.option.elements;
-    this.option.elements = null;
-    GraphicModel.superApply(this, 'mergeOption', arguments);
-    this.option.elements = elements;
-  },
-
-  /**
-   * @override
-   */
-  optionUpdated: function (newOption, isInit) {
-    var thisOption = this.option;
-    var newList = (isInit ? thisOption : newOption).elements;
-    var existList = thisOption.elements = isInit ? [] : thisOption.elements;
-    var flattenedList = [];
-
-    this._flatten(newList, flattenedList);
-
-    var mappingResult = mappingToExists(existList, flattenedList);
-    makeIdAndName(mappingResult); // Clear elOptionsToUpdate
-
-    var elOptionsToUpdate = this._elOptionsToUpdate = [];
-    each$1(mappingResult, function (resultItem, index) {
-      var newElOption = resultItem.option;
-
-      if (!newElOption) {
-        return;
-      }
-
-      elOptionsToUpdate.push(newElOption);
-      setKeyInfoToNewElOption(resultItem, newElOption);
-      mergeNewElOptionToExist(existList, index, newElOption);
-      setLayoutInfoToExist(existList[index], newElOption);
-    }, this); // Clean
-
-    for (var i = existList.length - 1; i >= 0; i--) {
-      if (existList[i] == null) {
-        existList.splice(i, 1);
-      } else {
-        // $action should be volatile, otherwise option gotten from
-        // `getOption` will contain unexpected $action.
-        delete existList[i].$action;
-      }
-    }
-  },
-
-  /**
-   * Convert
-   * [{
-   *  type: 'group',
-   *  id: 'xx',
-   *  children: [{type: 'circle'}, {type: 'polygon'}]
-   * }]
-   * to
-   * [
-   *  {type: 'group', id: 'xx'},
-   *  {type: 'circle', parentId: 'xx'},
-   *  {type: 'polygon', parentId: 'xx'}
-   * ]
-   *
-   * @private
-   * @param {Array.<Object>} optionList option list
-   * @param {Array.<Object>} result result of flatten
-   * @param {Object} parentOption parent option
-   */
-  _flatten: function (optionList, result, parentOption) {
-    each$1(optionList, function (option) {
-      if (!option) {
-        return;
-      }
-
-      if (parentOption) {
-        option.parentOption = parentOption;
-      }
-
-      result.push(option);
-      var children = option.children;
-
-      if (option.type === 'group' && children) {
-        this._flatten(children, result, option);
-      } // Deleting for JSON output, and for not affecting group creation.
-
-
-      delete option.children;
-    }, this);
-  },
-  // FIXME
-  // Pass to view using payload? setOption has a payload?
-  useElOptionsToUpdate: function () {
-    var els = this._elOptionsToUpdate; // Clear to avoid render duplicately when zooming.
-
-    this._elOptionsToUpdate = null;
-    return els;
-  }
-}); // -----
-// View
-// -----
-
-extendComponentView({
-  type: 'graphic',
-
-  /**
-   * @override
-   */
-  init: function (ecModel, api) {
-    /**
-     * @private
-     * @type {module:zrender/core/util.HashMap}
-     */
-    this._elMap = createHashMap();
-    /**
-     * @private
-     * @type {module:echarts/graphic/GraphicModel}
-     */
-
-    this._lastGraphicModel;
-  },
-
-  /**
-   * @override
-   */
-  render: function (graphicModel, ecModel, api) {
-    // Having leveraged between use cases and algorithm complexity, a very
-    // simple layout mechanism is used:
-    // The size(width/height) can be determined by itself or its parent (not
-    // implemented yet), but can not by its children. (Top-down travel)
-    // The location(x/y) can be determined by the bounding rect of itself
-    // (can including its descendants or not) and the size of its parent.
-    // (Bottom-up travel)
-    // When `chart.clear()` or `chart.setOption({...}, true)` with the same id,
-    // view will be reused.
-    if (graphicModel !== this._lastGraphicModel) {
-      this._clear();
-    }
-
-    this._lastGraphicModel = graphicModel;
-
-    this._updateElements(graphicModel);
-
-    this._relocate(graphicModel, api);
-  },
-
-  /**
-   * Update graphic elements.
-   *
-   * @private
-   * @param {Object} graphicModel graphic model
-   */
-  _updateElements: function (graphicModel) {
-    var elOptionsToUpdate = graphicModel.useElOptionsToUpdate();
-
-    if (!elOptionsToUpdate) {
-      return;
-    }
-
-    var elMap = this._elMap;
-    var rootGroup = this.group; // Top-down tranverse to assign graphic settings to each elements.
-
-    each$1(elOptionsToUpdate, function (elOption) {
-      var $action = elOption.$action;
-      var id = elOption.id;
-      var existEl = elMap.get(id);
-      var parentId = elOption.parentId;
-      var targetElParent = parentId != null ? elMap.get(parentId) : rootGroup;
-      var elOptionStyle = elOption.style;
-
-      if (elOption.type === 'text' && elOptionStyle) {
-        // In top/bottom mode, textVerticalAlign should not be used, which cause
-        // inaccurately locating.
-        if (elOption.hv && elOption.hv[1]) {
-          elOptionStyle.textVerticalAlign = elOptionStyle.textBaseline = null;
-        } // Compatible with previous setting: both support fill and textFill,
-        // stroke and textStroke.
-
-
-        !elOptionStyle.hasOwnProperty('textFill') && elOptionStyle.fill && (elOptionStyle.textFill = elOptionStyle.fill);
-        !elOptionStyle.hasOwnProperty('textStroke') && elOptionStyle.stroke && (elOptionStyle.textStroke = elOptionStyle.stroke);
-      } // Remove unnecessary props to avoid potential problems.
-
-
-      var elOptionCleaned = getCleanedElOption(elOption); // For simple, do not support parent change, otherwise reorder is needed.
-
-      if (!$action || $action === 'merge') {
-        existEl ? existEl.attr(elOptionCleaned) : createEl(id, targetElParent, elOptionCleaned, elMap);
-      } else if ($action === 'replace') {
-        removeEl(existEl, elMap);
-        createEl(id, targetElParent, elOptionCleaned, elMap);
-      } else if ($action === 'remove') {
-        removeEl(existEl, elMap);
-      }
-
-      var el = elMap.get(id);
-
-      if (el) {
-        el.__ecGraphicWidth = elOption.width;
-        el.__ecGraphicHeight = elOption.height;
-        setEventData(el, graphicModel, elOption);
-      }
-    });
-  },
-
-  /**
-   * Locate graphic elements.
-   *
-   * @private
-   * @param {Object} graphicModel graphic model
-   * @param {module:echarts/ExtensionAPI} api extension API
-   */
-  _relocate: function (graphicModel, api) {
-    var elOptions = graphicModel.option.elements;
-    var rootGroup = this.group;
-    var elMap = this._elMap; // Bottom-up tranvese all elements (consider ec resize) to locate elements.
-
-    for (var i = elOptions.length - 1; i >= 0; i--) {
-      var elOption = elOptions[i];
-      var el = elMap.get(elOption.id);
-
-      if (!el) {
-        continue;
-      }
-
-      var parentEl = el.parent;
-      var containerInfo = parentEl === rootGroup ? {
-        width: api.getWidth(),
-        height: api.getHeight()
-      } : {
-        // Like 'position:absolut' in css, default 0.
-        width: parentEl.__ecGraphicWidth || 0,
-        height: parentEl.__ecGraphicHeight || 0
-      };
-      positionElement(el, elOption, containerInfo, null, {
-        hv: elOption.hv,
-        boundingMode: elOption.bounding
-      });
-    }
-  },
-
-  /**
-   * Clear all elements.
-   *
-   * @private
-   */
-  _clear: function () {
-    var elMap = this._elMap;
-    elMap.each(function (el) {
-      removeEl(el, elMap);
-    });
-    this._elMap = createHashMap();
-  },
-
-  /**
-   * @override
-   */
-  dispose: function () {
-    this._clear();
-  }
-});
-
-function createEl(id, targetElParent, elOption, elMap) {
-  var graphicType = elOption.type;
-  var Clz = graphicUtil[graphicType.charAt(0).toUpperCase() + graphicType.slice(1)];
-  var el = new Clz(elOption);
-  targetElParent.add(el);
-  elMap.set(id, el);
-  el.__ecGraphicId = id;
-}
-
-function removeEl(existEl, elMap) {
-  var existElParent = existEl && existEl.parent;
-
-  if (existElParent) {
-    existEl.type === 'group' && existEl.traverse(function (el) {
-      removeEl(el, elMap);
-    });
-    elMap.removeKey(existEl.__ecGraphicId);
-    existElParent.remove(existEl);
-  }
-} // Remove unnecessary props to avoid potential problems.
-
-
-function getCleanedElOption(elOption) {
-  elOption = extend({}, elOption);
-  each$1(['id', 'parentId', '$action', 'hv', 'bounding'].concat(LOCATION_PARAMS), function (name) {
-    delete elOption[name];
-  });
-  return elOption;
-}
-
-function isSetLoc(obj, props) {
-  var isSet;
-  each$1(props, function (prop) {
-    obj[prop] != null && obj[prop] !== 'auto' && (isSet = true);
-  });
-  return isSet;
-}
-
-function setKeyInfoToNewElOption(resultItem, newElOption) {
-  var existElOption = resultItem.exist; // Set id and type after id assigned.
-
-  newElOption.id = resultItem.keyInfo.id;
-  !newElOption.type && existElOption && (newElOption.type = existElOption.type); // Set parent id if not specified
-
-  if (newElOption.parentId == null) {
-    var newElParentOption = newElOption.parentOption;
-
-    if (newElParentOption) {
-      newElOption.parentId = newElParentOption.id;
-    } else if (existElOption) {
-      newElOption.parentId = existElOption.parentId;
-    }
-  } // Clear
-
-
-  newElOption.parentOption = null;
-}
-
-function mergeNewElOptionToExist(existList, index, newElOption) {
-  // Update existing options, for `getOption` feature.
-  var newElOptCopy = extend({}, newElOption);
-  var existElOption = existList[index];
-  var $action = newElOption.$action || 'merge';
-
-  if ($action === 'merge') {
-    if (existElOption) {
-      // We can ensure that newElOptCopy and existElOption are not
-      // the same object, so `merge` will not change newElOptCopy.
-      merge(existElOption, newElOptCopy, true); // Rigid body, use ignoreSize.
-
-      mergeLayoutParam(existElOption, newElOptCopy, {
-        ignoreSize: true
-      }); // Will be used in render.
-
-      copyLayoutParams(newElOption, existElOption);
-    } else {
-      existList[index] = newElOptCopy;
-    }
-  } else if ($action === 'replace') {
-    existList[index] = newElOptCopy;
-  } else if ($action === 'remove') {
-    // null will be cleaned later.
-    existElOption && (existList[index] = null);
-  }
-}
-
-function setLayoutInfoToExist(existItem, newElOption) {
-  if (!existItem) {
-    return;
-  }
-
-  existItem.hv = newElOption.hv = [// Rigid body, dont care `width`.
-  isSetLoc(newElOption, ['left', 'right']), // Rigid body, dont care `height`.
-  isSetLoc(newElOption, ['top', 'bottom'])]; // Give default group size. Otherwise layout error may occur.
-
-  if (existItem.type === 'group') {
-    existItem.width == null && (existItem.width = newElOption.width = 0);
-    existItem.height == null && (existItem.height = newElOption.height = 0);
-  }
-}
-
-function setEventData(el, graphicModel, elOption) {
-  var eventData = el.eventData; // Simple optimize for large amount of elements that no need event.
-
-  if (!el.silent && !el.ignore && !eventData) {
-    eventData = el.eventData = {
-      componentType: 'graphic',
-      componentIndex: graphicModel.componentIndex,
-      name: el.name
-    };
-  } // `elOption.info` enables user to mount some info on
-  // elements and use them in event handlers.
-
-
-  if (eventData) {
-    eventData.info = el.info;
-  }
-}
 
 exports.version = version;
 exports.dependencies = dependencies;
@@ -58746,7 +42903,7 @@ exports.color = color;
 exports.parseGeoJSON = parseGeoJSON;
 exports.parseGeoJson = parseGeoJson;
 exports.util = ecUtil;
-exports.graphic = graphic;
+exports.graphic = graphic$1;
 exports.List = List;
 exports.Model = Model;
 exports.Axis = Axis;
