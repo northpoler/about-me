@@ -26,10 +26,10 @@ public class MemoService {
         return memoRepositoty.findAllByUserIdOrderBySequenceAsc(userId);
     }
 
-    public void delete(Long id){
+    public void delete(Long id, Long userId){
         // 更新其他链接的排序
         Memo memo = getById(id);
-        memoRepositoty.decreaseSequence(memo.getSequence());
+        memoRepositoty.decreaseSequence(memo.getSequence(),userId);
         memoRepositoty.deleteById(id);
     }
 
@@ -40,7 +40,7 @@ public class MemoService {
     @Transactional
     public Integer save(Memo memo){
         // 更新其他链接的排序
-        memoRepositoty.increaseSequence(memo.getSequence());
+        memoRepositoty.increaseSequence(memo.getSequence(), memo.getUserId());
         // 保存
         Memo save = memoRepositoty.save(memo);
         if (save!=null){
@@ -54,9 +54,9 @@ public class MemoService {
         // 更新其他链接的排序
         Memo old = getById(memo.getId());
         if (old.getSequence()>memo.getSequence()){
-            memoRepositoty.increaseSequence(memo.getSequence(),old.getSequence());
+            memoRepositoty.increaseSequence(memo.getSequence(),old.getSequence(),memo.getUserId());
         } else if (old.getSequence()<memo.getSequence()){
-            memoRepositoty.decreaseSequence(old.getSequence(),memo.getSequence());
+            memoRepositoty.decreaseSequence(old.getSequence(),memo.getSequence(),memo.getUserId());
         }
         // 保存
         Memo save = memoRepositoty.save(memo);
