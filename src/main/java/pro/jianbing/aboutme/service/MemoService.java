@@ -33,8 +33,8 @@ public class MemoService {
         memoRepositoty.deleteById(id);
     }
 
-    public long count(){
-        return memoRepositoty.count();
+    public long getMaxSequence(Long userId){
+        return memoRepositoty.countByUserId(userId);
     }
 
     @Transactional
