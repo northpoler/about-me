@@ -28,21 +28,21 @@ public interface MemoRepositoty extends JpaRepository<Memo,Long> {
      */
     @Transactional
     @Modifying
-    @Query("update Memo set sequence = sequence+1 where sequence >= ?1")
-    Integer increaseSequence(Long sequence);
+    @Query("update Memo set sequence = sequence+1 where sequence >= ?1 and userId = ?2")
+    Integer increaseSequence(Long sequence, Long userId);
 
     @Transactional
     @Modifying
-    @Query("update Memo set sequence = sequence+1 where sequence >= ?1 and sequence < ?2")
-    Integer increaseSequence(Long start, Long end);
+    @Query("update Memo set sequence = sequence+1 where sequence >= ?1 and sequence < ?2 and userId = ?3")
+    Integer increaseSequence(Long start, Long end, Long userId);
 
     @Transactional
     @Modifying
-    @Query("update Memo set sequence = sequence-1 where sequence >= ?1")
-    Integer decreaseSequence(Long sequence);
+    @Query("update Memo set sequence = sequence-1 where sequence >= ?1 and userId = ?2")
+    Integer decreaseSequence(Long sequence, Long userId);
 
     @Transactional
     @Modifying
-    @Query("update Memo set sequence = sequence-1 where sequence > ?1 and sequence <= ?2")
-    Integer decreaseSequence(Long start, Long end);
+    @Query("update Memo set sequence = sequence-1 where sequence > ?1 and sequence <= ?2 and userId = ?3")
+    Integer decreaseSequence(Long start, Long end, Long userId);
 }

@@ -61,10 +61,11 @@ public class MemoController {
 
     @RequestMapping(value = "/{id}",method = RequestMethod.DELETE)
     @ResponseBody
-    public Map<String,Object> delete(@PathVariable Long id){
+    public Map<String,Object> delete(@PathVariable Long id,HttpServletRequest request){
         Map<String,Object> data = new HashMap<>(2);
         try {
-            memoService.delete(id);
+            User user = (User)request.getSession().getAttribute("user");
+            memoService.delete(id,user.getId());
             data.put("code",0);
             data.put("msg","删除成功");
         } catch (Exception e) {
