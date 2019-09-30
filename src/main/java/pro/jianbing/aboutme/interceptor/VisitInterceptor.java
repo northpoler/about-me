@@ -77,7 +77,7 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
             if (!loginToken.trim().equals("")){
                 String[] strs = loginToken.split(":");
                 if (strs.length==3){
-                    User user = userService.FindUserByUsernameAndUserId(strs[0], Long.parseLong(strs[2]));
+                    User user = userService.FindUserByUsername(strs[0]);
                     if (null!=user && strs[1].equals(user.getPassword())){
                         request.getSession().setAttribute("user",user);
                     }
