@@ -7,9 +7,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.entity.Visit;
+import pro.jianbing.aboutme.service.UserService;
 import pro.jianbing.aboutme.service.VisitService;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
@@ -26,6 +28,8 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
     private static final String COMPANY_ADDRESS = "本地局域网";
     @Autowired
     private VisitService visitService;
+    @Autowired
+    private UserService userService;
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         StringBuffer url = request.getRequestURL();
@@ -59,6 +63,26 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
             }
             visit.setVisitTime(LocalDateTime.now());
             visitService.saveVisit(visit);
+        }
+        if (session.getAttribute("user") == null){
+            String loginToken = "";
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null && cookies.length >0){
+                for (Cookie cookie : cookies){
+                    if ("remember".equals(cookie.getName())){
+                        loginToken = cookie.getValue();
+                    }
+                }
+            }
+            if (!loginToken.trim().equals("")){
+                String[] strs = loginToken.split(":");
+                if (strs.length==3){
+                    User user = userService.FindUserByUsernameAndUserId(strs[0], Long.parseLong(strs[2]));
+                    if (null!=user && strs[1].equals(user.getPassword())){
+                        request.getSession().setAttribute("user",user);
+                    }
+                }
+            }
         }
         return true;
     }

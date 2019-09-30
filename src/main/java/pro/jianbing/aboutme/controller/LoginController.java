@@ -9,7 +9,9 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,7 +51,7 @@ public class LoginController {
 
     @PostMapping("login/check")
     @ResponseBody
-    public Map<String,Object> checkLogin(User user, HttpServletRequest request) {
+    public Map<String,Object> checkLogin(User user, HttpServletRequest request, HttpServletResponse response) {
         User result = userService.FindUserByUsername(user.getUsername());
         Map<String,Object> data = new HashMap<>(2);
         if (null != result && user.getPassword().equals(result.getPassword())){
@@ -59,10 +61,28 @@ public class LoginController {
             data.put("code",0);
             data.put("msg","登陆成功");
             request.getSession().setAttribute("user",result);
+            //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
+            String loginToken = generateLoginToken(result.getUsername(), result.getPassword(), result.getId());
+            Cookie cookie = new Cookie("remember", loginToken);
+            //若我们这里不设置path，则只要访问“/login”时才会带该cooke
+            cookie.setPath("/");
+            cookie.setMaxAge(30*24*3600);
+            response.addCookie(cookie);
         } else {
             data.put("code",500);
             data.put("msg","用户名或密码错误");
         }
         return data;
+    }
+
+    /**
+     * 根据用户名、密码和用户id生成登录令牌
+     * @param username 用户名
+     * @param password 密码
+     * @param userId 用户id
+     * @return 登录令牌
+     */
+    public static String generateLoginToken(String username, String password, Long userId) {
+        return username + ":" + password + ":" + userId;
     }
 }
