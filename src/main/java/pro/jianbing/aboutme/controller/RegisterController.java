@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.User;
+import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.UserService;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
@@ -25,10 +26,12 @@ import java.util.Map;
 public class RegisterController {
 
     private final UserService userService;
+    private final LikeService likeService;
 
     @Autowired
-    public RegisterController(UserService userService) {
+    public RegisterController(UserService userService, LikeService likeService) {
         this.userService = userService;
+        this.likeService = likeService;
     }
 
     @GetMapping("")
@@ -57,12 +60,13 @@ public class RegisterController {
                     data.put("msg","注册成功,已自动登录!");
                     request.getSession().setAttribute("user",user);
                     //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
-                    String loginToken = generateLoginToken(result.getUsername(), result.getPassword(), result.getId());
+                    String loginToken = generateLoginToken(user.getUsername(), user.getPassword(), user.getId());
                     Cookie cookie = new Cookie("remember", loginToken);
                     //若我们这里不设置path，则只要访问“/login”时才会带该cooke
                     cookie.setPath("/");
                     cookie.setMaxAge(30*24*3600);
                     response.addCookie(cookie);
+                    likeService.updateNullByUserIdAndIp(user.getId(),NetworkUtil.getIpAddress(request));
                 } else {
                     data.put("code",500);
                     data.put("msg","注册出错");

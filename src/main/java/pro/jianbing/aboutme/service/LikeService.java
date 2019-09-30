@@ -9,7 +9,7 @@ import pro.jianbing.aboutme.repository.LikeRepositoty;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
-import java.sql.Timestamp;
+import javax.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -59,5 +59,15 @@ public class LikeService{
 
     public List<Map<String,Integer>> getCountLikesByUsers() {
         return likeMapper.getCountLikesByUsers();
+    }
+
+    @Transactional
+    public Integer updateNullByUserIdAndIp(Long userId, String ip){
+        // 更新其他链接的排序
+        Integer result = likeRepositoty.updateNullByUserIdAndIp(userId, ip);
+        if (result > 0){
+            return 1;
+        }
+        return 0;
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.User;
+import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.UserService;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
@@ -22,10 +23,12 @@ import java.util.Map;
 public class LoginController {
 
     private final UserService userService;
+    private final LikeService likeService;
 
     @Autowired
-    public LoginController(UserService userService) {
+    public LoginController(UserService userService, LikeService likeService) {
         this.userService = userService;
+        this.likeService = likeService;
     }
 
     @GetMapping("login")
@@ -35,10 +38,15 @@ public class LoginController {
 
     @GetMapping("logout")
     @ResponseBody
-    public Map<String,Object> logout(HttpServletRequest request){
+    public Map<String,Object> logout(HttpServletRequest request, HttpServletResponse response){
         Map<String,Object> data = new HashMap<>(2);
         try {
             request.getSession().removeAttribute("user");
+            Cookie cookie = new Cookie("remember", "");
+            //若我们这里不设置path，则只要访问“/login”时才会带该cooke
+            cookie.setPath("/");
+            cookie.setMaxAge(0);
+            response.addCookie(cookie);
             data.put("code",0);
             data.put("msg","注销成功");
         } catch (Exception e) {
@@ -68,6 +76,7 @@ public class LoginController {
             cookie.setPath("/");
             cookie.setMaxAge(30*24*3600);
             response.addCookie(cookie);
+            likeService.updateNullByUserIdAndIp(result.getId(),NetworkUtil.getIpAddress(request));
         } else {
             data.put("code",500);
             data.put("msg","用户名或密码错误");

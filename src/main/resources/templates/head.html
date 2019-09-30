@@ -70,7 +70,7 @@
             toRegister();
         });
 
-        function toRegister() {
+        function toRegister(target) {
             layer.closeAll();
             layer.open({
                 type : 2,
@@ -135,7 +135,12 @@
                                     time:1500
                                 },function(){
                                     parent.layer.close(index)
-                                    location.reload();
+                                    if (target) {
+                                        location.reload();
+                                        open(target);
+                                    } else {
+                                        location.reload();
+                                    }
                                 });
                             } else if (data.code == 500) {
                                 layer.msg(data.msg,{

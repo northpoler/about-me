@@ -65,10 +65,10 @@ function normalLoginInquiry(msg,btn1,btn2,no){
         ,id: 'LAY_layuipro' //设定一个id，防止重复弹出
         ,btn: [btn1, btn2, no]
         ,btn1:function(){
-            toLogin()
+            toLogin('/personal/index')
         }
         ,btn2:function(){
-            toRegister()
+            toRegister('/personal/index')
         }
         ,btnAlign: 'c'
         ,moveType: 1 //拖拽模式，0或者1
@@ -102,7 +102,7 @@ function successMsg(msg) {
     );
 }
 
-function toLogin(){
+function toLogin(target){
     layer.open({
         type : 2,
         title : "登录",
@@ -131,7 +131,12 @@ function toLogin(){
                             time:1500
                         },function(){
                             parent.layer.close(index)
-                            location.reload();
+                            if (target) {
+                                location.reload();
+                                open(target);
+                            } else {
+                                location.reload();
+                            }
                         });
                     } else if (data.code == 500) {
                         layer.msg(data.msg,{
