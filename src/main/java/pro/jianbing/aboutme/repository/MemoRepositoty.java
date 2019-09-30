@@ -45,4 +45,6 @@ public interface MemoRepositoty extends JpaRepository<Memo,Long> {
     @Modifying
     @Query("update Memo set sequence = sequence-1 where sequence > ?1 and sequence <= ?2 and userId = ?3")
     Integer decreaseSequence(Long start, Long end, Long userId);
+
+    long countByUserId(Long userId);
 }
