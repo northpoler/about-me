@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh">
+<head>
+    <title>更换LOGO</title>
+    <meta th:include="top :: top"/>
+</head>
+<body class="layui-layout-body" style="background-color: lightcyan;padding-top: 20px">
+<div class="layui-row" style="text-align: center">
+    <div class="layui-row">
+        当前的LOGO
+    </div>
+    <div class="layui-row">
+        <img alt="logo" th:src="${logo}" title="更改前LOGO" style="width: 100px;border: 2px solid aqua"/>
+    </div>
+</div>
+<script>
+    layui.use('form', function(){
+        var form = layui.form;
+
+        //监听提交
+        form.on('submit(formDemo)', function(data){
+            layer.msg(JSON.stringify(data.field));
+            return false;
+        });
+    });
+</script>
+</body>
+</html>
