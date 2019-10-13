@@ -17,6 +17,8 @@ import java.io.*;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
 
 /**
  * @author DefaultAccount
@@ -37,17 +39,18 @@ public class UploadController {
     public Map<String, Object> upload(MultipartFile file, HttpServletResponse response, HttpServletRequest request) {
         Map<String, Object> map = new HashMap<>();
         try {
+            String oldName = file.getOriginalFilename();
+            String path = request.getServletContext().getRealPath("/upload/");
             User user = (User)request.getSession().getAttribute("user");
-            BASE64Encoder encoder = new BASE64Encoder();
-            String images = encoder.encode(file.getBytes());
-            Logo logo = logoService.getTempLogoByUserId(user.getId());
-            if (null == logo){
-                logo = new Logo(user.getId(),images, LocalDateTime.now(),"2");
-            } else {
-                logo.setSrc(images);
-                logo.setSaveTime(LocalDateTime.now());
+            String fileName = System.currentTimeMillis()+"_"+user.getId()+oldName.substring(oldName.lastIndexOf("."));
+            File localFile = new File("D:\\cache",fileName);
+            file.transferTo(localFile);
+            fileName = path + "/" + fileName;
+            File fileTemp = new File(fileName);
+            if (!fileTemp.getParentFile().exists()){
+                fileTemp.getParentFile().mkdirs();
             }
-            logoService.save(logo);
+            file.transferTo(fileTemp);
             map.put("code", 0);
             map.put("msg", "");
             map.put("data","");
