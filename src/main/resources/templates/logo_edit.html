@@ -6,11 +6,10 @@
 </head>
 <body class="layui-layout-body" style="background-color: lightcyan;padding-top: 20px">
 <div class="layui-row" style="text-align: center">
-    <div class="layui-row">
-        当前的LOGO
-    </div>
-    <div class="layui-row">
-        <img alt="logo" th:src="${logo}" title="更改前LOGO" style="width: 100px;border: 2px solid aqua"/>
+    <div class="layui-upload-drag" id="test1">
+        <i class="layui-icon"></i>
+        <p>点击上传，或将文件拖拽到此处</p>
+        <img class="layui-upload-img" id="demo1" style="height: 200px">
     </div>
 </div>
 <script>
@@ -21,6 +20,41 @@
         form.on('submit(formDemo)', function(data){
             layer.msg(JSON.stringify(data.field));
             return false;
+        });
+    });
+
+    layui.use('upload', function(){
+        var $ = layui.jquery
+            ,upload = layui.upload;
+
+        //普通图片上传
+        var uploadInst = upload.render({
+            elem: '#test1'
+            ,url: '/upload'
+            ,size: 1024 //限制文件大小，单位 KB
+            ,accept: 'images' //图片
+            //,exts: 'jpg|jpeg|png|bmp' //只允许上传的格式
+            ,before: function(obj){
+                //预读本地文件示例，不支持ie8
+                obj.preview(function(index, file, result){
+                    $('#demo1').attr('src', result); //图片链接（base64）
+                });
+            }
+            ,done: function(res){
+                //如果上传失败
+                if(res.code > 0){
+                    return layer.msg('上传失败');
+                }
+                //上传成功
+            }
+            ,error: function(){
+                //演示失败状态，并实现重传
+                var demoText = $('#demoText');
+                demoText.html('<span style="color: #FF5722;">上传失败</span> <a class="layui-btn layui-btn-xs demo-reload">重试</a>');
+                demoText.find('.demo-reload').on('click', function(){
+                    uploadInst.upload();
+                });
+            }
         });
     });
 </script>

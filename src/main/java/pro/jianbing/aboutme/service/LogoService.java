@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.entity.Logo;
 import pro.jianbing.aboutme.repository.LogoRepositoty;
 
+import javax.transaction.Transactional;
+
 /**
  * @author Jianbing
  */
@@ -20,10 +22,19 @@ public class LogoService {
     }
 
     public String getLogoByUserId(Long userId){
-        Logo logo = logoRepositoty.findByUserId(userId);
+        Logo logo = logoRepositoty.findByUserIdAndMark(userId,"0");
         if (null==logo || null==logo.getSrc()){
             return "../static/image/logo.png";
         }
         return logo.getSrc();
+    }
+
+    public Logo getTempLogoByUserId(Long userId){
+        return logoRepositoty.findByUserIdAndMark(userId,"2");
+    }
+
+    @Transactional
+    public Logo save(Logo logo){
+        return logoRepositoty.save(logo);
     }
 }

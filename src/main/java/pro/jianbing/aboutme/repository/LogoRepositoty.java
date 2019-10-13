@@ -10,6 +10,6 @@ import pro.jianbing.aboutme.entity.Logo;
  */
 @Repository("logoRepository")
 public interface LogoRepositoty extends JpaRepository<Logo,Long> {
-    @Query("from Logo where userId = ?1 and mark = '0'")
-    Logo findByUserId(Long userId);
+    @Query("from Logo where userId = ?1 and mark = ?2")
+    Logo findByUserIdAndMark(Long userId, String s);
 }
