@@ -37,13 +37,22 @@ public class UploadController {
     @PostMapping("")
     @ResponseBody
     public Map<String, Object> upload(MultipartFile file, HttpServletResponse response, HttpServletRequest request) {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>(3);
         try {
             String oldName = file.getOriginalFilename();
             String path = request.getServletContext().getRealPath("/upload/");
             User user = (User)request.getSession().getAttribute("user");
             String fileName = System.currentTimeMillis()+"_"+user.getId()+oldName.substring(oldName.lastIndexOf("."));
-            File localFile = new File("D:\\cache",fileName);
+            // 把上传的图片保存一份在本地（根据当前系统是Windows或是Linux来决定保存路径）
+            File localFile;
+            if (System.getProperty("os.name").toLowerCase().startsWith("win")){
+                localFile = new File("C:\\jianbing\\logo\\backup",fileName);
+            } else {
+                localFile = new File("/usr/temp",fileName);
+            }
+            if (!localFile.getParentFile().exists()){
+                localFile.getParentFile().mkdirs();
+            }
             file.transferTo(localFile);
             fileName = path + "/" + fileName;
             File fileTemp = new File(fileName);
