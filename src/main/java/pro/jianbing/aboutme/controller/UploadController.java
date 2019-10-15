@@ -6,19 +6,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
-import pro.jianbing.aboutme.entity.Logo;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LogoService;
-import sun.misc.BASE64Encoder;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
-import java.util.UUID;
 
 /**
  * @author DefaultAccount
@@ -64,6 +59,9 @@ public class UploadController {
             map.put("msg", "");
             map.put("data","");
         } catch (IOException e) {
+            map.put("code", 500);
+            map.put("msg", "");
+            map.put("data","");
             e.printStackTrace();
         }
         return map;
