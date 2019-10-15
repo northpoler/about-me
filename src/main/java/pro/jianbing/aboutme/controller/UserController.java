@@ -9,10 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 

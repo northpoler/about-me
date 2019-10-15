@@ -117,7 +117,7 @@ public final class NetworkUtil {
         params.put("tn", "baidu");
         params.put("cb", "jQuery1102009188415896251856_1561774185767");
         params.put("_", "1561774185772");
-        String result = HttpUtils.doGet("https://sp0.baidu.com/8aQDcjqpAAV3otqbppnN2DJv/api.php", params);
+        String result = HttpUtil.doGet("https://sp0.baidu.com/8aQDcjqpAAV3otqbppnN2DJv/api.php", params);
         logger.info("根据IP获取到的详细信息 : " + result);
         String location;
         if (result.contains(LOCAL_ADDRESS)){

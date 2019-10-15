@@ -19,11 +19,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * @author  编码小王子
- * @date    2018年5月25日 下午6:17:31
- * @version 1.0
+ * @author  jianbing
  */
-public class HttpUtils {
+public class HttpUtil {
     /**
      * 发送GET请求
      * @param url

@@ -75,7 +75,7 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                     }
                 }
             }
-            if (!loginToken.trim().equals("")){
+            if (!"".equals(loginToken.trim())){
                 loginToken = EncryptionUtil.decrypt(loginToken);
                 String[] strs = loginToken.split(":");
                 if (strs.length==3){
