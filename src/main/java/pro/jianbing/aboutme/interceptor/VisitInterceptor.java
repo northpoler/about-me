@@ -9,6 +9,7 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.UserService;
 import pro.jianbing.aboutme.service.VisitService;
+import pro.jianbing.aboutme.util.EncryptionUtil;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.Cookie;
@@ -75,6 +76,7 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                 }
             }
             if (!loginToken.trim().equals("")){
+                loginToken = EncryptionUtil.decrypt(loginToken);
                 String[] strs = loginToken.split(":");
                 if (strs.length==3){
                     User user = userService.FindUserByUsername(strs[0]);

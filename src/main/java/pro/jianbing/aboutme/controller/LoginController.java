@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.UserService;
+import pro.jianbing.aboutme.util.EncryptionUtil;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.Cookie;
@@ -92,6 +93,6 @@ public class LoginController {
      * @return 登录令牌
      */
     public static String generateLoginToken(String username, String password, Long userId) {
-        return username + ":" + password + ":" + userId;
+        return EncryptionUtil.encrypt(username + ":" + password + ":" + userId);
     }
 }
