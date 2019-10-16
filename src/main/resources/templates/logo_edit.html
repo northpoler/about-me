@@ -6,10 +6,10 @@
 </head>
 <body class="layui-layout-body" style="background-color: lightcyan;padding-top: 20px">
 <div class="layui-row" style="text-align: center">
-    <div class="layui-upload-drag" id="test1">
+    <div class="layui-upload-drag" id="uploadArea">
+        <img class="layui-upload-img" id="logoTemp" style="height: 200px"><br>
         <i class="layui-icon"></i>
         <p>点击上传，或将文件拖拽到此处</p>
-        <img class="layui-upload-img" id="demo1" style="height: 200px">
     </div>
 </div>
 <script>
@@ -29,7 +29,7 @@
 
         //普通图片上传
         var uploadInst = upload.render({
-            elem: '#test1'
+            elem: '#uploadArea'
             ,url: '/upload'
             ,size: 1024 //限制文件大小，单位 KB
             ,accept: 'images' //图片
@@ -37,7 +37,7 @@
             ,before: function(obj){
                 //预读本地文件示例，不支持ie8
                 obj.preview(function(index, file, result){
-                    $('#demo1').attr('src', result); //图片链接（base64）
+                    $('#logoTemp').attr('src', result); //图片链接（base64）
                 });
             }
             ,done: function(res){
