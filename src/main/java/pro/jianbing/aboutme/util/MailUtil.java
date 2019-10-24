@@ -21,11 +21,11 @@ public final class MailUtil {
     private static final Logger logger = LoggerFactory.getLogger(MailUtil.class);
 
     @Autowired
-    private static JavaMailSender mailSender;
+    private JavaMailSender mailSender;
 
-    private static String from = "2776204800@qq.com";
+    private String from = "2776204800@qq.com";
 
-    public static void sendSimpleMail(String to, String subject, String content) {
+    public void sendSimpleMail(String to, String subject, String content) {
         SimpleMailMessage simpleMailMessage = new SimpleMailMessage();
         simpleMailMessage.setFrom(from);
         simpleMailMessage.setTo(to);
@@ -40,7 +40,7 @@ public final class MailUtil {
         }
     }
 
-    public static void sendHtmlMail(String to, String subject, String content) {
+    public void sendHtmlMail(String to, String subject, String content) {
         MimeMessage message = mailSender.createMimeMessage();
         try {
             //true表示需要创建一个multipart message
@@ -59,7 +59,7 @@ public final class MailUtil {
 
     }
 
-    public static void sendAttachmentsMail(String to, String subject, String content, String filePath) {
+    public void sendAttachmentsMail(String to, String subject, String content, String filePath) {
         MimeMessage message = mailSender.createMimeMessage();
         try {
             //true表示需要创建一个multipart message
@@ -81,7 +81,7 @@ public final class MailUtil {
         }
     }
 
-    public static void sendInlineResourceMail(String to, String subject, String content, String rscPath, String rscId) {
+    public void sendInlineResourceMail(String to, String subject, String content, String rscPath, String rscId) {
         MimeMessage message = mailSender.createMimeMessage();
         try {
             //true表示需要创建一个multipart message
