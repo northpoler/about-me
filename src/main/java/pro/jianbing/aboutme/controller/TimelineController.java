@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.service.TimelineService;
+import pro.jianbing.aboutme.util.MailUtil;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
@@ -49,6 +50,7 @@ public class TimelineController {
             timeline.setIp(NetworkUtil.getIpAddress(request));
             Integer save = service.save(timeline);
             if (null != save && save>0){
+                MailUtil.sendSimpleMail("787331840@qq.com","新增时间线","有人提交了新的时间线，快来看看吧！");
                 data.put("code",0);
                 data.put("msg","提交成功");
             } else {

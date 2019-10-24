@@ -98,6 +98,11 @@
             <version>2.1.0</version>
         </dependency>
         <!--加密数据库密码 end-->
+        <!--发送邮件-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

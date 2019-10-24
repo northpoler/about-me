@@ -35,7 +35,7 @@ public class UploadController {
         Map<String, Object> map = new HashMap<>(3);
         try {
             String oldName = file.getOriginalFilename();
-            String path = request.getServletContext().getRealPath("/upload/");
+            String path = request.getServletContext().getRealPath("/static/upload/");
             User user = (User)request.getSession().getAttribute("user");
             String fileName = System.currentTimeMillis()+"_"+user.getId()+oldName.substring(oldName.lastIndexOf("."));
             // 把上传的图片保存一份在本地（根据当前系统是Windows或是Linux来决定保存路径）
@@ -49,11 +49,12 @@ public class UploadController {
                 localFile.getParentFile().mkdirs();
             }
             file.transferTo(localFile);
-            fileName = path + "/" + fileName;
+            fileName = path + fileName;
             File fileTemp = new File(fileName);
             if (!fileTemp.getParentFile().exists()){
                 fileTemp.getParentFile().mkdirs();
             }
+            System.out.println(fileName);
             file.transferTo(fileTemp);
             map.put("code", 0);
             map.put("msg", "");

@@ -18,6 +18,11 @@ spring:
     open-in-view: false
   jackson:
     time-zone: GMT+8
+  mail:
+    host: smtp.qq.com
+    username: 2776204800@qq.com
+    password: csdcsvlqzzgodgcf
+    default-encoding: UTF-8
 
 server:
   port: 8008
