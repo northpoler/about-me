@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.entity.Timeline;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.TimelineService;
 import pro.jianbing.aboutme.util.MailUtil;
 import pro.jianbing.aboutme.util.NetworkUtil;
@@ -69,7 +70,13 @@ public class TimelineController {
     }
 
     @GetMapping("manage")
-    public String manage(){
+    public String manage(HttpServletRequest request){
+        User user = (User) request.getSession().getAttribute("user");
+        if (null == user){
+            return "error/login";
+        } else if (!"0".equals(user.getRole())){
+            return "error/unauthorized";
+        }
         return "timeline_manage";
     }
 
