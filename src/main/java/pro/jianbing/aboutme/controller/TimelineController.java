@@ -31,6 +31,9 @@ public class TimelineController {
         this.service = service;
     }
 
+    @Autowired
+    private MailUtil mailUtil;
+
     @GetMapping("add")
     public String add(){
         return "timeline_add";
@@ -50,8 +53,7 @@ public class TimelineController {
             timeline.setIp(NetworkUtil.getIpAddress(request));
             Integer save = service.save(timeline);
             if (null != save && save>0){
-                MailUtil mailUtil = new MailUtil();
-                mailUtil.sendSimpleMail("787331840@qq.com","新增时间线","有人提交了新的时间线，快来看看吧！");
+                mailUtil.sendMailTemplate(timeline.getContent());
                 data.put("code",0);
                 data.put("msg","提交成功");
             } else {

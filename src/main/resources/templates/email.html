@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html  xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>你有新的消息</title>
+</head>
+<body>
+<p>你好!有人提交了新的时间线信息！</p>
+<p>主体内容如下：</p>
+<p th:text="${content}"></p>
+<a href="http://www.jianbing.pro/timeline/manage">点击查看详情</a>
+</body>
+</html>

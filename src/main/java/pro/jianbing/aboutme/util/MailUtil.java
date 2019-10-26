@@ -3,10 +3,14 @@ package pro.jianbing.aboutme.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Component;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
@@ -17,13 +21,20 @@ import java.io.File;
  *
  * @author 李建兵
  */
-public final class MailUtil {
+@Component
+public class MailUtil {
     private static final Logger logger = LoggerFactory.getLogger(MailUtil.class);
 
     @Autowired
     private JavaMailSender mailSender;
 
-    private String from = "2776204800@qq.com";
+    @Autowired
+    TemplateEngine templateEngine;
+
+    @Value("${spring.mail.username}")
+    private String from;
+
+    private String to = "787331840@qq.com";
 
     public void sendSimpleMail(String to, String subject, String content) {
         SimpleMailMessage simpleMailMessage = new SimpleMailMessage();
@@ -101,5 +112,22 @@ public final class MailUtil {
             e.printStackTrace();
         }
     }
-
+    public void sendMailTemplate(String message) {
+        try {
+            Context context = new Context();
+            context.setVariable("content", message);
+            String content = templateEngine.process("email", context);
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
+            helper.setFrom(from);
+            helper.setTo(to);
+            helper.setSubject("时间线信息");
+            helper.setText(content, true);
+            mailSender.send(mimeMessage);
+            logger.info("模板邮件已经发送成功。");
+        } catch (MessagingException e) {
+            logger.info("模板邮件已经发送失败。");
+            e.printStackTrace();
+        }
+    }
 }
