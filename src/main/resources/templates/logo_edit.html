@@ -11,6 +11,9 @@
         <i class="layui-icon"></i>
         <p>点击上传，或将文件拖拽到此处</p>
     </div>
+    <div>
+        <input type="text" id="logo_url"/>
+    </div>
 </div>
 <script>
     layui.use('form', function(){
@@ -46,6 +49,7 @@
                     return layer.msg('上传失败');
                 }
                 //上传成功
+                $("#logo_url").val(res.data);
             }
             ,error: function(){
                 //演示失败状态，并实现重传

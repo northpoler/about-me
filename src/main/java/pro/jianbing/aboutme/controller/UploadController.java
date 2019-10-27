@@ -49,16 +49,16 @@ public class UploadController {
                 localFile.getParentFile().mkdirs();
             }
             file.transferTo(localFile);
-            fileName = path + fileName;
+            /*fileName = path + fileName;
             File fileTemp = new File(fileName);
             if (!fileTemp.getParentFile().exists()){
                 fileTemp.getParentFile().mkdirs();
             }
             System.out.println(fileName);
-            file.transferTo(fileTemp);
+            file.transferTo(fileTemp);*/
             map.put("code", 0);
             map.put("msg", "");
-            map.put("data","");
+            map.put("data",fileName);
         } catch (IOException e) {
             map.put("code", 500);
             map.put("msg", "");

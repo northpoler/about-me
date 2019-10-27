@@ -97,7 +97,7 @@
             btn:['确定','取消'],
             yes:function(index,layero){
                 var body = top.layer.getChildFrame('body',index);
-                var src = body.find('#src').val();
+                var src = body.find('#logo_url').val();
                 if (src==''){
                     alertMsg('请上传图片');
                     return false;

@@ -34,8 +34,6 @@ public class MailUtil {
     @Value("${spring.mail.username}")
     private String from;
 
-    private String to = "787331840@qq.com";
-
     public void sendSimpleMail(String to, String subject, String content) {
         SimpleMailMessage simpleMailMessage = new SimpleMailMessage();
         simpleMailMessage.setFrom(from);
@@ -120,14 +118,13 @@ public class MailUtil {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);
             helper.setFrom(from);
-            helper.setTo(to);
+            helper.setTo("787331840@qq.com");
             helper.setSubject("时间线信息");
             helper.setText(content, true);
             mailSender.send(mimeMessage);
             logger.info("模板邮件已经发送成功。");
         } catch (MessagingException e) {
-            logger.info("模板邮件已经发送失败。");
-            e.printStackTrace();
+            logger.error("模板邮件发送失败!",e);
         }
     }
 }
