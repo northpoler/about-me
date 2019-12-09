@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pro.jianbing.aboutme.entity.Knowledge;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.repository.KnowledgeRepositoty;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
@@ -30,6 +31,8 @@ public class KnowledgeService {
             String ipAddress = NetworkUtil.getIpAddress(request);
             knowledge.setIp(ipAddress);
             knowledge.setEditTime(LocalDateTime.now());
+            User user = (User)request.getSession().getAttribute("user");
+            knowledge.setUserId(user.getId());
             Knowledge save = knowledgeRepositoty.save(knowledge);
             if (save!=null){
                 return 1;
