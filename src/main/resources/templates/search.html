@@ -20,7 +20,7 @@
 <body style="background-color: lightgoldenrodyellow">
 <div th:include="head :: head"></div>
 <div class="layui-row" style="text-align: center;font-size: larger">
-    <form action="http://www.baidu.com/baidu" target="_blank" onsubmit="return check()">
+    <form action="http://www.baidu.com/baidu" name="searchForm" target="_blank" onsubmit="return check()">
     <div class="layui-row">
         <div class="layui-col-md6 layui-col-md-offset3" id="search">
             <!--搜索框-->
@@ -53,7 +53,7 @@
                     【倒计时标题】
                 </span>
                 <span title="编辑" id="editCountdown" style="cursor: pointer;color: #1E9FFF">
-                    <i class="layui-icon layui-icon-set-fill layui-anim layui-anim-rotate layui-anim-loop"></i>
+                    <i id="editBtn" class="layui-icon layui-icon-set-fill layui-anim layui-anim-rotate layui-anim-loop"></i>
                 </span>
             </div>
         </div>
@@ -79,6 +79,14 @@
             layer.msg(JSON.stringify(data.field));
             return false;
         });
+    });
+
+    $("#editBtn").mouseover(function () {
+        $("#editBtn").removeClass("layui-anim layui-anim-rotate layui-anim-loop")
+    });
+
+    $("#editBtn").mouseout(function () {
+        $("#editBtn").addClass("layui-anim layui-anim-rotate layui-anim-loop")
     });
 
     function changeLogo() {
@@ -251,6 +259,10 @@
 
     window.onload = function () {
         getCountdown();
+        if(navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i)){
+            alert('移动端')
+            document.searchForm.action="http://m.baidu.com/s";
+        }
     };
 
     function getCountdown() {
