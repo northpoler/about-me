@@ -3,6 +3,7 @@ package pro.jianbing.aboutme.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.entity.Keyword;
+import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.KeywordService;
 import pro.jianbing.aboutme.util.NetworkUtil;
 
@@ -31,6 +32,10 @@ public class KeywordController {
         keyword.setIp(NetworkUtil.getIpAddress(request));
         keyword.setSearchTime(LocalDateTime.now());
         keyword.setMark("0");
+        User user = (User)request.getSession().getAttribute("user");
+        if (null!=user){
+            keyword.setUserId(user.getId());
+        }
         return keywordService.saveKeyword(keyword);
     }
 }
