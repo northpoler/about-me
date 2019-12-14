@@ -46,7 +46,11 @@
                         </div>
                         <div class="layui-col-md12">
                             <div class="layui-card">
-                                <div class="layui-card-header">献花占比</div>
+                                <div class="layui-card-header">
+                                    献花占比
+                                    <i class="layui-icon layui-icon-refresh-3" title="刷新" onclick="paintChart()"
+                                       style="position: absolute;right: 1em;cursor: pointer"></i>
+                                </div>
                                 <div class="layui-card-body">
                                     <div id="container" style="width: 100%;height:500px;"></div>
                                 </div>
@@ -81,7 +85,7 @@
                                     <td>操作</td>
                                     <td style="padding-bottom: 0;">
                                         <div class="layui-btn-container">
-                                            <a onclick="reportIp()" class="layui-btn layui-btn-danger">举报</a>
+                                            <a id="reportIp" class="layui-btn layui-btn-danger">举报</a>
                                             <a onclick="changeInfo()" class="layui-btn">更改信息</a>
                                         </div>
                                     </td>
@@ -131,15 +135,10 @@
     </div>
 </div>
 <script>
-    //JavaScript代码区域
-    layui.use('element', function () {
-        var element = layui.element;
-
+    $("#reportIp").click(function () {
+        successMsg("举报成功！");
+        $("#reportIp").html("已举报").addClass("layui-btn-disabled").unbind("click");
     });
-
-    function reportIp() {
-        successMsg("举报成功！")
-    }
 
     function paintChart() {
         var dom = document.getElementById("container");
@@ -205,7 +204,6 @@
                                 shadowColor: 'rgba(122, 0, 0, 0.5)'
                             }
                         },
-
                         animationType: 'scale',
                         animationEasing: 'elasticOut',
                         animationDelay: function (idx) {
@@ -213,36 +211,11 @@
                         }
                     }
                 ]
-
-
             });
-            /*setInterval(function () {
-                var dataLen = option.series[0].data.length;
-                // 取消之前高亮的图形
-                myChart.dispatchAction({
-                    type: 'downplay',
-                    seriesIndex: 0,
-                    dataIndex: app.currentIndex
-                });
-                app.currentIndex = (app.currentIndex + 1) % dataLen;
-                // 高亮当前图形
-                myChart.dispatchAction({
-                    type: 'highlight',
-                    seriesIndex: 0,
-                    dataIndex: app.currentIndex
-                });
-                // 显示 tooltip
-                myChart.dispatchAction({
-                    type: 'showTip',
-                    seriesIndex: 0,
-                    dataIndex: app.currentIndex
-                });
-            }, 1000);*/
         });
         if (option && typeof option === "object") {
             myChart.setOption(option, true);
         }
-
         app.currentIndex = -1;
     }
 

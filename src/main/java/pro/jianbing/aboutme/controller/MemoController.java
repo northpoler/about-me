@@ -46,18 +46,18 @@ public class MemoController {
         return "memo";
     }
 
-    @GetMapping("add")
-    public String add(Model model, HttpServletRequest request){
-        User user = (User)request.getSession().getAttribute("user");
-        model.addAttribute("maxSequence",memoService.getMaxSequence(user.getId())+1);
-        return "memo_add";
-    }
-
     @RequestMapping(value = "edit/{id}",method = RequestMethod.GET)
     public String edit(@PathVariable Long id,Model model,HttpServletRequest request){
         User user = (User)request.getSession().getAttribute("user");
         model.addAttribute("maxSequence",memoService.getMaxSequence(user.getId())+1);
-        model.addAttribute("memo",memoService.getOld(id));
+        Memo old;
+        // id小于0表示添加
+        if (id>0){
+            old = memoService.getOld(id);
+        } else {
+            old = new Memo();
+        }
+        model.addAttribute("memo",old);
         return "memo_edit";
     }
 

@@ -52,8 +52,9 @@
                 <span id="countDownTitle" style="color: deeppink">
                     【倒计时标题】
                 </span>
-                <span title="编辑" id="editCountdown" style="cursor: pointer;color: #1E9FFF">
-                    <i id="editBtn" class="layui-icon layui-icon-set-fill layui-anim layui-anim-rotate layui-anim-loop"></i>
+                <span title="编辑" id="editCountdown" style="cursor: pointer;color: #1E9FFF;">
+                    <i id="editBtn" style="font-size: large"
+                       class="layui-icon layui-icon-set-fill layui-anim layui-anim-rotate layui-anim-loop"></i>
                 </span>
             </div>
         </div>
@@ -65,10 +66,6 @@
     layui.use('element', function () {
         var element = layui.element;
 
-    });
-
-    layui.use('layer', function () {
-        var layer = layui.layer;
     });
 
     layui.use('form', function(){
@@ -234,7 +231,6 @@
             },
             end : function() {
                 layer.closeAll();
-                /*location.reload();*/
             }
         });
     });
@@ -302,8 +298,5 @@
         $("#countDownTitle").html('【'+title+'】');
         setTimeout(countdown, 33);
     }
-
-
-
 </script>
 </html>
