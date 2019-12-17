@@ -38,14 +38,9 @@
             </div>
             </a>
             <div style="text-align: center" class="layui-hide link-btn">
-                <button type="button" class="layui-btn layui-btn-sm layui-btn-radius layui-btn-danger" title="删除"
-                        th:onclick="'javascript:del('+${memo.id}+');'">
-                    <i class="layui-icon layui-icon-close"></i>
-                </button>
-                <button type="button" class="layui-btn layui-btn-sm layui-btn-radius layui-btn-normal" title="编辑"
-                        th:onclick="'javascript:edit('+${memo.id}+');'">
-                    <i class="layui-icon layui-icon-edit"></i>
-                </button>
+                <span th:onclick="'javascript:del('+${memo.id}+');'" style="color: grey;cursor: pointer">删除</span>
+                <span>|</span>
+                <span th:onclick="'javascript:edit('+${memo.id}+');'" style="color: grey;cursor: pointer">编辑</span>
             </div>
             <br>
         </div>
