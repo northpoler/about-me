@@ -26,11 +26,8 @@
 </body>
 <script th:src="@{../static/js/editor/wangEditor.min.js}"></script>
 <script type="text/javascript">
-    layui.use('layer', function () {
-        var layer = layui.layer;
-    });
 
-    layui.use('util', function(){
+    /*layui.use('util', function(){
         var util = layui.util;
 
         //执行
@@ -44,7 +41,7 @@
                 }
             }
         });
-    });
+    });*/
 
     var E = window.wangEditor;
     var editor = new E('#editor');
