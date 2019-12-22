@@ -218,3 +218,15 @@ $("#like_btn").click(function(e){
         clickTime = now;
     }
 })
+
+function showMore() {
+    var text = $("#info-more").html();
+    if (text.indexOf("更多")!=-1){
+        $(".info-more").removeClass("layui-hide");
+        $("#info-more").html("收起 <<");
+    } else {
+        $(".info-more").addClass("layui-hide");
+        $("#info-more").html("更多 >>");
+    }
+
+}

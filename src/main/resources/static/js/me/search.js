@@ -189,8 +189,6 @@ window.onload = function () {
     if(navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i)){
         // 更改搜索引擎
         document.searchForm.action="http://m.baidu.com/s";
-        // 调整logo大小
-        $("#logo").style.width='125px';
     }
 };
 
