@@ -31,7 +31,7 @@ public class UploadController {
 
     @PostMapping("")
     @ResponseBody
-    public Map<String, Object> upload(MultipartFile file, HttpServletResponse response, HttpServletRequest request) {
+    public Map<String, Object> upload(MultipartFile file, HttpServletRequest request) {
         Map<String, Object> map = new HashMap<>(3);
         try {
             String oldName = file.getOriginalFilename();

@@ -47,25 +47,13 @@ public class LogoController {
         try {
             User user = (User)request.getSession().getAttribute("user");
             if (null != user){
-                File localFile;
-                if (System.getProperty("os.name").toLowerCase().startsWith("win")){
-                    localFile = new File("C:\\jianbing\\logo\\backup",src);
-                } else {
-                    localFile = new File("/usr/temp",src);
-                }
-                String path = request.getSession().getServletContext().getRealPath("") + "upload" + File.separator + "imgs";
-                File destFile = new File(path);
-                if (!destFile.exists()){
-                    destFile.mkdirs();
-                }
-                Files.copy(localFile.toPath(), destFile.toPath());
                 data.put("code",0);
                 data.put("msg","添加成功");
             } else {
                 data.put("code",500);
                 data.put("msg","请先登录");
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             data.put("code",500);
             data.put("msg","系统出错");
             e.printStackTrace();

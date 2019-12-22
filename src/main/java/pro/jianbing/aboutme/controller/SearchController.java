@@ -41,7 +41,7 @@ public class SearchController {
         if (null!=user){
             logo = logoService.getLogoByUserId(user.getId());
         } else {
-            logo = "../static/image/logo.png";
+            logo = "../static/image/logo_bear.png";
         }
         model.addAttribute("logo",logo);
         return "search";
