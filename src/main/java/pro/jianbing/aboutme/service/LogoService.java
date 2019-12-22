@@ -24,7 +24,7 @@ public class LogoService {
     public String getLogoByUserId(Long userId){
         Logo logo = logoRepositoty.findByUserIdAndMark(userId,"0");
         if (null==logo || null==logo.getSrc()){
-            return "../static/image/logo_bear.png";
+            return "../static/image/logo_cat.png";
         }
         return logo.getSrc();
     }

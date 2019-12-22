@@ -1,5 +1,6 @@
 package pro.jianbing.aboutme.controller;
 
+import io.netty.util.internal.StringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -29,15 +30,7 @@ public class LogoController {
     }
 
     @GetMapping("edit")
-    public String editLogo(Model model, HttpServletRequest request){
-        User user = (User)request.getSession().getAttribute("user");
-        String logo;
-        if (null!=user){
-            logo = logoService.getLogoByUserId(user.getId());
-        } else {
-            logo = "../static/image/logo.png";
-        }
-        model.addAttribute("logo",logo);
+    public String editLogo(){
         return "logo_edit";
     }
 
