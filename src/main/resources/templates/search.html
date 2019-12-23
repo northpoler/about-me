@@ -25,8 +25,8 @@
         <div class="layui-col-md6 layui-col-md-offset3" id="search">
             <!--搜索框-->
             <div class="layui-form-item" style="margin-top: 10%">
-                <img alt="logo" th:src="${logo}" style="width: 200px;cursor: pointer" onclick="changeLogo()" title="点击可更换LOGO"/>
-                <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;margin-top: 50px">
+                <img alt="logo" th:src="${logo}" id="logo" style="width: 20%;cursor: pointer" onclick="changeLogo()" title="点击可更换LOGO"/>
+                <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;">
                     <input type="text" name="word" style="font-size: medium;height: 44px" id="searchBody" placeholder="百度能搜到的这里都能搜..." autocomplete="off" class="layui-input">
                     <button style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
                         <i class="layui-icon layui-icon-search"></i>
@@ -43,18 +43,17 @@
             </ul>
             <!--倒计时-->
             <div style="margin-top: 20px">
-                <span>
-                    <i style='font-size: large;color: deeppink' class="layui-icon layui-icon-notice"></i>
+                <span id="editCountdown" style="cursor: pointer" title="更改倒计时">
+                <span title="编辑" style="color: deeppink;">
+                    <i id="editBtn" style="font-size: large"
+                       class="layui-icon layui-icon-log layui-anim layui-anim-rotate layui-anim-loop"></i>
                 </span>
                 <span id="countDown" style="color: #333333">
-                    <i class="layui-icon layui-icon-log"></i>倒计时
+                    倒计时
                 </span>
                 <span id="countDownTitle" style="color: deeppink">
-                    【倒计时标题】
+                    • 倒计时标题
                 </span>
-                <span title="编辑" id="editCountdown" style="cursor: pointer;color: #1E9FFF;">
-                    <i id="editBtn" style="font-size: large"
-                       class="layui-icon layui-icon-set-fill layui-anim layui-anim-rotate layui-anim-loop"></i>
                 </span>
             </div>
         </div>
@@ -62,241 +61,5 @@
     </form>
 </div>
 </body>
-<script type="text/javascript">
-    layui.use('element', function () {
-        var element = layui.element;
-
-    });
-
-    layui.use('form', function(){
-        var form = layui.form;
-
-        //监听提交
-        form.on('submit(formDemo)', function(data){
-            layer.msg(JSON.stringify(data.field));
-            return false;
-        });
-    });
-
-    $("#editBtn").mouseover(function () {
-        $("#editBtn").removeClass("layui-anim layui-anim-rotate layui-anim-loop")
-    });
-
-    $("#editBtn").mouseout(function () {
-        $("#editBtn").addClass("layui-anim layui-anim-rotate layui-anim-loop")
-    });
-
-    function changeLogo() {
-        if ($("#username").length === 0){
-            alertMsg("登录后方可更换LOGO！");
-            return false;
-        }
-        layer.open({
-            type : 2,
-            title : "更换LOGO",
-            area : [ '400px', '500px' ],
-            shade : 0,
-            offset : "5px",
-            shadeClose : false,
-            content : "/logo/edit",
-            btn:['确定','取消'],
-            yes:function(index,layero){
-                var body = top.layer.getChildFrame('body',index);
-                var src = body.find('#logo_url').val();
-                if (src==''){
-                    alertMsg('请上传图片');
-                    return false;
-                }
-                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-                console.log(body.find('#classId').val());
-                $.ajax({
-                    url:"/logo/save",
-                    type:'post',
-                    data:{
-                        'src':src
-                    },
-                    dataType:'json',
-                    success:function(data){
-                        if (data.code == 0) {
-                            layer.msg(data.msg,{
-                                offset: '10px',
-                                icon:1,
-                                time:1000
-                            },function(){
-                                parent.layer.close(index)
-                                window.location.reload();
-                            });
-                        } else if (data.code == 500) {
-                            layer.msg(data.msg,{
-                                icon:2,
-                                time:1500
-                            },function(){});
-                        }
-                    }
-                });
-            },
-            btn2 : function() {
-                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-                });
-                return false;
-            },
-            closeBtn : 1,
-            btnAlign:'c',
-            success : function(layero, index) {
-
-            },
-            cancel : function() {
-                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-                });
-                return false;
-            },
-            end : function() {
-                layer.closeAll();
-            }
-        });
-    }
-
-    $("#editCountdown").click(function () {
-        if ($("#username").length === 0){
-            alertMsg("请先登录！");
-            return false;
-        }
-        layer.open({
-            type : 2,
-            title : "编辑倒计时",
-            area : [ '400px', '500px' ],
-            shade : 0,
-            offset : "5px",
-            shadeClose : false,
-            content : "/countdown/edit",
-            btn:['确定','取消'],
-            yes:function(index,layero){
-                var body = top.layer.getChildFrame('body',index);
-                var title = body.find('#title').val();
-                var date = body.find('#date').val();
-                var time = body.find('#time').val();
-                if (title==''||date==''||time==''){
-                    alertMsg('内容填写不完整');
-                    return false;
-                }
-                var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-                console.log(body.find('#classId').val());
-                $.ajax({
-                    url:"/countdown/update",
-                    type:'post',
-                    data:{
-                        'id': body.find('#id').val(),
-                        'title':title,
-                        'date':date,
-                        'time':time
-                    },
-                    dataType:'json',
-                    success:function(data){
-                        if (data.code == 0) {
-                            layer.msg(data.msg,{
-                                offset: '10px',
-                                icon:1,
-                                time:1000
-                            },function(){
-                                parent.layer.close(index)
-                                window.location.reload();
-                            });
-                        } else if (data.code == 500) {
-                            layer.msg(data.msg,{
-                                icon:2,
-                                time:1500
-                            },function(){});
-                        }
-                    }
-                });
-            },
-            btn2 : function() {
-                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-                });
-                return false;
-            },
-            closeBtn : 1,
-            btnAlign:'c',
-            success : function(layero, index) {
-
-            },
-            cancel : function() {
-                dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-                });
-                return false;
-            },
-            end : function() {
-                layer.closeAll();
-            }
-        });
-    });
-
-    function check(){
-        var keyword = $("#searchBody").val();
-        $.ajax({
-            type: 'POST',
-            dataType: 'json',
-            url: '/keyword/insert',
-            data: {"keyword": keyword},
-            cache: false,
-            async: true,
-            success: function () {
-                $("#searchBody").val();
-            }
-        });
-        return true;
-    }
-
-    $("#searchBody").focus();
-
-    window.onload = function () {
-        getCountdown();
-        if(navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i)){
-            document.searchForm.action="http://m.baidu.com/s";
-        }
-    };
-
-    function getCountdown() {
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/countdown/get',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                countdown_title = data.title;
-                endTime = data.endTime;
-                if (endTime.length<6){
-                    endTime[5] = 0;
-                }
-                end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
-                countdown();
-            }
-        });
-    }
-
-    function countdown() {
-        var now = new Date();
-        var title = countdown_title;
-        var today = now;
-        var stopTime = end;
-        var shenyu = stopTime.getTime() - today.getTime(),//倒计时毫秒数
-            shengyuD = parseInt(shenyu / (60 * 60 * 24 * 1000)),//转换为天
-            D = parseInt(shenyu) - parseInt(shengyuD * 60 * 60 * 24 * 1000),//除去天的毫秒数
-            shengyuH = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
-            H = D - shengyuH * 60 * 60 * 1000,//除去天、小时的毫秒数
-            shengyuM = parseInt(H / (60 * 1000));//除去天的毫秒数转换成分钟
-        var S = parseInt((shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000) / 1000)//除去天、小时、分的毫秒数转化为秒
-        var MS = parseInt(shenyu - shengyuD * 60 * 60 * 24 * 1000 - shengyuH * 60 * 60 * 1000 - shengyuM * 60 * 1000 - S * 1000)//除去天、小时、分的毫秒数转化为秒
-        MS = (Array(3).join('0') + MS).slice(-3);
-        document.getElementById("countDown").innerHTML = (shengyuD + "天" + shengyuH + "小时" + shengyuM + "分" + S + "秒" + MS/* + "毫秒"*/);
-        $("#countDownTitle").html('【'+title+'】');
-        setTimeout(countdown, 33);
-    }
-</script>
+<script th:src="@{../static/js/me/search.js}"></script>
 </html>

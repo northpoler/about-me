@@ -1,5 +1,6 @@
 package pro.jianbing.aboutme.interceptor;
 
+import io.netty.util.internal.StringUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,7 @@ import java.time.LocalDateTime;
 public class VisitInterceptor extends HandlerInterceptorAdapter {
     private static final Logger log = LoggerFactory.getLogger(VisitInterceptor.class);
     private static final String GRANDPA_URL = "/grandpa";
+    private static final String INDEX_URL = "/";
     private static final String COMPANY_IP = "122.224.218.34";
     private static final String COMPANY_ADDRESS = "本地局域网";
     @Autowired
@@ -50,14 +52,17 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                 session.setAttribute("domain","society");
             }
         }
-        //如果访问祖父页面，记录访问信息
-        if (GRANDPA_URL.equals(urlSubString)){
+        if (urlSubString.contains(";jsessionid")){
+            urlSubString = urlSubString.substring(0,urlSubString.indexOf(";jsessionid"));
+        }
+        //如果访问特定页面，记录访问信息
+        if (GRANDPA_URL.equals(urlSubString)||INDEX_URL.equals(urlSubString)){
             Visit visit = new Visit();
             String ipAddress = NetworkUtil.getIpAddress(request);
             String addressByIp = NetworkUtil.getAddressByIp(ipAddress);
             visit.setIp(ipAddress);
             visit.setAddress(addressByIp);
-            visit.setTarget(GRANDPA_URL);
+            visit.setTarget(urlSubString);
             User user = (User) request.getSession().getAttribute("user");
             if (null!=user){
                 visit.setUserId(user.getId());
