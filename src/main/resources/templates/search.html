@@ -36,13 +36,15 @@
             <!--常用链接-->
             <ul class="layui-inline scroll">
                 <li th:each="link : ${links}" class="scroll-son">
-                    <a th:href="@{${link.link}}" target="_blank" class="layui-btn" style="margin: 0 5px" th:title="${link.title}">
-                        <i th:class="${link.icon}"></i>
+                    <a th:href="@{${link.link}}" target="_blank" class="link-btn"
+                       style="margin: 0 5px;color: deepskyblue" th:title="${link.title}">
+                        <i th:class="${link.icon}" style="font-size: larger" class="link-btn"></i>
                     </a>
                 </li>
             </ul>
             <!--倒计时-->
             <div style="margin-top: 20px">
+                <hr>
                 <span id="editCountdown" style="cursor: pointer" title="更改倒计时">
                 <span title="编辑" style="color: deeppink;">
                     <i id="editBtn" style="font-size: large"
