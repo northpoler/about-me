@@ -31,6 +31,10 @@
             </button>
             <br><br><br>
         </div>
+        <hr>
+        <!--<fieldset class="layui-elem-field layui-field-title" style="margin-top: 20px;">
+            <legend><input value="常用" style="background-color: rgba(0,0,0,0);border: 0px;width: 50px"></legend>
+        </fieldset>-->
         <div class="layui-col-md2 layui-col-sm2 layui-col-xs3" th:each="memo : ${memos}" th:id="${memo.id}">
             <a th:href="@{${memo.address}}" target="_blank">
             <div class="link">

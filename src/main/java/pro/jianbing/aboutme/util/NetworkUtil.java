@@ -129,4 +129,29 @@ public final class NetworkUtil {
         logger.info("解析出的上次登陆的地理地址 : " + location);
         return location;
     }
+
+    /**
+     * 通过ip获取城市的名字
+     * @param ip
+     * @return
+     */
+    public static String getCityNameByIp(String ip){
+        String address = getAddressByIp(ip);
+        String cityName;
+        if (!address.contains(LOCAL_ADDRESS)){
+            if (address.contains("北京")||address.contains("上海")
+                    ||address.contains("天津")||address.contains("重庆")){
+                if (address.length()<4){
+                    cityName = address;
+                } else {
+                    cityName = address.substring(3);
+                }
+            } else {
+                cityName = address.substring(address.indexOf("省")+1);
+            }
+        } else {
+            cityName = "";
+        }
+        return cityName;
+    }
 }
