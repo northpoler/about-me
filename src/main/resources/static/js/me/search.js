@@ -184,13 +184,58 @@ function check(){
 $("#searchBody").focus();
 
 window.onload = function () {
+    // 获取倒计时
     getCountdown();
     // 如果是移动端进行的调整
     if(navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i)){
         // 更改搜索引擎
         document.searchForm.action="http://m.baidu.com/s";
     }
+    // 获取天气
+    getWeather();
 };
+
+function getWeather() {
+    $.ajax({
+        type: 'GET',
+        dataType: 'json',
+        url: '/weather/get',
+        data: {},
+        cache: false,
+        async: true,
+        success: function (data) {
+            if (data.result){
+                var weather = data.weather;
+                $("#weatherPic").attr('src',weather.weatherPic);
+                $("#weatherPic").attr('src');
+                $("#weather").html(weather.weather);
+                $("#temperature").html(weather.temperature);
+                $("#city").html(weather.city);
+                $("#publish_time").html(weather.publishTime);
+                $("#location").html(weather.province + " • " + weather.city);
+                $("#longitude").html(weather.longitude);
+                $("#latitude").html(weather.latitude);
+                $("#feeling").html(weather.feeling);
+                $("#relative_humidity").html(weather.relativeHumidity);
+                $("#precipitation").html(weather.precipitation);
+                $("#visibility").html(weather.visibility);
+                $("#atmos").html(weather.atmos);
+                $("#wind_direction").html(weather.windDirection+"("+weather.windAngle+")");
+                $("#wind_force").html(weather.windForce+"("+weather.windSpeed+")");
+                $("#weather_div").removeClass("layui-hide")
+            }
+        }
+    });
+}
+
+function showMore() {
+    var className = document.getElementById("weather_detail_div").className;
+    if (className.indexOf("layui-hide")!=-1){
+        $("#weather_detail_div").removeClass("layui-hide")
+    } else {
+        $("#weather_detail_div").addClass("layui-hide")
+    }
+}
 
 function getCountdown() {
     $.ajax({

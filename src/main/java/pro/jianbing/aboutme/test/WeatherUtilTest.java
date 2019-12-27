@@ -12,7 +12,7 @@ import pro.jianbing.aboutme.util.WeatherUtil;
  */
 public class WeatherUtilTest {
     public static void main(String[] args) {
-        WeatherDto cityName = WeatherUtil.getWeatherByCityName("测试");
+        WeatherDto cityName = WeatherUtil.getWeatherByIp("auto_ip");
         System.out.println(cityName);
     }
 }

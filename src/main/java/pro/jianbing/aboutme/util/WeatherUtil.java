@@ -7,8 +7,6 @@ import org.springframework.util.StringUtils;
 import pro.jianbing.aboutme.pojo.WeatherDto;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,8 +20,7 @@ public final class WeatherUtil {
      * Logger for this class
      */
     private static final Logger logger = LoggerFactory.getLogger(WeatherUtil.class);
-    private static final String UNKNOWN_LOCATION = "unknown location";
-    private static final String LOCATION = "location";
+    private static final String SUCCESS = "\"status\":\"ok\"";
     /**
      * 获取天气的接口：此处的location可以有以下几种类型：
      * 1. 城市ID：城市列表
@@ -40,21 +37,67 @@ public final class WeatherUtil {
      * 5. location=60.194.130.1
      * 6. location=auto_ip
      */
-    private static final String URL = "https://free-api.heweather.net/s6/weather/now?key=3c3fa198cacc4152b94b20def11b2455@location=";
-
+    private static final String LINK = "https://free-api.heweather.net/s6/weather/now";
+    private static final String KEY = "8285153a6d83436193a6fe494cc028d2";
+    private static final String URL = LINK + "?key=" + KEY + "&location=";
     /**
      * 获取天气
      *
      * @return
      */
     public static WeatherDto getWeather() {
-        String url = URL + "auto_ip";
+        return getWeatherByIp("auto_ip");
+    }
+
+    /**
+     * 获取天气
+     *
+     * @return
+     */
+    public static WeatherDto getWeatherByIp(String ip) {
+        String url = URL + ip;
         String result = HttpUtil.doGet(url);
         WeatherDto dto = new WeatherDto();
-        if (!StringUtils.isEmpty(result) && !result.contains(UNKNOWN_LOCATION)){
+        if (StringUtils.isEmpty(result) || !result.contains(SUCCESS)){
+            return null;
+        } else {
             Map resultMap = JSON.parseObject(result, Map.class);
+            List<Map<String,Map<String,String>>> main = (List)resultMap.get("HeWeather6");
+            Map<String, Map<String,String>> item = main.get(0);
+            Map<String, String> basic = item.get("basic");
+            dto.setProvince(basic.get("admin_area"));
+            dto.setCity(basic.get("parent_city"));
+            dto.setLongitude(basic.get("lon"));
+            dto.setLatitude(basic.get("lat"));
+            Map<String, String> update = item.get("update");
+            dto.setPublishTime(update.get("loc").substring(11));
+            Map<String, String> now = item.get("now");
+            dto.setWeatherCode(now.get("cond_code"));
+            dto.setWeather(now.get("cond_txt"));
+            dto.setTemperature(now.get("tmp") + "℃");
+            dto.setFeeling(now.get("fl") + "℃");
+            dto.setVisibility(now.get("vis") + "公里");
+            dto.setWindAngle(now.get("wind_deg") + "°");
+            dto.setWindDirection(now.get("wind_dir"));
+            dto.setWindForce(now.get("wind_sc") + "级");
+            dto.setWindSpeed(now.get("wind_spd") + "公里/小时");
+            dto.setCloud(now.get("cloud") + "(0-10)");
+            dto.setRelativeHumidity(now.get("hum") + "%");
+            dto.setPrecipitation(now.get("pcpn") + "mm");
+            dto.setAtmos(now.get("pres") + "Pa");
+            dto.setWeatherPic("../static/image/weather/"+dto.getWeatherCode()+".png");
         }
         return dto;
+    }
+
+    /**
+     * 获取天气
+     *
+     * @return
+     */
+    public static WeatherDto getWeatherByRequest(HttpServletRequest request) {
+        String ip = NetworkUtil.getIpAddress(request);
+        return getWeatherByIp(ip);
     }
 
     /**
