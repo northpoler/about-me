@@ -231,12 +231,7 @@ function getWeather() {
 }
 
 function showMore() {
-    var className = document.getElementById("weather_detail_div").className;
-    if (className.indexOf("layui-hide")!=-1){
-        $("#weather_detail_div").removeClass("layui-hide")
-    } else {
-        $("#weather_detail_div").addClass("layui-hide")
-    }
+    $("#weather_detail_div").slideToggle();
 }
 
 function getCountdown() {

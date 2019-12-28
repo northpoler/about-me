@@ -71,8 +71,8 @@
                 <span id="temperature"></span>
             </div>
             <!--天气-->
-            <div style="padding: 10px 0px;color: #333333;width: 100%;background-color: rgba(255,255,255,0.5)"
-                 id="weather_detail_div" class="layui-hide">
+            <div style="padding: 10px 0px;color: #333333;width: 100%;background-color: rgba(255,255,255,0.5);display: none"
+                 id="weather_detail_div">
                 <table align="center" valign="center" style="text-align: left;margin: 0 auto" cellpadding="15px">
                     <tr>
                         <td class="weather-item">更新：</td>
@@ -107,16 +107,16 @@
                         <td id="visibility"></td>
                     </tr>
                     <tr>
-                        <td class="weather-item">大气：</td>
-                        <td id="atmos"></td>
-                    </tr>
-                    <tr>
                         <td class="weather-item">风向：</td>
                         <td id="wind_direction"></td>
                     </tr>
                     <tr>
                         <td class="weather-item">风力：</td>
                         <td id="wind_force"></td>
+                    </tr>
+                    <tr>
+                        <td class="weather-item">气压：</td>
+                        <td id="atmos"></td>
                     </tr>
                 </table>
             </div>
