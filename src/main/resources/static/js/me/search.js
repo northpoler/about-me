@@ -88,82 +88,59 @@ function changeLogo() {
     });
 }
 
-$("#editCountdown").click(function () {
+function editCountdown() {
+    $("#countdown_edit_div").slideToggle();
+}
+
+function cancleEditCountdown() {
+    $("#countDownTitle").html(title);
+    $("#countdown_title").val(title);
+    $("#countdown_edit_div").slideToggle();
+}
+
+function changeTitle() {
+    $("#countDownTitle").html($('#countdown_title').val());
+}
+
+function saveCountdown() {
     if ($("#username").length === 0){
-        alertMsg("请先登录！");
-        return false;
-    }
-    layer.open({
-        type : 2,
-        title : "编辑倒计时",
-        area : [ '400px', '500px' ],
-        shade : 0,
-        offset : "5px",
-        shadeClose : false,
-        content : "/countdown/edit",
-        btn:['确定','取消'],
-        yes:function(index,layero){
-            var body = top.layer.getChildFrame('body',index);
-            var title = body.find('#title').val();
-            var date = body.find('#date').val();
-            var time = body.find('#time').val();
-            if (title==''||date==''||time==''){
-                alertMsg('内容填写不完整');
-                return false;
-            }
-            var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-            console.log(body.find('#classId').val());
-            $.ajax({
-                url:"/countdown/update",
-                type:'post',
-                data:{
-                    'id': body.find('#id').val(),
-                    'title':title,
-                    'date':date,
-                    'time':time
-                },
-                dataType:'json',
-                success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
-                            offset: '10px',
-                            icon:1,
-                            time:1000
-                        },function(){
-                            parent.layer.close(index)
-                            window.location.reload();
-                        });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
-                            icon:2,
-                            time:1500
-                        },function(){});
-                    }
+        end = new Date($('#countdown_date').val()+" "+$('#countdown_time').val());
+        layer.msg("编辑成功！<br>登录后可以永久保存~~",{
+            icon:1,
+            time:2000
+        },function(){
+            $("#countdown_edit_div").slideToggle();
+        });
+    } else {
+        $.ajax({
+            url:"/countdown/update",
+            type:'post',
+            data:{
+                'id': $('#countdown_id').val(),
+                'title':$('#countdown_title').val(),
+                'date':$('#countdown_date').val(),
+                'time':$('#countdown_time').val()
+            },
+            dataType:'json',
+            success:function(data){
+                if (data.result) {
+                    end = new Date($('#countdown_date').val()+" "+$('#countdown_time').val());
+                    layer.msg(data.msg,{
+                        icon:1,
+                        time:1000
+                    },function(){
+                        $("#countdown_edit_div").slideToggle();
+                    });
+                } else {
+                    layer.msg(data.msg,{
+                        icon:2,
+                        time:1500
+                    },function(){});
                 }
-            });
-        },
-        btn2 : function() {
-            dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-            });
-            return false;
-        },
-        closeBtn : 1,
-        btnAlign:'c',
-        success : function(layero, index) {
-
-        },
-        cancel : function() {
-            dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-            });
-            return false;
-        },
-        end : function() {
-            layer.closeAll();
-        }
-    });
-});
+            }
+        });
+    }
+}
 
 function check(){
     var keyword = $("#searchBody").val();
@@ -197,10 +174,10 @@ window.onload = function () {
 
 function getWeather() {
     $.ajax({
-        type: 'GET',
+        type: 'POST',
         dataType: 'json',
         url: '/weather/get',
-        data: {},
+        data: {"ip":returnCitySN["cip"]},
         cache: false,
         async: true,
         success: function (data) {
@@ -243,12 +220,17 @@ function getCountdown() {
         cache: false,
         async: true,
         success: function (data) {
-            countdown_title = data.title;
+            title = data.title;
+            $("#countDownTitle").html(title);
             endTime = data.endTime;
             if (endTime.length<6){
                 endTime[5] = 0;
             }
             end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
+            $("#countdown_id").val(data.id);
+            $("#countdown_title").val(data.title);
+            $("#countdown_date").val(data.date);
+            $("#countdown_time").val(data.time);
             countdown();
         }
     });
@@ -256,7 +238,6 @@ function getCountdown() {
 
 function countdown() {
     var now = new Date();
-    var title = countdown_title;
     var today = now;
     var stopTime = end;
     var remain = stopTime.getTime() - today.getTime(),//倒计时毫秒数
@@ -272,9 +253,46 @@ function countdown() {
     seconds = getFormedStyle(seconds,2);
     milliseconds = getFormedStyle(milliseconds,3);
     $("#countDown").html(days + "天" + hours + "小时" + minutes + "分" + seconds + "秒" + milliseconds/* + "毫秒"*/);
-    $("#countDownTitle").html('• '+title);
     setTimeout(countdown, 33);
 }
 function getFormedStyle(source,len) {
     return (Array(len).join('0') + source).slice(-len);
 }
+
+layui.use('laydate', function(){
+    var laydate = layui.laydate;
+
+    //开启公历节日
+    laydate.render({
+        elem: '#countdown_date'
+        ,mark: {
+            '0-2-8': '生日'
+            ,'0-0-28': '工资' //每月某天
+            ,'0-0-15': '月中'
+            ,'2017-8-15': '' //如果为空字符，则默认显示数字+徽章
+            ,'2099-10-14': '呵呵'
+        }
+        //初始赋值
+        /*,value: '1989-10-14'
+        ,isInitValue: true*/
+        /*,done: function(value, date){
+            if(date.year === 2017 && date.month === 8 && date.date === 15){ //点击2017年8月15日，弹出提示语
+                layer.msg('这一天是：中国人民抗日战争胜利72周年');
+            }
+        }*/
+        ,trigger: 'click'
+        //前后若干天可选
+        ,min: 0
+        ,max: 999
+        ,calendar: true
+    });
+
+    //时间选择器
+    laydate.render({
+        elem: '#countdown_time'
+        /*,value: '18:00:00'*/
+        ,isInitValue: true
+        ,trigger: 'click'
+        ,type: 'time'
+    });
+});

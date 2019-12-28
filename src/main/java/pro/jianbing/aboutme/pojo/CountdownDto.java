@@ -2,6 +2,8 @@ package pro.jianbing.aboutme.pojo;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * @author 李建兵
  */
@@ -14,4 +16,5 @@ public class CountdownDto {
     private String date;
     private String time;
     private String days;
+    private LocalDateTime endTime;
 }

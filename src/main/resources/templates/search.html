@@ -18,24 +18,36 @@
         .weather-item {
             color: deeppink;
         }
+        .layui-input {
+            background-color: rgba(255,255,255,0);
+        }
+        .layui-form-label {
+            color: deeppink;
+        }
+        .layui-form-item {
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body style="background-color: lightgoldenrodyellow">
 <div th:include="head :: head"></div>
 <div class="layui-row" style="text-align: center;font-size: larger">
-    <form action="http://www.baidu.com/baidu" name="searchForm" target="_blank" onsubmit="return check()">
     <div class="layui-row">
         <div class="layui-col-md6 layui-col-md-offset3" id="search">
             <!--搜索框-->
-            <div class="layui-form-item" style="margin-top: 10%">
-                <img alt="logo" th:src="${logo}" id="logo" style="width: 20%;cursor: pointer" onclick="changeLogo()" title="点击可更换LOGO"/>
-                <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;">
-                    <input type="text" name="word" style="font-size: medium;height: 44px" id="searchBody" placeholder="百度能搜到的这里都能搜..." autocomplete="off" class="layui-input">
-                    <button style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
-                        <i class="layui-icon layui-icon-search"></i>
-                    </button>
+            <form action="http://www.baidu.com/baidu" name="searchForm" target="_blank" onsubmit="return check()">
+                <div class="layui-form-item" style="margin-top: 10%">
+                    <img alt="logo" th:src="${logo}" id="logo" style="width: 20%;cursor: pointer" onclick="changeLogo()" title="点击可更换LOGO"/>
+                    <div class="layui-input-block" href="/index" style="margin-left: 10px;margin-right: 10px;">
+                        <input type="text" name="word" id="searchBody" placeholder="百度能搜到的这里都能搜..."
+                               style="font-size: medium;height: 44px;background-color: white"
+                               autocomplete="off" class="layui-input">
+                        <button style="position: absolute;top: 0;right: 6px;cursor: pointer" type="submit" class="layui-btn layui-btn-lg layui-btn-normal">
+                            <i class="layui-icon layui-icon-search"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </form>
             <!--常用链接-->
             <ul class="layui-inline scroll">
                 <li th:each="link : ${links}" class="scroll-son">
@@ -48,7 +60,7 @@
             <!--倒计时-->
             <div style="margin-top: 20px">
                 <hr>
-                <span id="editCountdown" style="cursor: pointer" title="更改倒计时">
+                <span onclick="editCountdown()" style="cursor: pointer" title="更改倒计时" onselectstart="return false">
                     <span title="编辑" style="color: deeppink;">
                         <i id="editBtn" style="font-size: large"
                            class="layui-icon layui-icon-log layui-anim layui-anim-rotate layui-anim-loop"></i>
@@ -56,10 +68,51 @@
                     <span id="countDown" style="color: #333333">
                         倒计时
                     </span>
+                    <span style="color: deeppink">
+                        •
+                    </span>
                     <span id="countDownTitle" style="color: deeppink">
-                        • 倒计时标题
+                        倒计时标题
                     </span>
                 </span>
+            </div>
+            <!--更改倒计时-->
+            <div style="padding: 20px 0px;color: #333333;width: 100%;background-color: rgba(255,255,255,0.5);display: none"
+                 id="countdown_edit_div">
+                <form action="" class="layui-form">
+                    <input type="number" class="layui-hide" id="countdown_id" name="id">
+                    <div class="layui-form-item">
+                        <div class="layui-inline">
+                            <label class="layui-form-label" style="text-align: center">标&nbsp;&nbsp;题：</label>
+                            <div class="layui-input-inline">
+                                <input type="text" id="countdown_title" name="title" autocomplete="off"
+                                       oninput="changeTitle()"
+                                       required placeholder="倒计时标题" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <div class="layui-inline">
+                            <label class="layui-form-label" style="text-align: center">日&nbsp;&nbsp;期：</label>
+                            <div class="layui-input-inline">
+                                <input type="text" name="date" autocomplete="off" class="layui-input" id="countdown_date" required
+                                       placeholder="倒计时的日期">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <div class="layui-inline">
+                            <label class="layui-form-label" style="text-align: center">时&nbsp;&nbsp;间：</label>
+                            <div class="layui-input-inline">
+                                <input type="text" name="time" autocomplete="off" class="layui-input" id="countdown_time"
+                                       required placeholder="具体时间">
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <button class="layui-btn layui-btn-warm" type="button" onclick="cancleEditCountdown()">取消</button>
+                    <button class="layui-btn layui-btn-normal" type="button" onclick="saveCountdown()">确定</button>
+                </form>
             </div>
             <!--天气-->
             <div style="margin-top: 20px;color: #333333;cursor: pointer"
@@ -70,7 +123,7 @@
                 <span id="weather"></span>
                 <span id="temperature"></span>
             </div>
-            <!--天气-->
+            <!--天气详细信息-->
             <div style="padding: 10px 0px;color: #333333;width: 100%;background-color: rgba(255,255,255,0.5);display: none"
                  id="weather_detail_div">
                 <table align="center" valign="center" style="text-align: left;margin: 0 auto" cellpadding="15px">
@@ -122,8 +175,8 @@
             </div>
         </div>
     </div>
-    </form>
 </div>
 </body>
+<script src="http://pv.sohu.com/cityjson?ie=utf-8"></script>
 <script th:src="@{../static/js/me/search.js}"></script>
 </html>

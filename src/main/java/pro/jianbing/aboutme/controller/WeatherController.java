@@ -1,13 +1,10 @@
 package pro.jianbing.aboutme.controller;
 
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.pojo.WeatherDto;
 import pro.jianbing.aboutme.util.WeatherUtil;
 
-import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,9 +15,9 @@ import java.util.Map;
 @RequestMapping("weather")
 public class WeatherController {
 
-    @GetMapping("/get")
+    @PostMapping("/get")
     @ResponseBody
-    public Map<String,Object> getWeather(HttpServletRequest request){
+    public Map<String,Object> getWeather(String ip){
         Map<String,Object> data = new HashMap<>(2);
         try {
             WeatherDto weather = WeatherUtil.getWeatherByRequest(request);

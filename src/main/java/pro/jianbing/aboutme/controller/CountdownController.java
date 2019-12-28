@@ -31,19 +31,13 @@ public class CountdownController {
 
     @ResponseBody
     @GetMapping("get")
-    public Countdown getTwoCountdown(HttpServletRequest request){
+    public CountdownDto getTwoCountdown(HttpServletRequest request){
         return getCountdown(request);
     }
 
     @GetMapping("edit")
     public String edit(HttpServletRequest request, Model model){
-        Countdown countdown = getCountdown(request);
-        CountdownDto countdownDto = new CountdownDto();
-        countdownDto.setId(countdown.getId());
-        countdownDto.setTitle(countdown.getTitle());
-        countdownDto.setDate(countdown.getEndTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
-        countdownDto.setTime(countdown.getEndTime().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
-        model.addAttribute("countdownDto",countdownDto);
+        model.addAttribute("countdownDto",getCountdown(request));
         return "countdown_edit";
     }
 
@@ -64,21 +58,21 @@ public class CountdownController {
             }
             Integer save = countdownService.save(countdown);
             if (null != save && save>0){
-                data.put("code",0);
+                data.put("result",true);
                 data.put("msg","编辑成功");
             } else {
-                data.put("code",500);
+                data.put("result",false);
                 data.put("msg","编辑失败");
             }
         } catch (Exception e) {
             e.printStackTrace();
-            data.put("code",500);
+            data.put("result",false);
             data.put("msg","系统出错");
         }
         return data;
     }
 
-    private Countdown getCountdown(HttpServletRequest request){
+    private CountdownDto getCountdown(HttpServletRequest request){
         User user = (User) request.getSession().getAttribute("user");
         Countdown countdown = new Countdown();
         if (null != user){
