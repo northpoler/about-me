@@ -20,11 +20,7 @@ public class WeatherController {
     public Map<String,Object> getWeather(String ip){
         Map<String,Object> data = new HashMap<>(2);
         try {
-            WeatherDto weather = WeatherUtil.getWeatherByRequest(request);
-            /*
-             * 上面为正式语句，下面是测试用
-             */
-            /*WeatherDto weather = WeatherUtil.getWeatherByIp("auto_ip");*/
+            WeatherDto weather = WeatherUtil.getWeatherByIp(ip);
             if (null!=weather){
                 data.put("result",true);
                 data.put("weather",weather);
