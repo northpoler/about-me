@@ -8,6 +8,10 @@ import lombok.Data;
 @Data
 public class WeatherDto {
     /**
+     * 国家
+     */
+    private String country;
+    /**
      * 省份
      */
     private String province;
@@ -19,6 +23,10 @@ public class WeatherDto {
      * 发布时间
      */
     private String publishTime;
+    /**
+     * 时区
+     */
+    private String timeZone;
     /**
      * 气温
      */

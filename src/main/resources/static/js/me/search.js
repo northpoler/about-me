@@ -211,8 +211,8 @@ function getWeather() {
                 $("#weather").html(weather.weather);
                 $("#temperature").html(weather.temperature);
                 $("#city").html(weather.city);
-                $("#publish_time").html(weather.publishTime);
-                $("#location").html(weather.province + " • " + weather.city);
+                $("#publish_time").html(weather.publishTime + "【" + weather.timeZone + "】");
+                $("#location").html(weather.country + " • " + weather.province + " • " + weather.city);
                 $("#longitude").html(weather.longitude);
                 $("#latitude").html(weather.latitude);
                 $("#feeling").html(weather.feeling);
@@ -220,12 +220,14 @@ function getWeather() {
                 $("#precipitation").html(weather.precipitation);
                 $("#visibility").html(weather.visibility);
                 $("#atmos").html(weather.atmos);
-                $("#wind_direction").html(weather.windDirection+"("+weather.windAngle+")");
-                $("#wind_force").html(weather.windForce+"("+weather.windSpeed+")");
+                $("#wind_direction").html(weather.windDirection + "【" + weather.windAngle + "】");
+                $("#wind_force").html(weather.windForce + "【"+ weather.windSpeed + "】");
                 $("#weather_div").removeClass("layui-hide")
             }
         }
     });
+    // 每三分钟更新
+    setTimeout(getWeather, 1000 * 60 * 3);
 }
 
 function showMore() {

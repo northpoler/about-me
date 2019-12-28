@@ -65,10 +65,12 @@ public final class WeatherUtil {
             List<Map<String,Map<String,String>>> main = (List)resultMap.get("HeWeather6");
             Map<String, Map<String,String>> item = main.get(0);
             Map<String, String> basic = item.get("basic");
+            dto.setCountry(basic.get("cnty"));
             dto.setProvince(basic.get("admin_area"));
             dto.setCity(basic.get("parent_city"));
-            dto.setLongitude(basic.get("lon"));
-            dto.setLatitude(basic.get("lat"));
+            dto.setLongitude(basic.get("lon") + "°");
+            dto.setLatitude(basic.get("lat") + "°");
+            dto.setTimeZone(basic.get("tz"));
             Map<String, String> update = item.get("update");
             dto.setPublishTime(update.get("loc").substring(11));
             Map<String, String> now = item.get("now");
