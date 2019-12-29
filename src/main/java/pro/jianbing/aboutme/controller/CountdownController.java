@@ -49,8 +49,12 @@ public class CountdownController {
             Countdown countdown = new Countdown();
             countdown.setId(countdownDto.getId());
             countdown.setTitle(countdownDto.getTitle());
+            String time = countdownDto.getTime();
+            if (time.length()<8){
+                time = time + ":00";
+            }
             LocalDateTime dateTime = LocalDateTime
-                    .parse(countdownDto.getDate()+" "+countdownDto.getTime(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                    .parse(countdownDto.getDate()+" "+time, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             countdown.setEndTime(dateTime);
             User user = (User)request.getSession().getAttribute("user");
             if (null!=user){
