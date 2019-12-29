@@ -135,7 +135,7 @@ function getWeather() {
     setTimeout(getWeather, 1000 * 60 * 3);
 }
 
-function showMore() {
+function showMoreWeather() {
     $("#weather_detail_div").slideToggle();
 }
 
