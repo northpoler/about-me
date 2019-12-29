@@ -159,6 +159,10 @@ $("#correct").click(function () {
 var clickTime = new Date().getTime();
 
 function like() {
+    var className = document.getElementById("portrait").className;
+    if (className.indexOf("portrait")==-1){
+        $("#portrait").addClass("portrait");
+    }
     var now = new Date().getTime();
     if (now-clickTime>1000){
         userLikes++;
@@ -198,8 +202,6 @@ $("#like_btn").click(function(e){
         var tem="<p class='show'>💐</p>";
         var x=e.pageX;
         var y=e.pageY;
-        console.log(x);
-        console.log(y);
         $(this).append(tem);
         $(".show").css({
             "z-index": 9999,
