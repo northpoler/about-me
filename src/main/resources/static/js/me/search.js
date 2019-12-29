@@ -16,78 +16,6 @@ $("#editBtn").mouseout(function () {
     $("#editBtn").addClass("layui-anim layui-anim-rotate layui-anim-loop")
 });
 
-function changeLogo() {
-    if ($("#username").length === 0){
-        alertMsg("登录后方可更换LOGO！");
-        return false;
-    }
-    layer.open({
-        type : 2,
-        title : "更换LOGO",
-        area : [ '400px', '500px' ],
-        shade : 0,
-        offset : "5px",
-        shadeClose : false,
-        content : "/logo/edit",
-        btn:['确定','取消'],
-        yes:function(index,layero){
-            var body = top.layer.getChildFrame('body',index);
-            var src = body.find('#logo_url').val();
-            if (src==''){
-                alertMsg('请上传图片');
-                return false;
-            }
-            var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-            console.log(body.find('#classId').val());
-            $.ajax({
-                url:"/logo/save",
-                type:'post',
-                data:{
-                    'src':src
-                },
-                dataType:'json',
-                success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
-                            offset: '10px',
-                            icon:1,
-                            time:1000
-                        },function(){
-                            parent.layer.close(index)
-                            window.location.reload();
-                        });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
-                            icon:2,
-                            time:1500
-                        },function(){});
-                    }
-                }
-            });
-        },
-        btn2 : function() {
-            dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-            });
-            return false;
-        },
-        closeBtn : 1,
-        btnAlign:'c',
-        success : function(layero, index) {
-
-        },
-        cancel : function() {
-            dangerInquiry('确定关闭吗','是的关闭它','我再考虑一下',true,function () {
-
-            });
-            return false;
-        },
-        end : function() {
-            layer.closeAll();
-        }
-    });
-}
-
 function editCountdown() {
     $("#countdown_edit_div").slideToggle();
 }
@@ -257,4 +185,8 @@ function countdown() {
 }
 function getFormedStyle(source,len) {
     return (Array(len).join('0') + source).slice(-len);
+}
+
+function showTips() {
+    $("#tips").slideToggle();
 }
