@@ -47,8 +47,8 @@
             <form action="http://www.baidu.com/baidu" name="searchForm" target="_blank" onsubmit="return check()">
                 <div class="layui-form-item" style="margin-top: 10%">
                     <img alt="logo" th:src="${logo}" id="logo" style="width: 20%;cursor: pointer" onclick="showTips()" title="点击可更换LOGO"/>
-                    <div class="layui-row" style="margin: 0px 10px 5px 10px">
-                        <div class="layui-col-md6 layui-col-md-offset3 hide-info" id="tips" style="padding: 15px">
+                    <div class="layui-row">
+                        <div class="layui-col-md6 layui-col-md-offset3 hide-info" id="tips" style="padding: 15px;margin-bottom: 5px">
                              <p style="color: deeppink">Tips</p>
                             <div style="font-size: small;color: #333333">
                                 <p>点击倒计时可以自由编辑</p>
@@ -75,7 +75,18 @@
                             <i th:class="${link.icon}" style="font-size: larger" class="link-btn"></i>
                         </a>
                     </li>
+                    <li class="scroll-son">
+                        <a onclick="showMoreLinks()" target="_blank" class="link-btn"
+                           style="margin: 0 5px;color: deepskyblue;cursor: pointer" title="更多">
+                            <i class="layui-icon layui-icon-more" id="more_link"></i>
+                        </a>
+                    </li>
                 </ul>
+            </div>
+            <!--全部链接-->
+            <div class="hide-info" style="padding: 20px 0px;color: #333333;width: 100%"
+                 id="links_edit_div">
+                <p>此处有待完善</p>
             </div>
             <!--倒计时-->
             <div style="margin-top: 10px">

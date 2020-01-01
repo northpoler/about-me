@@ -194,3 +194,15 @@ function getFormedStyle(source,len) {
 function showTips() {
     $("#tips").slideToggle();
 }
+
+function showMoreLinks() {
+    $("#links_edit_div").slideToggle();
+    var className = document.getElementById("more_link").className;
+    if (className.indexOf("layui-icon-more-vertical")!=-1){
+        $("#more_link").removeClass("layui-icon-more-vertical");
+        $("#more_link").addClass("layui-icon-more");
+    } else {
+        $("#more_link").addClass("layui-icon-more-vertical");
+        $("#more_link").removeClass("layui-icon-more");
+    }
+}
