@@ -174,6 +174,10 @@ function countdown() {
         hours = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
         H = D - hours * 60 * 60 * 1000,//除去天、小时的毫秒数
         minutes = parseInt(H / (60 * 1000));//除去天的毫秒数转换成分钟
+    if (remain<=0){
+        getCountdown();
+        return;
+    }
     var seconds = parseInt((remain - days*60*60*24*1000 - hours*60*60*1000 - minutes*60*1000) / 1000);
     var milliseconds = parseInt(remain - days*60*60*24*1000 - hours*60*60*1000 - minutes*60*1000 - seconds*1000);
     hours = getFormedStyle(hours,2);
