@@ -6,11 +6,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.util.EncryptionUtil;
+import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.UserService;
-import pro.jianbing.aboutme.util.EncryptionUtil;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -42,11 +43,10 @@ public class RegisterController {
 
     @PostMapping("save")
     @ResponseBody
-    public Map<String,Object> checkLogin(User user, HttpServletRequest request, HttpServletResponse response) {
-        Map<String,Object> data = null;
+    public BaseResult checkLogin(User user, HttpServletRequest request, HttpServletResponse response) {
+        BaseResult baseResult;
         try {
             User result = userService.FindUserByUsername(user.getUsername());
-            data = new HashMap<>(2);
             if (null == result){
                 // 保存用户信息
                 user.setRole("1");
@@ -57,8 +57,6 @@ public class RegisterController {
                 user.setLastIP(ipAddress);
                 int save = userService.saveUser(user);
                 if (1==save){
-                    data.put("code",0);
-                    data.put("msg","注册成功,已自动登录!");
                     request.getSession().setAttribute("user",user);
                     //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
                     String loginToken = generateLoginToken(user.getUsername(), user.getPassword(), user.getId());
@@ -68,20 +66,18 @@ public class RegisterController {
                     cookie.setMaxAge(30*24*3600);
                     response.addCookie(cookie);
                     likeService.updateNullByUserIdAndIp(user.getId(),NetworkUtil.getIpAddress(request));
+                    baseResult = BaseResult.success("注册成功,已自动登录!");
                 } else {
-                    data.put("code",500);
-                    data.put("msg","注册出错");
+                    baseResult = BaseResult.fail("注册出错！");
                 }
             } else {
-                data.put("code",500);
-                data.put("msg","此用户名已被注册");
+                baseResult = BaseResult.fail("此用户名已被注册！");
             }
         } catch (Exception e) {
-            data.put("code",500);
-            data.put("msg","注册出错");
             e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 
     /**

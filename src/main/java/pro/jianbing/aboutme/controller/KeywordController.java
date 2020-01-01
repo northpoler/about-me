@@ -2,10 +2,11 @@ package pro.jianbing.aboutme.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Keyword;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.KeywordService;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
@@ -26,16 +27,24 @@ public class KeywordController {
     }
 
     @PostMapping("insert")
-    public Integer saveKeyword(@RequestParam("keyword") String word, HttpServletRequest request){
-        Keyword keyword = new Keyword();
-        keyword.setKeyword(word);
-        keyword.setIp(NetworkUtil.getIpAddress(request));
-        keyword.setSearchTime(LocalDateTime.now());
-        keyword.setMark("0");
-        User user = (User)request.getSession().getAttribute("user");
-        if (null!=user){
-            keyword.setUserId(user.getId());
+    public BaseResult saveKeyword(@RequestParam("keyword") String word, HttpServletRequest request){
+        BaseResult baseResult;
+        try {
+            Keyword keyword = new Keyword();
+            keyword.setKeyword(word);
+            keyword.setIp(NetworkUtil.getIpAddress(request));
+            keyword.setSearchTime(LocalDateTime.now());
+            keyword.setMark("0");
+            User user = (User)request.getSession().getAttribute("user");
+            if (null!=user){
+                keyword.setUserId(user.getId());
+            }
+            Integer result = keywordService.saveKeyword(keyword);
+            baseResult = result>0?BaseResult.success():BaseResult.fail();
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        return keywordService.saveKeyword(keyword);
+        return baseResult;
     }
 }

@@ -10,7 +10,6 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LogoService;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.util.HashMap;
 import java.util.Map;

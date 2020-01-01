@@ -1,19 +1,15 @@
 package pro.jianbing.aboutme.controller;
 
-import io.netty.util.internal.StringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LogoService;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,22 +31,15 @@ public class LogoController {
     }
 
     @PostMapping("save")
-    public Map<String,Object> saveLogo(String src, HttpServletRequest request){
-        Map<String,Object> data = new HashMap<>(2);
+    public BaseResult saveLogo(String src, HttpServletRequest request){
+        BaseResult baseResult;
         try {
             User user = (User)request.getSession().getAttribute("user");
-            if (null != user){
-                data.put("code",0);
-                data.put("msg","添加成功");
-            } else {
-                data.put("code",500);
-                data.put("msg","请先登录");
-            }
+            baseResult = null == user? BaseResult.fail("请先登录！"):BaseResult.success("添加成功！");
         } catch (Exception e) {
-            data.put("code",500);
-            data.put("msg","系统出错");
             e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 }

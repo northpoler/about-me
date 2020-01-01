@@ -125,8 +125,8 @@ function toLogin(target){
                 },
                 dataType:'json',
                 success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
+                    if (data.result) {
+                        layer.msg(data.message,{
                             icon:1,
                             time:1500
                         },function(){
@@ -138,8 +138,8 @@ function toLogin(target){
                                 location.reload();
                             }
                         });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
+                    } else {
+                        layer.msg(data.message,{
                             icon:2,
                             time:1500
                         },function(){});
@@ -150,13 +150,11 @@ function toLogin(target){
         closeBtn : 1,
         btnAlign:'c',
         success : function(layero, index) {
-
         },
         cancel : function() {
         },
         end : function() {
             layer.closeAll();
-            /*location.reload();*/
         }
     });
 }

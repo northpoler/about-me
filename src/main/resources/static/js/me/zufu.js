@@ -39,16 +39,16 @@ $("#add").click(function () {
                 },
                 dataType:'json',
                 success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
+                    if (data.result) {
+                        layer.msg(data.message,{
                             offset: '10px',
                             icon:1,
                             time:1000
                         },function(){
                             parent.layer.close(index)
                         });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
+                    } else {
+                        layer.msg(data.message,{
                             icon:2,
                             time:1500
                         },function(){});
@@ -75,7 +75,6 @@ $("#add").click(function () {
         },
         end : function() {
             layer.closeAll();
-            /*location.reload();*/
         }
     });
 });
@@ -118,16 +117,16 @@ $("#correct").click(function () {
                 },
                 dataType:'json',
                 success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
+                    if (data.result) {
+                        layer.msg(data.message,{
                             offset: '10px',
                             icon:1,
                             time:1000
                         },function(){
                             parent.layer.close(index)
                         });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
+                    } else {
+                        layer.msg(data.message,{
                             icon:2,
                             time:1500
                         },function(){});
@@ -184,7 +183,9 @@ function like() {
         cache: false,
         async: true,
         success: function (data) {
-            $("#like").text(data);
+            if (data.result){
+                $("#like").text(data.data);
+            }
         }
     });
     if ($("#username").length === 0){

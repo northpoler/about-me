@@ -292,7 +292,9 @@ $(function () {
             cache: false,
             async: true,
             success: function (data) {
-                $("#editor").html(data.data);
+                if (data.result){
+                    $("#editor").html(data.data);
+                }
             }
         });
     }
@@ -339,10 +341,10 @@ function save() {
         cache: false,
         async: true,
         success: function (data) {
-            if (data.code==0){
-                layer.msg("保存成功！", {offset: '200px', anim: 0, time: 666});
+            if (data.result){
+                layer.msg(data.message, {offset: '200px', anim: 0, time: 666});
             } else {
-                alertMsg("保存失败！");
+                alertMsg(data.message);
             }
         }
     });

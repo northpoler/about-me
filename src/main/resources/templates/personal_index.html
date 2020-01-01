@@ -234,7 +234,7 @@
             cache: false,
             async: true,
             success: function (data) {
-                if (data.code == 0) {
+                if (data.result) {
                     sumLikes = data.data;
                     NumAutoPlusAnimation("sumLikes", {
                         time: 6000,
@@ -253,7 +253,7 @@
             cache: false,
             async: true,
             success: function (data) {
-                if (data.code == 0) {
+                if (data.result) {
                     sumPersonalLikes = data.data;
                     NumAutoPlusAnimation("sumPersonalLikes", {
                         time: 3000,
@@ -272,7 +272,7 @@
             cache: false,
             async: true,
             success: function (data) {
-                if (data.code == 0) {
+                if (data.result) {
                     sumLikesToday = data.data;
                     $("#sumLikesToday").html(sumLikesToday);
                 }
@@ -286,7 +286,7 @@
             cache: false,
             async: true,
             success: function (data) {
-                if (data.code == 0) {
+                if (data.result) {
                     sumPersonalLikesToday = data.data;
                     $("#sumPersonalLikesToday").html(sumPersonalLikesToday);
                 }
@@ -349,7 +349,7 @@
                 cache: false,
                 async: true,
                 success: function (data) {
-                    if (data.code == 0 && data.data != source) {
+                    if (data.result && data.data !== source) {
                         NumAutoPlusAnimation(target, {
                             time: 1000,
                             num: data.data,
@@ -373,7 +373,7 @@
                 cache: false,
                 async: true,
                 success: function (data) {
-                    if (data.code == 0) {
+                    if (data.result) {
                         if (target == 'sumLikesToday') {
                             $("#sumLikesToday").html(data.data);
                         } else {
@@ -384,7 +384,6 @@
             });
         }, 3000)
     }
-
     var script = document.createElement("script");
     script.type = "text/javascript";
     script.src = "../static/js/echarts/echarts.min.js";

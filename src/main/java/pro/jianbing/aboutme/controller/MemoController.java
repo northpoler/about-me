@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.MemoService;
@@ -63,50 +64,41 @@ public class MemoController {
 
     @RequestMapping(value = "/{id}",method = RequestMethod.DELETE)
     @ResponseBody
-    public Map<String,Object> delete(@PathVariable Long id,HttpServletRequest request){
-        Map<String,Object> data = new HashMap<>(2);
+    public BaseResult delete(@PathVariable Long id, HttpServletRequest request){
+        BaseResult baseResult;
         try {
             User user = (User)request.getSession().getAttribute("user");
             memoService.delete(id,user.getId());
-            data.put("code",0);
-            data.put("msg","删除成功");
+            baseResult = BaseResult.success("删除成功！");
         } catch (Exception e) {
-            data.put("code",500);
-            data.put("msg","操作失败");
             e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 
     @ResponseBody
     @PostMapping("")
-    public Map<String,Object> insert(Memo memo, HttpServletRequest request){
-        Map<String,Object> data = new HashMap<>(2);
+    public BaseResult insert(Memo memo, HttpServletRequest request){
+        BaseResult baseResult;
         try {
             User user = (User)request.getSession().getAttribute("user");
             if (null!=user){
                 memo.setUserId(user.getId());
             }
             Integer save = memoService.save(memo);
-            if (null != save && save>0){
-                data.put("code",0);
-                data.put("msg","添加成功");
-            } else {
-                data.put("code",500);
-                data.put("msg","添加失败");
-            }
+            baseResult = save>0? BaseResult.success("添加成功！"):BaseResult.fail("添加失败！");
         } catch (Exception e) {
             e.printStackTrace();
-            data.put("code",500);
-            data.put("msg","系统出错");
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 
     @ResponseBody
     @RequestMapping(value="update/{id}", method=RequestMethod.POST)
-    public Map<String,Object> update(@PathVariable Long id, @ModelAttribute Memo memo, HttpServletRequest request) {
-        Map<String,Object> data = new HashMap<>(2);
+    public BaseResult update(@PathVariable Long id, @ModelAttribute Memo memo, HttpServletRequest request) {
+        BaseResult baseResult;
         try {
             User user = (User)request.getSession().getAttribute("user");
             if (null!=user){
@@ -114,18 +106,11 @@ public class MemoController {
             }
             memo.setId(id);
             Integer save = memoService.update(memo);
-            if (null != save && save>0){
-                data.put("code",0);
-                data.put("msg","更新成功");
-            } else {
-                data.put("code",500);
-                data.put("msg","更新失败");
-            }
+            baseResult = save>0? BaseResult.success("更新成功！"):BaseResult.fail("更新失败！");
         } catch (Exception e) {
             e.printStackTrace();
-            data.put("code",500);
-            data.put("msg","系统出错");
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 }

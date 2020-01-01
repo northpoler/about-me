@@ -1,4 +1,4 @@
-package pro.jianbing.aboutme.util;
+package pro.jianbing.aboutme.common.util;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;

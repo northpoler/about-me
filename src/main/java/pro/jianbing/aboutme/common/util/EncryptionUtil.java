@@ -1,4 +1,4 @@
-package pro.jianbing.aboutme.util;
+package pro.jianbing.aboutme.common.util;
 
 /**
  * 加密/解密的工具

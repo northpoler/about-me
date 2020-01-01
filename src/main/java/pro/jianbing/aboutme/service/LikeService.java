@@ -2,11 +2,11 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Like;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.mapper.LikeMapper;
 import pro.jianbing.aboutme.repository.LikeRepositoty;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.transaction.Transactional;

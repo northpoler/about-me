@@ -90,8 +90,8 @@
                         cache: false,
                         async: true,
                         success: function (data) {
-                            if (data.code==0){
-                                layer.msg('保存成功',{
+                            if (data.result){
+                                layer.msg(data.message,{
                                     offset: '10px',
                                     icon:1,
                                     time:1000
@@ -128,7 +128,7 @@
                         cache: false,
                         async: true,
                         success: function (data) {
-                            if (data.code==0){
+                            if (data.result){
                                 layer.msg("删除成功！");
                             } else {
                                 layer.msg("删除失败！");

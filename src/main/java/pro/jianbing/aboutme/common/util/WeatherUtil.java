@@ -1,4 +1,4 @@
-package pro.jianbing.aboutme.util;
+package pro.jianbing.aboutme.common.util;
 
 import com.alibaba.fastjson.JSON;
 import org.slf4j.Logger;

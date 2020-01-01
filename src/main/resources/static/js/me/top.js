@@ -27,16 +27,16 @@ $("#logout").click(function () {
             type:'get',
             dataType:'json',
             success:function(data){
-                if (data.code == 0) {
-                    layer.msg(data.msg,{
+                if (data.result) {
+                    layer.msg(data.message,{
                         icon:1,
                         time:1500
                     },function(){
                         parent.layer.close(index)
                     });
                     location.reload();
-                } else if (data.code == 500) {
-                    layer.msg(data.msg,{
+                } else {
+                    layer.msg(data.message,{
                         icon:2,
                         time:1500
                     },function(){});
@@ -113,8 +113,8 @@ function toRegister(target) {
                 },
                 dataType:'json',
                 success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
+                    if (data.result) {
+                        layer.msg(data.message,{
                             icon:1,
                             time:1500
                         },function(){
@@ -126,8 +126,8 @@ function toRegister(target) {
                                 location.reload();
                             }
                         });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
+                    } else {
+                        layer.msg(data.message,{
                             icon:2,
                             time:1500
                         },function(){});
@@ -171,16 +171,16 @@ function changeInfo() {
                 },
                 dataType:'json',
                 success:function(data){
-                    if (data.code == 0) {
-                        layer.msg(data.msg,{
+                    if (data.result) {
+                        layer.msg(data.message,{
                             icon:1,
                             time:1500
                         },function(){
                             parent.layer.close(index)
                             location.reload();
                         });
-                    } else if (data.code == 500) {
-                        layer.msg(data.msg,{
+                    } else {
+                        layer.msg(data.message,{
                             icon:2,
                             time:1500
                         },function(){});

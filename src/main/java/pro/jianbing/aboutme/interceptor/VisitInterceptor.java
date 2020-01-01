@@ -6,12 +6,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+import pro.jianbing.aboutme.common.util.EncryptionUtil;
+import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.entity.Visit;
 import pro.jianbing.aboutme.service.UserService;
 import pro.jianbing.aboutme.service.VisitService;
-import pro.jianbing.aboutme.util.EncryptionUtil;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;

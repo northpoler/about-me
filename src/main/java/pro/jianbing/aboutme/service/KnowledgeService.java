@@ -3,10 +3,10 @@ package pro.jianbing.aboutme.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Knowledge;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.repository.KnowledgeRepositoty;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;

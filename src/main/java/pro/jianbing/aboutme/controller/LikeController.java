@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 
@@ -31,52 +32,69 @@ public class LikeController {
     }
 
     @GetMapping("count/all")
-    public Map<String,Object> getCountLikes(){
-        int sumLikes = likeService.getSumLikes();
-        Map<String, Object> result = getResult(sumLikes);
-        return result;
+    public BaseResult getCountLikes(){
+        BaseResult baseResult;
+        try {
+            int sumLikes = likeService.getSumLikes();
+            baseResult = BaseResult.success(sumLikes);
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
+        }
+        return baseResult;
     }
 
     @GetMapping("count/today")
-    public Map<String,Object> getCountLikesToday(){
-        int sumLikesToday = likeService.getSumLikesToday();
-        Map<String, Object> result = getResult(sumLikesToday);
-        return result;
+    public BaseResult getCountLikesToday(){
+        BaseResult baseResult;
+        try {
+            int sumLikesToday = likeService.getSumLikesToday();
+            baseResult = BaseResult.success(sumLikesToday);
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
+        }
+        return baseResult;
     }
 
     @GetMapping("count/personal/all")
-    public Map<String,Object> getCountPersonalLikes(HttpServletRequest request){
-        User user = (User)request.getSession().getAttribute("user");
-        int sumLikes = likeService.getSumPersonalLikes(user.getId());
-        Map<String, Object> result = getResult(sumLikes);
-        return result;
+    public BaseResult getCountPersonalLikes(HttpServletRequest request){
+        BaseResult baseResult;
+        try {
+            User user = (User)request.getSession().getAttribute("user");
+            int sumLikes = likeService.getSumPersonalLikes(user.getId());
+            baseResult = BaseResult.success(sumLikes);
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
+        }
+        return baseResult;
     }
 
     @GetMapping("count/personal/today")
-    public Map<String,Object> getCountPersonalLikesToday(HttpServletRequest request){
-        User user = (User)request.getSession().getAttribute("user");
-        int sumLikesToday = likeService.getSumPersonalLikesToday(user.getId());
-        Map<String, Object> result = getResult(sumLikesToday);
-        return result;
+    public BaseResult getCountPersonalLikesToday(HttpServletRequest request){
+        BaseResult baseResult;
+        try {
+            User user = (User)request.getSession().getAttribute("user");
+            int sumLikesToday = likeService.getSumPersonalLikesToday(user.getId());
+            baseResult = BaseResult.success(sumLikesToday);
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
+        }
+        return baseResult;
     }
 
     @GetMapping("count/users")
-    public Map<String,Object> getCountLikesByUsers(){
-        Map<String,Object> result = new HashMap<>(2);
-        List<Map<String,Integer>> countLikesByUsers = likeService.getCountLikesByUsers();
-        result.put("code",0);
-        result.put("data",countLikesByUsers);
-        return result;
-    }
-
-    private Map<String,Object> getResult(Integer data){
-        Map<String,Object> result = new HashMap<>(2);
-        if (data>0){
-            result.put("code",0);
-            result.put("data",data);
-        } else {
-            result.put("code",1);
+    public BaseResult getCountLikesByUsers(){
+        BaseResult baseResult;
+        try {
+            List<Map<String,Integer>> countLikesByUsers = likeService.getCountLikesByUsers();
+            baseResult = BaseResult.success(countLikesByUsers);
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        return result;
+        return baseResult;
     }
 }

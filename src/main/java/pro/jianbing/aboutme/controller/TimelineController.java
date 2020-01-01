@@ -6,11 +6,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.util.MailUtil;
+import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.TimelineService;
-import pro.jianbing.aboutme.util.MailUtil;
-import pro.jianbing.aboutme.util.NetworkUtil;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
@@ -47,26 +48,23 @@ public class TimelineController {
 
     @ResponseBody
     @PostMapping("insert")
-    public Map<String,Object> insert(Timeline timeline, HttpServletRequest request){
-        Map<String,Object> data = new HashMap<>(2);
+    public BaseResult insert(Timeline timeline, HttpServletRequest request){
+        BaseResult baseResult;
         try {
             timeline.setInsertTime(LocalDateTime.now());
             timeline.setIp(NetworkUtil.getIpAddress(request));
             Integer save = service.save(timeline);
             if (null != save && save>0){
                 mailUtil.sendMailTemplate(timeline.getContent());
-                data.put("code",0);
-                data.put("msg","提交成功");
+                baseResult = BaseResult.success("提交成功！");
             } else {
-                data.put("code",500);
-                data.put("msg","提交失败");
+                baseResult = BaseResult.fail("提交失败");
             }
         } catch (Exception e) {
             e.printStackTrace();
-            data.put("code",500);
-            data.put("msg","系统出错");
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 
     @GetMapping("manage")
@@ -82,28 +80,33 @@ public class TimelineController {
 
     @GetMapping("table")
     @ResponseBody
-    public Map<String,Object> getTwoCountdown(){
-        List<Timeline> timelines = service.getAllTimelines();
-        Map<String,Object> data = new HashMap<>(4);
-        data.put("code",0);
-        data.put("msg","success");
-        data.put("data",timelines);
-        data.put("count",timelines.size());
+    public Map<String,Object> getAllCountdown(){
+        Map<String,Object> data = null;
+        try {
+            List<Timeline> timelines = service.getAllTimelines();
+            data = new HashMap<>(4);
+            data.put("code",0);
+            data.put("msg","success");
+            data.put("data",timelines);
+            data.put("count",timelines.size());
+        } catch (Exception e) {
+            e.printStackTrace();
+            data.put("code",500);
+        }
         return data;
     }
 
     @PostMapping("update")
     @ResponseBody
-    public Map<String,Object> updateInfo(Timeline timeline,String field,String value){
-        Integer result = service.update(timeline,field,value);
-        Map<String,Object> data = new HashMap<>(4);
-        if (result>0){
-            data.put("code",0);
-        } else {
-            data.put("code",1);
+    public BaseResult updateInfo(Timeline timeline,String field,String value){
+        BaseResult baseResult;
+        try {
+            Integer result = service.update(timeline,field,value);
+            baseResult = result > 0?BaseResult.success("修改成功！"):BaseResult.fail("修改失败！");
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
-
-
 }

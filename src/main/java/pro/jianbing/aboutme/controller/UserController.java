@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
 
@@ -37,33 +38,28 @@ public class UserController {
 
     @PostMapping("edit")
     @ResponseBody
-    public Map<String,Object> update(User user, HttpServletRequest request){
-        Map<String,Object> data = null;
+    public BaseResult update(User user, HttpServletRequest request){
+        BaseResult baseResult;
         try {
             User userTemp = (User)request.getSession().getAttribute("user");
             User result = userService.FindUserByUsernameAndUserId(user.getUsername(),userTemp.getId());
-            data = new HashMap<>(2);
             if (null == result){
                 userTemp.setUsername(user.getUsername());
                 userTemp.setPassword(user.getPassword());
                 int save = userService.saveUser(userTemp);
                 if (1==save){
-                    data.put("code",0);
-                    data.put("msg","修改成功,已自动登录!");
+                    baseResult = BaseResult.success("修改成功,已自动登录!");
                     request.getSession().setAttribute("user",userTemp);
                 } else {
-                    data.put("code",500);
-                    data.put("msg","修改出错");
+                    baseResult = BaseResult.fail("修改出错！");
                 }
             } else {
-                data.put("code",500);
-                data.put("msg","此用户名已被注册");
+                baseResult = BaseResult.fail("此用户名已被注册！");
             }
         } catch (Exception e) {
-            data.put("code",500);
-            data.put("msg","修改出错");
+            baseResult = BaseResult.systemError();
             e.printStackTrace();
         }
-        return data;
+        return baseResult;
     }
 }

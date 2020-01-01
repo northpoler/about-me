@@ -53,14 +53,14 @@ function saveCountdown() {
             success:function(data){
                 if (data.result) {
                     end = new Date($('#countdown_date').val()+" "+$('#countdown_time').val());
-                    layer.msg(data.msg,{
+                    layer.msg(data.message,{
                         icon:1,
                         time:1000
                     },function(){
                         $("#countdown_edit_div").slideToggle();
                     });
                 } else {
-                    layer.msg(data.msg,{
+                    layer.msg(data.message,{
                         icon:2,
                         time:1500
                     },function(){});
@@ -110,7 +110,7 @@ function getWeather() {
         async: true,
         success: function (data) {
             if (data.result){
-                var weather = data.weather;
+                var weather = data.data;
                 $("#weatherPic").attr('src',weather.weatherPic);
                 $("#weatherPic").attr('src');
                 $("#weather").html(weather.weather);
@@ -148,18 +148,21 @@ function getCountdown() {
         cache: false,
         async: true,
         success: function (data) {
-            title = data.title;
-            $("#countDownTitle").html(title);
-            endTime = data.endTime;
-            if (endTime.length<6){
-                endTime[5] = 0;
+            if (data.result){
+                var dto = data.data;
+                title = dto.title;
+                $("#countDownTitle").html(title);
+                endTime = dto.endTime;
+                if (endTime.length<6){
+                    endTime[5] = 0;
+                }
+                end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
+                $("#countdown_id").val(dto.id);
+                $("#countdown_title").val(dto.title);
+                $("#countdown_date").val(dto.date);
+                $("#countdown_time").val(dto.time);
+                countdown();
             }
-            end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
-            $("#countdown_id").val(data.id);
-            $("#countdown_title").val(data.title);
-            $("#countdown_date").val(data.date);
-            $("#countdown_time").val(data.time);
-            countdown();
         }
     });
 }

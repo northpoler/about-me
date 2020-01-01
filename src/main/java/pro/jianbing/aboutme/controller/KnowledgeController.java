@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Knowledge;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.KnowledgeService;
@@ -34,31 +35,31 @@ public class KnowledgeController {
 
     @GetMapping("get")
     @ResponseBody
-    public Map<String,Object> get(Model model,HttpServletRequest request){
-        Map<String,Object> data = new HashMap<>(4);
+    public BaseResult get(Model model,HttpServletRequest request){
+        BaseResult baseResult;
         try {
             User user = (User)request.getSession().getAttribute("user");
             String knowledge = knowledgeService.getByUserId(user.getId());
             model.addAttribute("knowledge",knowledge);
-            data.put("data",knowledge);
+            baseResult = BaseResult.success("",knowledge);
         } catch (Exception e) {
             e.printStackTrace();
-            data.put("data","出错");
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 
     @PostMapping("save")
     @ResponseBody
-    public Map<String,Object> save(Knowledge knowledge,HttpServletRequest request){
-        Map<String,Object> data = new HashMap<>(4);
+    public BaseResult save(Knowledge knowledge,HttpServletRequest request){
+        BaseResult baseResult;
         try {
             Integer result = knowledgeService.save(knowledge, request);
-            data.put("code",result>0?0:1);
+            baseResult = result>0?BaseResult.success("保存成功！"):BaseResult.fail("保存失败！");
         } catch (Exception e) {
             e.printStackTrace();
-            data.put("code",1);
+            baseResult = BaseResult.systemError();
         }
-        return data;
+        return baseResult;
     }
 }
