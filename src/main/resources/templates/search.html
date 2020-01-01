@@ -38,9 +38,9 @@
         }
     </style>
 </head>
-<body style="background-color: lightgoldenrodyellow">
+<body class="me-body">
 <div th:include="head :: head"></div>
-<div class="layui-row" style="text-align: center;font-size: larger">
+<div class="layui-row me-text-center" style="font-size: larger">
     <div class="layui-row">
         <div class="layui-col-md6 layui-col-md-offset3">
             <!--搜索框-->
@@ -124,7 +124,7 @@
                     </div>
                     <div class="layui-form-item">
                         <div class="layui-inline">
-                            <label class="layui-form-label" style="text-align: center">日&nbsp;&nbsp;期：</label>
+                            <label class="layui-form-label me-text-center">日&nbsp;&nbsp;期：</label>
                             <div class="layui-input-inline">
                                 <input type="date" name="date" autocomplete="off" class="layui-input" id="countdown_date" required
                                        placeholder="倒计时的日期">
@@ -133,7 +133,7 @@
                     </div>
                     <div class="layui-form-item">
                         <div class="layui-inline">
-                            <label class="layui-form-label" style="text-align: center">时&nbsp;&nbsp;间：</label>
+                            <label class="layui-form-label me-text-center">时&nbsp;&nbsp;间：</label>
                             <div class="layui-input-inline">
                                 <input type="time" step="01" name="time" autocomplete="off" class="layui-input" id="countdown_time"
                                        required placeholder="具体时间">

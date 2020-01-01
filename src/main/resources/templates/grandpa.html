@@ -32,13 +32,13 @@
         }
     </style>
 </head>
-<body style="background-color: lightgoldenrodyellow">
+<body class="me-body">
 <div th:include="head :: head"></div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <blockquote class="layui-elem-quote" style="background-color: lightcyan">
             <p style="font-size: larger">本页面分两大模块：</p>
-            <div style="margin: 5px 0px;text-align: center">
+            <div class="me-text-center" style="margin: 5px 0px">
                 <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>
                 <a href="#part_two" class="layui-btn layui-btn-normal anchor">人生轨迹图</a>
             </div>
@@ -90,7 +90,7 @@
                 <p><span class="layui-badge-dot"></span>&nbsp;实体照片高度为70cm，象征着建国70周年；</p>
                 <p><span class="layui-badge-dot"></span>&nbsp;整图中心有个字：李；</p>
                 <p><span class="layui-badge-dot"></span>&nbsp;整图中心垂直线，从上到下依次经过标题中心、长城烽火台中心、党徽中心；</p>
-                <p style="margin: 10px;text-align: center">
+                <p class="me-text-center" style="margin: 10px">
                     <a href="javascript:void(0);" style="color: deeppink" id="show-more" onclick="showMore()">更多 >></a>
                 </p>
                 <div id="info-more" style="display: none">
@@ -169,11 +169,11 @@
             <div class="layui-card-header">
                 <i class="layui-icon layui-icon-edit"></i>  写在最后
             </div>
-            <div class="layui-card-body" id="portrait"  style="text-align: center;letter-spacing: 5px">
+            <div class="layui-card-body me-text-center" id="portrait" style="letter-spacing: 5px">
                 <img alt="肖像" th:src="@{../static/image/grandpa/portrait.jpg}" style="width: 100%"/>
             </div>
         </div>
-        <div style="text-align: center" id="like_div">
+        <div class="me-text-center" id="like_div">
             <br/>
             <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" id="like_btn">
                献 💐 <span id="like" style="color: yellow" th:text="${likes}"></span> 💐 花</button>

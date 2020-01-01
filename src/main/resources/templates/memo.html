@@ -14,11 +14,11 @@
         }
     </style>
 </head>
-<body style="background-color: lightgoldenrodyellow">
+<body class="me-body">
 <div th:include="head :: head"></div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div class="layui-row layui-col-lg12" style="text-align: center">
+        <div class="layui-row layui-col-lg12 me-text-center">
             <br><br><br>
             <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="operate">
                 编辑
@@ -41,7 +41,7 @@
                 <h3 class="layui-timeline-title" th:utext ="${memo.title}"></h3>
             </div>
             </a>
-            <div style="text-align: center" class="layui-hide link-btn">
+            <div class="layui-hide link-btn me-text-center">
                 <span th:onclick="'javascript:del('+${memo.id}+');'" style="color: grey;cursor: pointer">删除</span>
                 <span>|</span>
                 <span th:onclick="'javascript:edit('+${memo.id}+');'" style="color: grey;cursor: pointer">编辑</span>

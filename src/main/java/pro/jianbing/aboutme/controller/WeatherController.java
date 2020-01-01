@@ -6,9 +6,6 @@ import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.common.util.WeatherUtil;
 import pro.jianbing.aboutme.pojo.WeatherDto;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * @author DefaultAccount
  */
@@ -22,7 +19,7 @@ public class WeatherController {
         BaseResult baseResult;
         try {
             WeatherDto weather = WeatherUtil.getWeatherByIp(ip);
-            baseResult = null==weather?BaseResult.fail():BaseResult.success();
+            baseResult = null==weather?BaseResult.fail():BaseResult.success(weather);
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();
