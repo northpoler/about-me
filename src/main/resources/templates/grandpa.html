@@ -27,7 +27,7 @@
             }
             100% {
                 border-color: #ff0000;
-                box-shadow: 0 0 20px rgba(255,0,0,.6), inset 0 0 10px rgba(255,0,0,.4), 0 0px 0 #ff0000;
+                box-shadow: 0 0 45px rgba(255,0,0,.6), inset 0 0 15px rgba(255,0,0,.4), 0 0px 0 #ff0000;
             }
         }
     </style>
@@ -36,6 +36,16 @@
 <div th:include="head :: head"></div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
+        <blockquote class="layui-elem-quote" style="background-color: lightcyan">
+            <p style="font-size: larger">本页面分两大模块：</p>
+            <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>
+            <a href="#part_two" class="layui-btn layui-btn-normal anchor">人生轨迹图</a>
+            <p>前者主要是介绍悬挂于家中的实体图的相关细节</p>
+            <p>后者主要是介绍李贺臣同志的家谱和生平等信息</p>
+        </blockquote>
+        <fieldset class="layui-elem-field layui-field-title" style="margin-top: 30px;" id="part_one">
+            <legend>继古开今图</legend>
+        </fieldset>
         <div class="layui-card">
             <div class="layui-card-header">
                 <i class="layui-icon layui-icon-picture"></i>  全图概览
@@ -88,7 +98,7 @@
                 <p>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3、整图中心垂直线，从上到下依次经过标题中心、长城烽火台中心、党徽中心；
                 </p>
-                <p style="margin: 10px">
+                <p style="margin: 10px;text-align: center">
                     <a href="javascript:void(0);" style="color: deeppink" id="show-more" onclick="showMore()">更多 >></a>
                 </p>
                 <div id="info-more" style="display: none">
@@ -136,6 +146,9 @@
                 <img alt="徽章" th:src="@{../static/image/grandpa/dedal.jpg}" style="width: 100%"/>
             </div>
         </div>
+        <fieldset class="layui-elem-field layui-field-title" style="margin-top: 30px;" id="part_two">
+            <legend>人生轨迹图</legend>
+        </fieldset>
         <div class="layui-card">
             <div class="layui-card-header">
                 <i class="layui-icon layui-icon-tree"></i>  家族谱系
@@ -181,17 +194,17 @@
                 </button>
             </div>
         </div>
-        <div class="layui-card" id="portrait">
+        <div class="layui-card">
             <div class="layui-card-header">
                 <i class="layui-icon layui-icon-edit"></i>  写在最后
             </div>
-            <div class="layui-card-body" style="text-align: center;letter-spacing: 5px">
+            <div class="layui-card-body" id="portrait"  style="text-align: center;letter-spacing: 5px">
                 <img alt="肖像" th:src="@{../static/image/grandpa/portrait.jpg}" style="width: 100%"/>
             </div>
         </div>
         <div style="text-align: center" id="like_div">
             <br/>
-            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" id="like_btn" onclick="like()">
+            <button class="layui-btn layui-btn-lg layui-btn-radius layui-btn-normal" id="like_btn">
                献 💐 <span id="like" style="color: yellow" th:text="${likes}"></span> 💐 花</button>
             <br/><br/><br/>
         </div>
@@ -202,5 +215,5 @@
 </div>
 </body>
 <script th:src="@{../static/js/me/common.js}"></script>
-<script th:src="@{../static/js/me/grandpa.js}"></script>
+<script th:src="@{../static/js/me/zufu.js}"></script>
 </html>

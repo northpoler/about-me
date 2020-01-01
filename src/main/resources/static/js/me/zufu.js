@@ -1,5 +1,7 @@
+// 记录当次浏览页面献花的次数
 var userLikes = 0;
 
+// 添加时间线的按钮点击事件
 $("#add").click(function () {
     layer.open({
         type : 2,
@@ -78,6 +80,7 @@ $("#add").click(function () {
     });
 });
 
+// 纠错按钮点击事件
 $("#correct").click(function () {
     layer.open({
         type : 2,
@@ -156,46 +159,49 @@ $("#correct").click(function () {
     });
 });
 
+// 记录点击献花按钮的时间，以控制点击频率
 var clickTime = new Date().getTime();
 
+// 点击献花后执行的方法
 function like() {
+    userLikes++;
+    layer.msg(
+        '向李贺臣同志献了'+userLikes+'朵鲜花！',
+        {
+            offset: '100px',
+            anim: 0,
+            time: 1000,
+            icon:1
+        }
+    );
+    var test = $("#like").text();
+    var before = parseInt(test);
+    $.ajax({
+        type: 'GET',
+        dataType: 'json',
+        url: '/like/insert',
+        data: {"count": before},
+        cache: false,
+        async: true,
+        success: function (data) {
+            $("#like").text(data);
+        }
+    });
+    if ($("#username").length === 0){
+        if (userLikes===3){
+            normalLoginInquiry("是否登录以便记录、查看鲜花信息","去登陆","去注册","不了")
+        }
+    }
     var className = document.getElementById("portrait").className;
     if (className.indexOf("portrait")==-1){
         $("#portrait").addClass("portrait");
-    }
-    var now = new Date().getTime();
-    if (now-clickTime>1000){
-        userLikes++;
-        layer.msg(
-            '向李贺臣同志献了'+userLikes+'朵鲜花！',
-            {
-                offset: '100px',
-                anim: 0,
-                time: 1000,
-                icon:1
-            }
-        );
-        var test = $("#like").text();
-        var before = parseInt(test);
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/like/insert',
-            data: {"count": before},
-            cache: false,
-            async: true,
-            success: function (data) {
-                $("#like").text(data);
-            }
-        });
-        if ($("#username").length === 0){
-            if (userLikes===3){
-                normalLoginInquiry("是否登录以便记录、查看鲜花信息","去登陆","去注册","不了")
-            }
-        }
+        setTimeout(function () {
+            $("#portrait").removeClass("portrait");
+        },4800)
     }
 }
 
+// 献花按钮点击事件
 $("#like_btn").click(function(e){
     var now = new Date().getTime();
     if (now-clickTime>1000){
@@ -218,9 +224,11 @@ $("#like_btn").click(function(e){
             $(".show").remove();
         });
         clickTime = now;
+        like();
     }
-})
+});
 
+// 查看更多细节
 function showMore() {
     var text = $("#show-more").html();
     if (text.indexOf("更多")!=-1){
@@ -230,3 +238,17 @@ function showMore() {
     }
     $("#info-more").slideToggle();
 }
+
+// 为锚点跳转添加过渡动画
+$(".anchor").click(function(){
+    if (location.pathname.replace(/^\//, '') == this.pathname.replace(/^\//, '')
+        && location.hostname == this.hostname) {
+        var $target = $(this.hash);
+        $target = $target.length && $target || $('[name=' + this.hash.slice(1) + ']');
+        if ($target.length) {
+            var targetOffset = $target.offset().top;
+            $('html,body').animate({scrollTop: targetOffset},800);
+            return false;
+        }
+    }
+});
