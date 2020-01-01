@@ -72,7 +72,7 @@ function normalLoginInquiry(msg,btn1,btn2,no){
         }
         ,btnAlign: 'c'
         ,moveType: 1 //拖拽模式，0或者1
-        ,content: '<div style="padding: 50px; line-height: 22px; background-color: darkgreen; color: white; font-weight: 300;text-align:center;font-size:20px;">'+msg+'</div>'
+        ,content: '<div style="padding: 50px; line-height: 22px; background-color: lightcyan; color: deeppink; font-weight: 300;text-align:center;font-size:20px;">'+msg+'</div>'
     });
 }
 
@@ -108,7 +108,7 @@ function toLogin(target){
         title : "登录",
         area : [ '400px', '400px' ],
         shade : 0,
-        offset : "100px",
+        offset : "5px",
         shadeClose : false,
         content : "/login",
         btn:['登录'],
