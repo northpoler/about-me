@@ -40,31 +40,26 @@ function saveCountdown() {
             $("#countdown_edit_div").slideToggle();
         });
     } else {
-        $.ajax({
-            url:"/countdown/update",
-            type:'post',
-            data:{
-                'id': $('#countdown_id').val(),
-                'title':$('#countdown_title').val(),
-                'date':$('#countdown_date').val(),
-                'time':$('#countdown_time').val()
-            },
-            dataType:'json',
-            success:function(data){
-                if (data.result) {
-                    end = new Date($('#countdown_date').val()+" "+$('#countdown_time').val());
-                    layer.msg(data.message,{
-                        icon:1,
-                        time:1000
-                    },function(){
-                        $("#countdown_edit_div").slideToggle();
-                    });
-                } else {
-                    layer.msg(data.message,{
-                        icon:2,
-                        time:1500
-                    },function(){});
-                }
+        var data = {
+            'id': $('#countdown_id').val(),
+            'title':$('#countdown_title').val(),
+            'date':$('#countdown_date').val(),
+            'time':$('#countdown_time').val()
+        };
+        asyncPost('/countdown/update',data,function (data) {
+            if (data.result) {
+                end = new Date($('#countdown_date').val()+" "+$('#countdown_time').val());
+                layer.msg(data.message,{
+                    icon:1,
+                    time:1000
+                },function(){
+                    $("#countdown_edit_div").slideToggle();
+                });
+            } else {
+                layer.msg(data.message,{
+                    icon:2,
+                    time:1500
+                },function(){});
             }
         });
     }
@@ -76,17 +71,7 @@ function check(){
         alertMsg("你还没有输入关键词~~");
         return false;
     }
-    $.ajax({
-        type: 'POST',
-        dataType: 'json',
-        url: '/keyword/insert',
-        data: {"keyword": keyword},
-        cache: false,
-        async: true,
-        success: function () {
-            $("#searchBody").val();
-        }
-    });
+    asyncPost('/keyword/insert',{"keyword": keyword},$("#searchBody").val());
     return true;
 }
 
@@ -105,34 +90,26 @@ window.onload = function () {
 };
 
 function getWeather() {
-    $.ajax({
-        type: 'POST',
-        dataType: 'json',
-        url: '/weather/get',
-        data: {"ip":returnCitySN["cip"]},
-        cache: false,
-        async: true,
-        success: function (data) {
-            if (data.result){
-                var weather = data.data;
-                $("#weatherPic").attr('src',weather.weatherPic);
-                $("#weatherPic").attr('src');
-                $("#weather").html(weather.weather);
-                $("#temperature").html(weather.temperature);
-                $("#city").html(weather.city);
-                $("#publish_time").html(weather.publishTime + "【" + weather.timeZone + "】");
-                $("#location").html(weather.country + " • " + weather.province + " • " + weather.city);
-                $("#longitude").html(weather.longitude);
-                $("#latitude").html(weather.latitude);
-                $("#feeling").html(weather.feeling);
-                $("#relative_humidity").html(weather.relativeHumidity);
-                $("#precipitation").html(weather.precipitation);
-                $("#visibility").html(weather.visibility);
-                $("#atmos").html(weather.atmos);
-                $("#wind_direction").html(weather.windDirection + "【" + weather.windAngle + "】");
-                $("#wind_force").html(weather.windForce + "【"+ weather.windSpeed + "】");
-                $("#weather_div").removeClass("layui-hide")
-            }
+    asyncPost('/weather/get',{"ip":returnCitySN["cip"]},function (data) {
+        if (data.result){
+            var weather = data.data;
+            $("#weatherPic").attr('src',weather.weatherPic);
+            $("#weatherPic").attr('src');
+            $("#weather").html(weather.weather);
+            $("#temperature").html(weather.temperature);
+            $("#city").html(weather.city);
+            $("#publish_time").html(weather.publishTime + "【" + weather.timeZone + "】");
+            $("#location").html(weather.country + " • " + weather.province + " • " + weather.city);
+            $("#longitude").html(weather.longitude);
+            $("#latitude").html(weather.latitude);
+            $("#feeling").html(weather.feeling);
+            $("#relative_humidity").html(weather.relativeHumidity);
+            $("#precipitation").html(weather.precipitation);
+            $("#visibility").html(weather.visibility);
+            $("#atmos").html(weather.atmos);
+            $("#wind_direction").html(weather.windDirection + "【" + weather.windAngle + "】");
+            $("#wind_force").html(weather.windForce + "【"+ weather.windSpeed + "】");
+            $("#weather_div").removeClass("layui-hide")
         }
     });
     // 每三分钟更新
@@ -144,29 +121,21 @@ function showMoreWeather() {
 }
 
 function getCountdown() {
-    $.ajax({
-        type: 'GET',
-        dataType: 'json',
-        url: '/countdown/get',
-        data: {},
-        cache: false,
-        async: true,
-        success: function (data) {
-            if (data.result){
-                var dto = data.data;
-                title = dto.title;
-                $("#countDownTitle").html(title);
-                endTime = dto.endTime;
-                if (endTime.length<6){
-                    endTime[5] = 0;
-                }
-                end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
-                $("#countdown_id").val(dto.id);
-                $("#countdown_title").val(dto.title);
-                $("#countdown_date").val(dto.date);
-                $("#countdown_time").val(dto.time);
-                countdown();
+    asyncGet('/countdown/get',{},function (data) {
+        if (data.result){
+            var dto = data.data;
+            title = dto.title;
+            $("#countDownTitle").html(title);
+            endTime = dto.endTime;
+            if (endTime.length<6){
+                endTime[5] = 0;
             }
+            end = new Date(endTime[0],endTime[1]-1,endTime[2],endTime[3],endTime[4],endTime[5]);
+            $("#countdown_id").val(dto.id);
+            $("#countdown_title").val(dto.title);
+            $("#countdown_date").val(dto.date);
+            $("#countdown_time").val(dto.time);
+            countdown();
         }
     });
 }

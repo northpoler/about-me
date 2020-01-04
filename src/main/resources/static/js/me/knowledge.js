@@ -284,19 +284,11 @@ $(function () {
     if ($("#username").length === 0){
         $("#editor").html("<p>在这里，可以随时记录<b>任何你想记录的信息</b> .......</p>");
     } else {
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/knowledge/get',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                if (data.result){
-                    $("#editor").html(data.data);
-                }
+        asyncGet('/knowledge/get',{},function (data) {
+            if (data.result){
+                $("#editor").html(data.data);
             }
-        });
+        })
     }
 });
 
@@ -331,26 +323,14 @@ $("#save").click(function () {
 
 //保存
 function save() {
-    $.ajax({
-        type: 'POST',
-        dataType: 'json',
-        url: '/knowledge/save',
-        data: {
-            content:editor.txt.html()
-        },
-        cache: false,
-        async: true,
-        success: function (data) {
-            if (data.result){
-                layer.msg(data.message, {offset: '200px', anim: 0, time: 666});
-            } else {
-                alertMsg(data.message);
-            }
+    asyncPost('/knowledge/save',{content:editor.txt.html()},function (data) {
+        if (data.result){
+            layer.msg(data.message, {offset: '200px', anim: 0, time: 666});
+        } else {
+            alertMsg(data.message);
         }
     });
 }
-
-
 
 /*// 禁用编辑功能
 editor.$textElem.attr('contenteditable', false)

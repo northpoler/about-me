@@ -218,102 +218,61 @@
         }
         app.currentIndex = -1;
     }
-
     var sumLikes = 0;
     var sumPersonalLikes = 0;
     var sumLikesToday = 0;
     var sumPersonalLikesToday = 0;
-
     //加载首页数据
     $(function () {
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/like/count/all',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                if (data.result) {
-                    sumLikes = data.data;
-                    NumAutoPlusAnimation("sumLikes", {
-                        time: 6000,
-                        num: data.data,
-                        regulator: 32,
-                        start: 0
-                    });
-                }
+        asyncGet('/like/count/all',{},function (data) {
+            if (data.result) {
+                sumLikes = data.data;
+                NumAutoPlusAnimation("sumLikes", {
+                    time: 6000,
+                    num: data.data,
+                    regulator: 32,
+                    start: 0
+                });
             }
         });
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/like/count/personal/all',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                if (data.result) {
-                    sumPersonalLikes = data.data;
-                    NumAutoPlusAnimation("sumPersonalLikes", {
-                        time: 3000,
-                        num: sumPersonalLikes,
-                        regulator: 32,
-                        start: 0
-                    });
-                }
+        asyncGet('/like/count/personal/all',{},function (data) {
+            if (data.result) {
+                sumPersonalLikes = data.data;
+                NumAutoPlusAnimation("sumPersonalLikes", {
+                    time: 3000,
+                    num: sumPersonalLikes,
+                    regulator: 32,
+                    start: 0
+                });
             }
         });
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/like/count/today',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                if (data.result) {
-                    sumLikesToday = data.data;
-                    $("#sumLikesToday").html(sumLikesToday);
-                }
+        asyncGet('/like/count/today',{},function (data) {
+            if (data.result) {
+                sumLikesToday = data.data;
+                $("#sumLikesToday").html(sumLikesToday);
             }
         });
-        $.ajax({
-            type: 'GET',
-            dataType: 'json',
-            url: '/like/count/personal/today',
-            data: {},
-            cache: false,
-            async: true,
-            success: function (data) {
-                if (data.result) {
-                    sumPersonalLikesToday = data.data;
-                    $("#sumPersonalLikesToday").html(sumPersonalLikesToday);
-                }
+        asyncGet('/like/count/personal/today',{},function (data) {
+            if (data.result) {
+                sumPersonalLikesToday = data.data;
+                $("#sumPersonalLikesToday").html(sumPersonalLikesToday);
             }
         });
     });
-
     //数字自增到某一值动画参数（目标元素,自定义配置）
     function NumAutoPlusAnimation(targetEle, options) {
-
         /*可以自己改造下传入的参数，按照自己的需求和喜好封装该函数*/
         //不传配置就把它绑定在相应html元素的data-xxxx属性上吧
         options = options || {};
-
         var $this = document.getElementById(targetEle),
             time = options.time || $this.data('time'), //总时间--毫秒为单位
             finalNum = options.num || $this.data('value'), //要显示的真实数值
             regulator = options.regulator || 100, //调速器，改变regulator的数值可以调节数字改变的速度
-
             step = finalNum / (time / regulator),/*每30ms增加的数值--*/
             count = options.start, //计数器
             initial = 0;
-
         var timer = setInterval(function () {
-
             count = count + step;
-
             if (count >= finalNum) {
                 clearInterval(timer);
                 count = finalNum;
@@ -322,9 +281,7 @@
             //避免调用text函数，提高DOM性能
             var t = Math.floor(count);
             if (t == initial) return;
-
             initial = t;
-
             $this.innerHTML = initial;
         }, 30);
     }
@@ -341,22 +298,14 @@
     // 定时获取最新的点赞数和搜索数（总数）
     function getNewestData(url, source, target) {
         setInterval(function () {
-            $.ajax({
-                type: 'GET',
-                dataType: 'json',
-                url: url,
-                data: {},
-                cache: false,
-                async: true,
-                success: function (data) {
-                    if (data.result && data.data !== source) {
-                        NumAutoPlusAnimation(target, {
-                            time: 1000,
-                            num: data.data,
-                            regulator: 32,
-                            start: source
-                        });
-                    }
+            asyncGet(url,{},function (data) {
+                if (data.result && data.data !== source) {
+                    NumAutoPlusAnimation(target, {
+                        time: 1000,
+                        num: data.data,
+                        regulator: 32,
+                        start: source
+                    });
                 }
             });
         }, 3000)
@@ -365,20 +314,12 @@
     // 定时获取最新的点赞数和搜索数(当天)
     function getNewestDataToday(url, target) {
         setInterval(function () {
-            $.ajax({
-                type: 'GET',
-                dataType: 'json',
-                url: url,
-                data: {},
-                cache: false,
-                async: true,
-                success: function (data) {
-                    if (data.result) {
-                        if (target == 'sumLikesToday') {
-                            $("#sumLikesToday").html(data.data);
-                        } else {
-                            $("#sumPersonalLikesToday").html(data.data);
-                        }
+            asyncGet(url,{},function (data) {
+                if (data.result) {
+                    if (target == 'sumLikesToday') {
+                        $("#sumLikesToday").html(data.data);
+                    } else {
+                        $("#sumPersonalLikesToday").html(data.data);
                     }
                 }
             });

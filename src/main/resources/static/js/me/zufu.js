@@ -28,31 +28,26 @@ $("#add").click(function () {
                 return false;
             }
             var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-            $.ajax({
-                url:"/timeline/insert",
-                type:'post',
-                data:{
-                    'occurTime':body.find('#occurTime').val(),
-                    'content':body.find('#content').val(),
-                    'contributor':body.find('#contributor').val(),
-                    'mark':'2'
-                },
-                dataType:'json',
-                success:function(data){
-                    if (data.result) {
-                        layer.msg(data.message,{
-                            offset: '10px',
-                            icon:1,
-                            time:1000
-                        },function(){
-                            parent.layer.close(index)
-                        });
-                    } else {
-                        layer.msg(data.message,{
-                            icon:2,
-                            time:1500
-                        },function(){});
-                    }
+            var data = {
+                'occurTime':body.find('#occurTime').val(),
+                'content':body.find('#content').val(),
+                'contributor':body.find('#contributor').val(),
+                'mark':'2'
+            };
+            asyncPost('/timeline/insert',data,function (data) {
+                if (data.result) {
+                    layer.msg(data.message,{
+                        offset: '10px',
+                        icon:1,
+                        time:1000
+                    },function(){
+                        parent.layer.close(index)
+                    });
+                } else {
+                    layer.msg(data.message,{
+                        icon:2,
+                        time:1500
+                    },function(){});
                 }
             });
         },
@@ -107,30 +102,25 @@ $("#correct").click(function () {
             }
             var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
             console.log(body.find('#classId').val());
-            $.ajax({
-                url:"/timeline/insert",
-                type:'post',
-                data:{
-                    'content':body.find('#content').val(),
-                    'contributor':body.find('#contributor').val(),
-                    'mark':'3'
-                },
-                dataType:'json',
-                success:function(data){
-                    if (data.result) {
-                        layer.msg(data.message,{
-                            offset: '10px',
-                            icon:1,
-                            time:1000
-                        },function(){
-                            parent.layer.close(index)
-                        });
-                    } else {
-                        layer.msg(data.message,{
-                            icon:2,
-                            time:1500
-                        },function(){});
-                    }
+            var data = {
+                'content':body.find('#content').val(),
+                'contributor':body.find('#contributor').val(),
+                'mark':'3'
+            };
+            asyncPost('/timeline/insert',data,function (data) {
+                if (data.result) {
+                    layer.msg(data.message,{
+                        offset: '10px',
+                        icon:1,
+                        time:1000
+                    },function(){
+                        parent.layer.close(index)
+                    });
+                } else {
+                    layer.msg(data.message,{
+                        icon:2,
+                        time:1500
+                    },function(){});
                 }
             });
         },
@@ -175,17 +165,9 @@ function like() {
     );
     var test = $("#like").text();
     var before = parseInt(test);
-    $.ajax({
-        type: 'GET',
-        dataType: 'json',
-        url: '/like/insert',
-        data: {"count": before},
-        cache: false,
-        async: true,
-        success: function (data) {
-            if (data.result){
-                $("#like").text(data.data);
-            }
+    asyncGet('/like/insert',{"count": before},function (data) {
+        if (data.result){
+            $("#like").text(data.data);
         }
     });
     if ($("#username").length === 0){

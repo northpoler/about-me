@@ -22,25 +22,20 @@ $("#personalCenter").click(function () {
 
 $("#logout").click(function () {
     dangerInquiry("确定注销吗",'去意已决', '我再考虑一下',false,function () {
-        $.ajax({
-            url:"/logout",
-            type:'get',
-            dataType:'json',
-            success:function(data){
-                if (data.result) {
-                    layer.msg(data.message,{
-                        icon:1,
-                        time:1500
-                    },function(){
-                        parent.layer.close(index)
-                    });
-                    location.reload();
-                } else {
-                    layer.msg(data.message,{
-                        icon:2,
-                        time:1500
-                    },function(){});
-                }
+        asyncGet("/logout",{},function (data) {
+            if (data.result) {
+                layer.msg(data.message,{
+                    icon:1,
+                    time:1500
+                },function(){
+                    parent.layer.close(index)
+                });
+                location.reload();
+            } else {
+                layer.msg(data.message,{
+                    icon:2,
+                    time:1500
+                },function(){});
             }
         });
     });
@@ -103,35 +98,30 @@ function toRegister(target) {
                 return false;
             }
 
-            $.ajax({
-                url:"/register/save",
-                type:'post',
-                data:{
-                    'username':username,
-                    'password':password,
-                    'phone':phone
-                },
-                dataType:'json',
-                success:function(data){
-                    if (data.result) {
-                        layer.msg(data.message,{
-                            icon:1,
-                            time:1500
-                        },function(){
-                            parent.layer.close(index)
-                            if (target) {
-                                location.reload();
-                                open(target);
-                            } else {
-                                location.reload();
-                            }
-                        });
-                    } else {
-                        layer.msg(data.message,{
-                            icon:2,
-                            time:1500
-                        },function(){});
-                    }
+            var data = {
+                'username':username,
+                'password':password,
+                'phone':phone
+            };
+            asyncPost('/register/save',data,function (data) {
+                if (data.result) {
+                    layer.msg(data.message,{
+                        icon:1,
+                        time:1500
+                    },function(){
+                        parent.layer.close(index)
+                        if (target) {
+                            location.reload();
+                            open(target);
+                        } else {
+                            location.reload();
+                        }
+                    });
+                } else {
+                    layer.msg(data.message,{
+                        icon:2,
+                        time:1500
+                    },function(){});
                 }
             });
         },
@@ -162,29 +152,24 @@ function changeInfo() {
             var body = top.layer.getChildFrame('body',index);
             var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
             console.log(body.find('#classId').val());
-            $.ajax({
-                url:"/user/edit",
-                type:'post',
-                data:{
-                    'username':body.find('#username').val(),
-                    'password':body.find('#password').val()
-                },
-                dataType:'json',
-                success:function(data){
-                    if (data.result) {
-                        layer.msg(data.message,{
-                            icon:1,
-                            time:1500
-                        },function(){
-                            parent.layer.close(index)
-                            location.reload();
-                        });
-                    } else {
-                        layer.msg(data.message,{
-                            icon:2,
-                            time:1500
-                        },function(){});
-                    }
+            var data = {
+                'username':body.find('#username').val(),
+                'password':body.find('#password').val()
+            };
+            asyncPost('/user/edit',data,function (data) {
+                if (data.result) {
+                    layer.msg(data.message,{
+                        icon:1,
+                        time:1500
+                    },function(){
+                        parent.layer.close(index)
+                        location.reload();
+                    });
+                } else {
+                    layer.msg(data.message,{
+                        icon:2,
+                        time:1500
+                    },function(){});
                 }
             });
         },
@@ -197,7 +182,6 @@ function changeInfo() {
         },
         end : function() {
             layer.closeAll();
-            /*location.reload();*/
         }
     });
 }

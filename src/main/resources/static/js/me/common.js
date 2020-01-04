@@ -158,3 +158,44 @@ function toLogin(target){
         }
     });
 }
+
+function asyncPost(url,data,callback) {
+    $.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: url,
+        data: data,
+        cache: false,
+        async: true,
+        success: function (data) {
+            callback(data);
+        }
+    });
+}
+
+function asyncGet(url,data,callback) {
+    $.ajax({
+        type: 'GET',
+        dataType: 'json',
+        url: url,
+        data: data,
+        cache: false,
+        async: true,
+        success: function (data) {
+            callback(data);
+        }
+    });
+}
+
+function asyncDelete(url,callback) {
+    $.ajax({
+        type: 'GET',
+        dataType: 'json',
+        url: url,
+        cache: false,
+        async: true,
+        success: function (data) {
+            callback(data);
+        }
+    });
+}

@@ -78,27 +78,20 @@
                     var value = obj.value //得到修改后的值
                         ,data = obj.data //得到所在行所有键值
                         ,field = obj.field; //得到字段
-                    $.ajax({
-                        type: 'POST',
-                        dataType: 'json',
-                        url: '/timeline/update',
-                        data: {
-                            "id":data.id,
-                            "field":field,
-                            "value":value
-                        },
-                        cache: false,
-                        async: true,
-                        success: function (data) {
-                            if (data.result){
-                                layer.msg(data.message,{
-                                    offset: '10px',
-                                    icon:1,
-                                    time:1000
-                                },function(){
-                                    parent.layer.close(index)
-                                });
-                            }
+                    var data = {
+                        "id":data.id,
+                        "field":field,
+                        "value":value
+                    };
+                    asyncPost('/timeline/update',data,function (data) {
+                        if (data.result){
+                            layer.msg(data.message,{
+                                offset: '10px',
+                                icon:1,
+                                time:1000
+                            },function(){
+                                parent.layer.close(index)
+                            });
                         }
                     });
                 }
@@ -118,27 +111,16 @@
             //console.log(obj)
             if(obj.event === 'del'){
                 layer.confirm('真的删除行么', function(index){
-                    $.ajax({
-                        type: 'POST',
-                        dataType: 'json',
-                        url: '/timeline/delete',
-                        data: {
-                            "id":data.id
-                        },
-                        cache: false,
-                        async: true,
-                        success: function (data) {
-                            if (data.result){
-                                layer.msg("删除成功！");
-                            } else {
-                                layer.msg("删除失败！");
-                            }
-                            obj.del();
-                            layer.close(index);
+                    asyncPost('/timeline/delete',{"id":data.id},function (data) {
+                        if (data.result){
+                            layer.msg("删除成功！");
+                        } else {
+                            layer.msg("删除失败！");
                         }
+                        obj.del();
+                        layer.close(index);
                     });
-
-                });
+                                    });
             } else if(obj.event === 'edit'){
                 layer.prompt({
                     formType: 2
