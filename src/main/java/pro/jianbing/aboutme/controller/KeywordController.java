@@ -57,13 +57,9 @@ public class KeywordController {
         Map<String,Object> result = new HashMap<>();
         try {
             List<String> cueWords = CueWordUtil.getCueWords(keywords);
-            if (null!=cueWords && cueWords.size()>0){
-                result.put("code",0);
-                result.put("type","success");
-                result.put("content",cueWords);
-            } else {
-                result.put("code",500);
-            }
+            result.put("code",0);
+            result.put("type","success");
+            result.put("content",cueWords);
         } catch (Exception e) {
             e.printStackTrace();
             result.put("code",500);

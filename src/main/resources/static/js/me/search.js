@@ -71,7 +71,9 @@ function check(){
         alertMsg("你还没有输入关键词~~");
         return false;
     }
-    asyncPost('/keyword/insert',{"keyword": keyword},$("#searchBody").val());
+    asyncPost('/keyword/insert',{"keyword": keyword},function () {
+        $("#searchBody").val("");
+    });
     return true;
 }
 
@@ -181,4 +183,8 @@ function showMoreLinks() {
         $("#more_link").addClass("layui-icon-more-vertical");
         $("#more_link").removeClass("layui-icon-more");
     }
+}
+
+function submitForm(keyword) {
+    $("#searchForm").submit();
 }

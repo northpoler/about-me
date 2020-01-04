@@ -35,7 +35,7 @@ layui.define(['jquery', 'laytpl', 'layer'], function (e) {
         };
     job.prototype.config = {
         text: {
-            none: "无数据",
+            /*none: "无数据",*/
             /*loading: "加载中"*/
         },
         response: {
@@ -78,7 +78,7 @@ layui.define(['jquery', 'laytpl', 'layer'], function (e) {
             contentType: 'text/json,charset=utf-8',
             dataType: "json",
             beforeSend: function () {
-                _container.addClass(container_focus), _dom.html(['<dd style="text-align: center" autocomplete-load>', _config.text.loading, '</dd>'].join(''))
+                /*_container.addClass(container_focus), _dom.html(['<dd style="text-align: center" autocomplete-load>', _config.text.loading, '</dd>'].join(''))*/
             },
             success: function (resp) {
                 return 0 != eval('resp.' + _config.response.code) ? layer.msg(eval('resp.' + _config.response.data)) : _config.data = eval('resp.' + _config.response.data), _self.renderData(_config.data)
