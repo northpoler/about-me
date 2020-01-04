@@ -4,3 +4,7 @@
 .me-text-center {
     text-align: center;
 }
+.me-tip {
+    color: gray;
+    font-size: small;
+}

@@ -30,6 +30,12 @@
                 box-shadow: 0 0 45px rgba(255,0,0,.6), inset 0 0 15px rgba(255,0,0,.4), 0 0px 0 #ff0000;
             }
         }
+        img {
+            width: 100%;
+        }
+        .layui-field-title {
+            margin-top: 30px;
+        }
     </style>
 </head>
 <body class="me-body">
@@ -44,9 +50,9 @@
             </div>
             <p><span class="layui-badge-dot"></span>&nbsp;前者主要是介绍悬挂于家中的实体图的相关细节</p>
             <p><span class="layui-badge-dot"></span>&nbsp;后者主要是介绍李贺臣同志的家谱和生平等信息</p>
-            <p style="color: grey;font-size: small">点击上方的按钮，可以快速跳转到指定位置</p>
+            <p class="me-tip">点击上方的按钮，可以快速跳转到指定位置</p>
         </blockquote>
-        <fieldset class="layui-elem-field layui-field-title" style="margin-top: 30px;" id="part_one">
+        <fieldset class="layui-elem-field layui-field-title" id="part_one">
             <legend>继古开今图</legend>
         </fieldset>
         <div class="layui-card">
@@ -54,12 +60,12 @@
                 <i class="layui-icon layui-icon-picture"></i>  全图概览
             </div>
             <div class="layui-card-body">
-                <img alt="《继古开今图》" th:src="@{../static/image/grandpa/grandpa.jpg}" style="width: 100%"/>
+                <img alt="《继古开今图》" th:src="@{../static/image/grandpa/grandpa.jpg}"/>
                 <br/><br/>
                 <a th:href="@{../static/image/grandpa/li_hechen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
                     <span style="text-decoration: underline;color: deeppink">点击下载原图</span></a>
                 <br>
-                <p style="color: grey;font-size: small">若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可</p>
+                <p class="me-tip">若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可</p>
             </div>
         </div>
         <div class="layui-card">
@@ -85,7 +91,7 @@
                 <i class="layui-icon layui-icon-layouts"></i>  构图说明
             </div>
             <div class="layui-card-body">
-                <img alt="70周年活动标识" th:src="@{../static/image/grandpa/ruler.jpg}" style="width: 100%"/>
+                <img alt="70周年活动标识" th:src="@{../static/image/grandpa/ruler.jpg}"/>
                 <br><br>
                 <p><span class="layui-badge-dot"></span>&nbsp;实体照片高度为70cm，象征着建国70周年；</p>
                 <p><span class="layui-badge-dot"></span>&nbsp;整图中心有个字：李；</p>
@@ -101,7 +107,7 @@
                     <p><span class="layui-badge-dot"></span>&nbsp;五星红旗最大星和党徽下沿在同一水平线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;李贺臣肖像中心和毛泽东名讳下沿在同一水平线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;毛泽东肖像中心和右下角主题里李贺臣的“李”在同一垂直线。</p>
-                    <i style="color: grey;font-size: small">其他细节不一一指出。</i>
+                    <p class="me-tip">其他细节不一一指出。</p>
                 </div>
             </div>
         </div>
@@ -110,15 +116,14 @@
                 <i class="layui-icon layui-icon-search"></i>  细节说明
             </div>
             <div class="layui-card-body">
-
                 <p><span class="layui-badge-dot"></span>&nbsp;《继古开今》图的左上角是“庆祝中华人民共和国成立70周年活动标识”。</p>
-                <img alt="70周年活动标识" th:src="@{../static/image/grandpa/symbol.jpg}" style="width: 100%"/>
-                <p><span class="layui-badge-dot"></span>&nbsp;李贺臣同志胸前有两个徽章，左边是“抗美援越纪念章”，右边是“党员徽章”。
-                    <br><i style="color: grey;font-size: small">为后期添加，用以纪念李贺臣同志的事迹。</i></p>
-                <img alt="徽章" th:src="@{../static/image/grandpa/dedal.jpg}" style="width: 100%"/>
+                <img alt="70周年活动标识" th:src="@{../static/image/grandpa/symbol.jpg}"/>
+                <p><span class="layui-badge-dot"></span>&nbsp;李贺臣同志胸前有两个徽章，左边是“抗美援越纪念章”，右边是“党员徽章”。</p>
+                <p class="me-tip">为后期添加，用以纪念李贺臣同志的事迹。</p>
+                <img alt="徽章" th:src="@{../static/image/grandpa/dedal.jpg}"/>
             </div>
         </div>
-        <fieldset class="layui-elem-field layui-field-title" style="margin-top: 30px;" id="part_two">
+        <fieldset class="layui-elem-field layui-field-title" id="part_two">
             <legend>人生轨迹图</legend>
         </fieldset>
         <div class="layui-card">
@@ -126,7 +131,7 @@
                 <i class="layui-icon layui-icon-tree"></i>  家族谱系
             </div>
             <div class="layui-card-body">
-                <img alt="《世系图》" th:src="@{../static/image/grandpa/shixi.png}" style="width: 100%"/>
+                <img alt="《世系图》" th:src="@{../static/image/grandpa/shixi.png}"/>
                 <br/>
                 <span class="layui-badge-dot"></span>
                 本世系图自【李贺臣】起始，位于世系顶部正中。正下方为嫡长子，嫡长子右侧为余子，左侧为其女，按诞辰次序向两边降序排列。伴侣均录入本谱，位于左侧。
@@ -138,9 +143,9 @@
             </div>
             <div class="layui-card-body">
                 单人照 <i class="layui-icon layui-icon-friends"></i><br/>
-                <img alt="《单人照》" th:src="@{../static/image/grandpa/lifephoto01.jpg}" style="width: 100%"/>
+                <img alt="《单人照》" th:src="@{../static/image/grandpa/lifephoto01.jpg}"/>
                 <br/><br/>合照 <i class="layui-icon layui-icon-group"></i><br/>
-                <img alt="《合照》" th:src="@{../static/image/grandpa/lifephoto02.jpg}" style="width: 100%"/>
+                <img alt="《合照》" th:src="@{../static/image/grandpa/lifephoto02.jpg}"/>
             </div>
         </div>
         <div class="layui-card">
@@ -170,7 +175,7 @@
                 <i class="layui-icon layui-icon-edit"></i>  写在最后
             </div>
             <div class="layui-card-body me-text-center" id="portrait" style="letter-spacing: 5px">
-                <img alt="肖像" th:src="@{../static/image/grandpa/portrait.jpg}" style="width: 100%"/>
+                <img alt="肖像" th:src="@{../static/image/grandpa/portrait.jpg}"/>
             </div>
         </div>
         <div class="me-text-center" id="like_div">
@@ -180,7 +185,7 @@
             <br/><br/><br/>
         </div>
         <div>
-            <img alt="底图" th:src="@{../static/image/grandpa/underground.jpg}" style="width: 100%"/>
+            <img alt="底图" th:src="@{../static/image/grandpa/underground.jpg}"/>
         </div>
     </div>
 </div>

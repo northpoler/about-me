@@ -209,3 +209,35 @@ function showMoreLinks() {
         $("#more_link").removeClass("layui-icon-more");
     }
 }
+
+class jsonpDemo {
+    constructor() {
+        this.search = searchBody;
+        this.list = list;
+        this.body = document.body;
+        this.init();
+    };
+    init(){
+        this.watchInput();
+    };
+    watchInput() {
+        this.search.onkeyup = () => {
+            if(this.search.value.length == 0){
+                this.list.innerHTML='';
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = "http://www.baidu.com/su?wd="+this.search.value+"&cb=jsonp.showMsg";
+            this.body.appendChild(script);
+            this.body.removeChild(script);
+        }
+    };
+    showMsg(msg) {
+        var str = '';
+        msg.s.forEach((item,i)=>{
+            str += '<li>' + item + '</li>';
+    });
+        this.list.innerHTML = str;
+    }
+}
+const jsonp = new jsonpDemo();

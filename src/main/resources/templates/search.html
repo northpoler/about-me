@@ -5,6 +5,8 @@
     <meta name="keywords" content="李建兵,建兵,搜索,个人网站,李建兵个人网站">
     <meta name="description" content="李建兵的个人网站">
     <meta th:include="top :: top"/>
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.2/themes/smoothness/jquery-ui.css" />
+    <script src="http://code.jquery.com/ui/1.10.2/jquery-ui.js"></script>
     <style>
         #links ul {
             width: 100%;
@@ -64,6 +66,7 @@
                             <i class="layui-icon layui-icon-search"></i>
                         </button>
                     </div>
+                    <ul id="list" class="kk"></ul>
                 </div>
             </form>
             <!--常用链接-->
@@ -114,7 +117,7 @@
                     <input type="number" class="layui-hide" id="countdown_id" name="id">
                     <div class="layui-form-item">
                         <div class="layui-inline">
-                            <label class="layui-form-label" style="text-align: center">标&nbsp;&nbsp;题：</label>
+                            <label class="layui-form-label me-text-center">标&nbsp;&nbsp;题：</label>
                             <div class="layui-input-inline">
                                 <input type="text" id="countdown_title" name="title" autocomplete="off"
                                        oninput="changeTitle()"
