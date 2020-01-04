@@ -3,6 +3,7 @@ package pro.jianbing.aboutme.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.util.CueWordUtil;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Keyword;
 import pro.jianbing.aboutme.entity.User;
@@ -10,6 +11,9 @@ import pro.jianbing.aboutme.service.KeywordService;
 
 import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author DefaultAccount
@@ -46,5 +50,24 @@ public class KeywordController {
             baseResult = BaseResult.systemError();
         }
         return baseResult;
+    }
+
+    @GetMapping("tips")
+    public Map<String,Object> getCueWords(String keywords){
+        Map<String,Object> result = new HashMap<>();
+        try {
+            List<String> cueWords = CueWordUtil.getCueWords(keywords);
+            if (null!=cueWords && cueWords.size()>0){
+                result.put("code",0);
+                result.put("type","success");
+                result.put("content",cueWords);
+            } else {
+                result.put("code",500);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            result.put("code",500);
+        }
+        return result;
     }
 }
