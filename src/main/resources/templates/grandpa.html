@@ -43,6 +43,16 @@
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <blockquote class="layui-elem-quote" style="background-color: lightcyan">
+            您好，
+            <span th:if="${session.user}!=null">
+                <span th:text="${session.user.username}"></span>
+            </span>
+            <span th:if="${session.user}==null">
+                <span>朋友</span>
+            </span>！您是第
+            <span th:text="${visitCounts}" style="font-weight: bold"></span>
+            位访客。
+            <hr class="layui-bg-orange">
             <p style="font-size: larger">本页面分两大模块：</p>
             <div class="me-text-center" style="margin: 5px 0px">
                 <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>

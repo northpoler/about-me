@@ -28,4 +28,8 @@ public class VisitService {
         }
         return 0;
     }
+
+    public Long getCountByTarget(String target) {
+        return visitRepositoty.countByTarget(target);
+    }
 }

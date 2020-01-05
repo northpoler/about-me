@@ -10,4 +10,6 @@ import pro.jianbing.aboutme.entity.Visit;
  */
 @Repository("visitRepository")
 public interface VisitRepositoty extends JpaRepository<Visit,Long> {
+
+    long countByTarget(String target);
 }
