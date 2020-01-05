@@ -14,6 +14,7 @@ public final class CueWordUtil {
     private static final String URL = "https://www.baidu.com/su?cb=result&wd=";
     public static List<String> getCueWords(String keyword){
         try {
+            keyword = keyword.replaceAll(" ","+");
             String result = HttpUtil.doGet(URL+keyword);
             result = result.replace("result(", "");
             result = result.substring(0,result.lastIndexOf(")"));
