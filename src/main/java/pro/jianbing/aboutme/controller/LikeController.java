@@ -9,7 +9,6 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 

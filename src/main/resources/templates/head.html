@@ -7,12 +7,13 @@
             <a type="button" id="registerBtn">注册</a>
         </div>
         <div th:if="${session.user}!=null">
-            <a type="button" id="username" onclick="changeInfo()" th:text="${session.user.username}"></a>
+            <a type="button" id="username" th:text="${session.user.username}"></a>
             <a type="button" id="personalCenter">个人中心</a>
             <a type="button" id="logout">注销</a>
         </div>
     </div>
     <script th:src="@{../static/js/me/common.js}"></script>
     <script th:src="@{../static/js/me/top.js}"></script>
+    <script th:src="@{../static/js/common/md5.js}"></script>
 </div>
 </html>

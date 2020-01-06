@@ -6,19 +6,23 @@
 </head>
 <body class="layui-layout-body" style="background-color: lightcyan">
 <form class="layui-form" action="">
+    <input type="hidden" th:value="${variantSalt}" name="variantSalt" id="variantSalt"/>
+    <input type="hidden" th:value="${staticSalt}" name="staticSalt" id="staticSalt"/>
     <h1 class="me-text-center" style="margin-top: 20px;margin-bottom: 20px">
         欢迎回来
     </h1>
     <div class="layui-form-item">
         <label class="layui-form-label">名&nbsp;&nbsp;&nbsp;&nbsp;讳</label>
         <div class="layui-input-block" style="padding-right: 50px">
-            <input type="text" id="username" name="username" required  lay-verify="required" placeholder="用户名" autocomplete="off" class="layui-input">
+            <input type="text" id="username" name="username" required  lay-verify="required"
+                   placeholder="用户名" autocomplete="off" class="layui-input">
         </div>
     </div>
     <div class="layui-form-item">
         <label class="layui-form-label">密&nbsp;&nbsp;&nbsp;&nbsp;码</label>
         <div class="layui-input-block" style="padding-right: 50px">
-            <input type="password" id="password" name="password" required lay-verify="required" placeholder="请输入密码" autocomplete="off" class="layui-input">
+            <input type="password" id="password" name="password" required lay-verify="required"
+                   placeholder="请输入密码" autocomplete="off" class="layui-input">
         </div>
     </div>
 </form>

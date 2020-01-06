@@ -2,6 +2,7 @@ package pro.jianbing.aboutme.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -15,8 +16,6 @@ import pro.jianbing.aboutme.service.UserService;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * @author DefaultAccount
@@ -34,7 +33,11 @@ public class LoginController {
     }
 
     @GetMapping("login")
-    public String login(){
+    public String login(Model model){
+        String currentTime = String.valueOf(System.currentTimeMillis()).substring(7);
+        String variantSalt = "V" + currentTime + "S";
+        model.addAttribute("variantSalt",variantSalt);
+        model.addAttribute("staticSalt","");
         return "login";
     }
 

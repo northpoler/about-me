@@ -12,8 +12,6 @@ import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * @author DefaultAccount

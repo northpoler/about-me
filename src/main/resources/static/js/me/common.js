@@ -114,14 +114,15 @@ function toLogin(target){
         btn:['登录'],
         yes:function(index,layero){
             var body = top.layer.getChildFrame('body',index);
-            var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-            console.log(body.find('#classId').val());
+            var iframeWin = window[layero.find('iframe')[0]['name']];
+            var username = body.find('#username').val();
+            var password = body.find('#password').val();
             $.ajax({
                 url:"/login/check",
                 type:'post',
                 data:{
-                    'username':body.find('#username').val(),
-                    'password':body.find('#password').val()
+                    'username':hex_md5(username),
+                    'password':hex_md5(password)
                 },
                 dataType:'json',
                 success:function(data){

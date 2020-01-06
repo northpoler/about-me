@@ -6,7 +6,6 @@
             bar1: "<i style=\"font-size: larger;font-weight: bolder\" class=\"layui-icon layui-icon-home\"></i>"
             ,css: {right: "10%", bottom: "10%"}
             ,click: function(type){
-                console.log(type);
                 if(type === 'bar1'){
                     window.open("/search",'_self');
                 }

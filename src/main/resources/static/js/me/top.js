@@ -63,7 +63,6 @@ function toRegister(target) {
         yes:function(index,layero){
             var body = top.layer.getChildFrame('body',index);
             var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-            console.log(body.find('#classId').val());
 
             var isChecked = true;
             var message = '';
@@ -151,7 +150,6 @@ function changeInfo() {
         yes:function(index,layero){
             var body = top.layer.getChildFrame('body',index);
             var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
-            console.log(body.find('#classId').val());
             var data = {
                 'username':body.find('#username').val(),
                 'password':body.find('#password').val()
