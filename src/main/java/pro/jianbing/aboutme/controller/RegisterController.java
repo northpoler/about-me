@@ -1,7 +1,9 @@
 package pro.jianbing.aboutme.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +29,8 @@ public class RegisterController {
 
     private final UserService userService;
     private final LikeService likeService;
+    @Value("${login.password.salt}")
+    private String salt;
 
     @Autowired
     public RegisterController(UserService userService, LikeService likeService) {
@@ -35,7 +39,8 @@ public class RegisterController {
     }
 
     @GetMapping("")
-    public String login(){
+    public String login(Model model){
+        model.addAttribute("staticSalt",salt);
         return "register";
     }
 

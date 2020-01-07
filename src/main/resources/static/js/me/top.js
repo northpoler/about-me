@@ -69,6 +69,7 @@ function toRegister(target) {
             var username = body.find('#username').val();
             var password = body.find('#password').val();
             var repassword = body.find('#repassword').val();
+            var staticSalt = body.find('#staticSalt').val();
             var phone = body.find('#phone').val();
 
             if (username == ''){
@@ -99,7 +100,7 @@ function toRegister(target) {
 
             var data = {
                 'username':username,
-                'password':password,
+                'password':hex_md5(password+staticSalt),
                 'phone':phone
             };
             asyncPost('/register/save',data,function (data) {

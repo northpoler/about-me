@@ -1,8 +1,11 @@
 package pro.jianbing.aboutme.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.DigestUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -16,6 +19,7 @@ import pro.jianbing.aboutme.service.UserService;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.UUID;
 
 /**
  * @author DefaultAccount
@@ -25,6 +29,8 @@ public class LoginController {
 
     private final UserService userService;
     private final LikeService likeService;
+    @Value("${login.password.salt}")
+    private String salt;
 
     @Autowired
     public LoginController(UserService userService, LikeService likeService) {
@@ -33,11 +39,11 @@ public class LoginController {
     }
 
     @GetMapping("login")
-    public String login(Model model){
-        String currentTime = String.valueOf(System.currentTimeMillis()).substring(7);
-        String variantSalt = "V" + currentTime + "S";
-        model.addAttribute("variantSalt",variantSalt);
-        model.addAttribute("staticSalt","");
+    public String login(Model model, HttpServletRequest request){
+        String variantSalt = UUID.randomUUID().toString();
+        request.getSession().setAttribute("variantSalt",variantSalt);
+        model.addAttribute("variantSalt", variantSalt);
+        model.addAttribute("staticSalt",salt);
         return "login";
     }
 
@@ -66,22 +72,31 @@ public class LoginController {
         BaseResult baseResult;
         try {
             User result = userService.FindUserByUsername(user.getUsername());
-            if (null != result && user.getPassword().equals(result.getPassword())){
-                // 保存登录信息
-                String ipAddress = NetworkUtil.getIpAddress(request);
-                userService.updateLoginInfo(ipAddress,result.getId());
-                request.getSession().setAttribute("user",result);
-                //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
-                String loginToken = generateLoginToken(result.getUsername(), result.getPassword(), result.getId());
-                Cookie cookie = new Cookie("remember", loginToken);
-                //若我们这里不设置path，则只要访问“/login”时才会带该cooke
-                cookie.setPath("/");
-                cookie.setMaxAge(30*24*3600);
-                response.addCookie(cookie);
-                likeService.updateNullByUserIdAndIp(result.getId(),NetworkUtil.getIpAddress(request));
-                baseResult = BaseResult.success("登录成功！");
-            } else {
+            String variantSalt = (String)request.getSession().getAttribute("variantSalt");
+            request.getSession().removeAttribute("variantSalt");
+            if (StringUtils.isEmpty(variantSalt)){
+                baseResult = BaseResult.fail("长时间未操作，请刷新网页后重新登陆");
+            } else if (null == result) {
                 baseResult = BaseResult.fail("用户名或密码错误！");
+            } else {
+                String password = DigestUtils.md5DigestAsHex((result.getPassword() + variantSalt).getBytes());
+                if (user.getPassword().equals(password)){
+                    // 保存登录信息
+                    String ipAddress = NetworkUtil.getIpAddress(request);
+                    userService.updateLoginInfo(ipAddress,result.getId());
+                    request.getSession().setAttribute("user",result);
+                    //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
+                    String loginToken = generateLoginToken(result.getUsername(), result.getPassword(), result.getId());
+                    Cookie cookie = new Cookie("remember", loginToken);
+                    //若我们这里不设置path，则只要访问“/login”时才会带该cooke
+                    cookie.setPath("/");
+                    cookie.setMaxAge(30*24*3600);
+                    response.addCookie(cookie);
+                    likeService.updateNullByUserIdAndIp(result.getId(),NetworkUtil.getIpAddress(request));
+                    baseResult = BaseResult.success("登录成功！");
+                } else {
+                    baseResult = BaseResult.fail("用户名或密码错误！");
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();

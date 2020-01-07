@@ -117,12 +117,14 @@ function toLogin(target){
             var iframeWin = window[layero.find('iframe')[0]['name']];
             var username = body.find('#username').val();
             var password = body.find('#password').val();
+            var variantSalt = body.find('#variantSalt').val();
+            var staticSalt = body.find('#staticSalt').val();
             $.ajax({
                 url:"/login/check",
                 type:'post',
                 data:{
-                    'username':hex_md5(username),
-                    'password':hex_md5(password)
+                    'username':username,
+                    'password':hex_md5(hex_md5(password+staticSalt)+variantSalt)
                 },
                 dataType:'json',
                 success:function(data){

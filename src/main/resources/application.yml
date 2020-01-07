@@ -35,3 +35,7 @@ mybatis:
 jasypt:
   encryptor:
     password: jianbing
+
+login:
+  password:
+    salt: fkarUYWrzk6fmOtAOEZzJQ==
