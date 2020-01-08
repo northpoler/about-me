@@ -324,7 +324,9 @@ $("#save").click(function () {
 function save() {
     asyncPost('/knowledge/save',{content:editor.txt.html()},function (data) {
         if (data.result){
-            layer.msg(data.message, {offset: '200px', anim: 0, time: 666});
+            layer.msg(data.message, {offset: '200px', anim: 0, time: 666},function () {
+                window.location.reload();
+            });
         } else {
             alertMsg(data.message);
         }
