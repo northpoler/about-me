@@ -29,7 +29,7 @@ public class LoginController {
 
     private final UserService userService;
     private final LikeService likeService;
-    @Value("${login.password.salt}")
+    @Value("${myself.password.salt}")
     private String salt;
 
     @Autowired
@@ -73,7 +73,6 @@ public class LoginController {
         try {
             User result = userService.FindUserByUsername(user.getUsername());
             String variantSalt = (String)request.getSession().getAttribute("variantSalt");
-            request.getSession().removeAttribute("variantSalt");
             if (StringUtils.isEmpty(variantSalt)){
                 baseResult = BaseResult.fail("长时间未操作，请刷新网页后重新登陆");
             } else if (null == result) {
@@ -93,6 +92,7 @@ public class LoginController {
                     cookie.setMaxAge(30*24*3600);
                     response.addCookie(cookie);
                     likeService.updateNullByUserIdAndIp(result.getId(),NetworkUtil.getIpAddress(request));
+                    request.getSession().removeAttribute("variantSalt");
                     baseResult = BaseResult.success("登录成功！");
                 } else {
                     baseResult = BaseResult.fail("用户名或密码错误！");
@@ -112,7 +112,7 @@ public class LoginController {
      * @param userId 用户id
      * @return 登录令牌
      */
-    public static String generateLoginToken(String username, String password, Long userId) {
+    private static String generateLoginToken(String username, String password, Long userId) {
         return EncryptionUtil.encrypt(username + ":" + password + ":" + userId);
     }
 }

@@ -36,6 +36,6 @@ jasypt:
   encryptor:
     password: jianbing
 
-login:
+myself:
   password:
     salt: fkarUYWrzk6fmOtAOEZzJQ==

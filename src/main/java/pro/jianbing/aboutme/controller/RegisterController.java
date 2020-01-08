@@ -29,7 +29,7 @@ public class RegisterController {
 
     private final UserService userService;
     private final LikeService likeService;
-    @Value("${login.password.salt}")
+    @Value("${myself.password.salt}")
     private String salt;
 
     @Autowired
@@ -90,7 +90,7 @@ public class RegisterController {
      * @param userId 用户id
      * @return 登录令牌
      */
-    public static String generateLoginToken(String username, String password, Long userId) {
+    private static String generateLoginToken(String username, String password, Long userId) {
         return EncryptionUtil.encrypt(username + ":" + password + ":" + userId);
     }
 }
