@@ -25,10 +25,18 @@ import java.time.LocalDateTime;
 @Component
 public class VisitInterceptor extends HandlerInterceptorAdapter {
     private static final Logger log = LoggerFactory.getLogger(VisitInterceptor.class);
+    /**
+     * 李贺臣页面
+     */
     private static final String GRANDPA_URL = "/grandpa";
+    /**
+     * 主页（搜索用）
+     */
     private static final String INDEX_URL = "/";
-    private static final String COMPANY_IP = "122.224.218.34";
-    private static final String COMPANY_ADDRESS = "本地局域网";
+    /**
+     * 管理端页面url开头
+     */
+    private static final String MANAGE_URL = "/manage";
     @Autowired
     private VisitService visitService;
     @Autowired
@@ -37,32 +45,22 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         StringBuffer url = request.getRequestURL();
         log.info("拦截请求："+url);
-        int lastIndex = url.lastIndexOf("/");
-        String urlSubString = url.substring(lastIndex);
-        log.info("具体的请求是："+urlSubString);
-        //获取IP和登陆地，以便进行权限控制
+        String subUrl = url.substring(7);
+        int lastIndex = subUrl.indexOf("/");
+        subUrl = subUrl.substring(lastIndex);
+        log.info("具体的请求是："+subUrl);
         HttpSession session = request.getSession();
-        Object domain = session.getAttribute("domain");
-        if (null==domain){
-            String ipAddress = NetworkUtil.getIpAddress(request);
-            String addressByIp = NetworkUtil.getAddressByIp(ipAddress);
-            if (COMPANY_IP.equals(ipAddress)||COMPANY_ADDRESS.equals(addressByIp)){
-                session.setAttribute("domain","company");
-            } else {
-                session.setAttribute("domain","society");
-            }
-        }
-        if (urlSubString.contains(";jsessionid")){
-            urlSubString = urlSubString.substring(0,urlSubString.indexOf(";jsessionid"));
+        if (subUrl.contains(";jsessionid")){
+            subUrl = subUrl.substring(0,subUrl.indexOf(";jsessionid"));
         }
         //如果访问特定页面，记录访问信息
-        if (GRANDPA_URL.equals(urlSubString)||INDEX_URL.equals(urlSubString)){
+        if (GRANDPA_URL.equals(subUrl)||INDEX_URL.equals(subUrl)){
             Visit visit = new Visit();
             String ipAddress = NetworkUtil.getIpAddress(request);
             String addressByIp = NetworkUtil.getAddressByIp(ipAddress);
             visit.setIp(ipAddress);
             visit.setAddress(addressByIp);
-            visit.setTarget(urlSubString);
+            visit.setTarget(subUrl);
             User user = (User) request.getSession().getAttribute("user");
             if (null!=user){
                 visit.setUserId(user.getId());
@@ -89,6 +87,12 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                         request.getSession().setAttribute("user",user);
                     }
                 }
+            }
+        }
+        if (subUrl.indexOf(MANAGE_URL)==0) {
+            User user = (User) session.getAttribute("user");
+            if (null == user || !"0".equals(user.getRole())){
+                response.sendRedirect(request.getContextPath()+"/unauthorized");
             }
         }
         return true;
