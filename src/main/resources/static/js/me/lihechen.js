@@ -169,11 +169,6 @@ function like() {
             $("#like").text(data.data);
         }
     });
-    if ($("#username").length === 0){
-        if (userLikes===3){
-            normalLoginInquiry("是否登录以便记录、查看鲜花信息","去登陆","去注册","不了")
-        }
-    }
     var className = document.getElementById("portrait").className;
     if (className.indexOf("portrait")==-1){
         $("#portrait").addClass("portrait");

@@ -34,10 +34,6 @@
             border-left: 0px;
             border-right: 0px;
         }
-        .hide-info {
-            display: none;
-            background-color: rgba(255,255,255,0.5);
-        }
     </style>
 </head>
 <body class="me-body">
@@ -50,7 +46,7 @@
                 <div class="layui-form-item" style="margin-top: 10%">
                     <img alt="logo" th:src="${logo}" id="logo" style="width: 20%;cursor: pointer" onclick="showTips()" title="点击一下"/>
                     <div class="layui-row">
-                        <div class="layui-col-md6 layui-col-md-offset3 hide-info" id="tips" style="padding: 15px;margin-bottom: 5px">
+                        <div class="layui-col-md6 layui-col-md-offset3 me-hide-info" id="tips" style="padding: 15px;margin-bottom: 5px">
                              <p style="color: deeppink">Tips</p>
                             <div style="font-size: small;color: #333333">
                                 <p>点击倒计时可以自由编辑</p>
@@ -90,7 +86,7 @@
                 </ul>
             </div>
             <!--全部链接-->
-            <div class="hide-info" style="padding: 20px 0px;color: #333333;width: 100%"
+            <div class="me-hide-info" style="padding: 20px 0px;color: #333333;width: 100%"
                  id="links_edit_div">
                 <p>此处有待完善</p>
             </div>
@@ -114,7 +110,7 @@
                 </span>
             </div>
             <!--更改倒计时-->
-            <div class="hide-info" style="padding: 20px 0px;color: #333333;width: 100%"
+            <div class="me-hide-info" style="padding: 20px 0px;color: #333333;width: 100%"
                  id="countdown_edit_div">
                 <form action="" class="layui-form">
                     <input type="number" class="layui-hide" id="countdown_id" name="id">
@@ -163,7 +159,7 @@
                 </span>
             </div>
             <!--天气详细信息-->
-            <div class="hide-info" style="padding: 10px 0px;color: #333333;width: 100%"
+            <div class="me-hide-info" style="padding: 10px 0px;color: #333333;width: 100%"
                  id="weather_detail_div">
                 <table align="center" valign="center" style="text-align: left;margin: 0 auto" cellpadding="15px">
                     <tr>
