@@ -2,6 +2,17 @@ layui.use('layer', function () {
     var layer = layui.layer;
 });
 
+// loading页面
+function showloading(show) {
+    if (show) {
+        loading = layer.load(0, {
+            shade: [0.1, '#000000']
+        });
+    } else {
+        layer.closeAll('loading');
+    }
+}
+
 // 警示询问框 msg:询问的消息; yes:确认按钮的名字; no:取消按钮的名字; isCloseAll:是否关闭全部弹出层; callback:回调函数
 function dangerInquiry(msg,yes,no,isCloseAll,callback){
     layer.open({

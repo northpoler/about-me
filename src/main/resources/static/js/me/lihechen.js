@@ -27,14 +27,16 @@ $("#add").click(function () {
                 );
                 return false;
             }
-            var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+            var iframeWin = window[layero.find('iframe')[0]['name']];
             var data = {
                 'occurTime':body.find('#occurTime').val(),
                 'content':body.find('#content').val(),
                 'contributor':body.find('#contributor').val(),
                 'mark':'2'
             };
+            showloading(true);
             asyncPost('/timeline/insert',data,function (data) {
+                showloading(false);
                 if (data.result) {
                     layer.msg(data.message,{
                         offset: '10px',
@@ -100,13 +102,15 @@ $("#correct").click(function () {
                 );
                 return false;
             }
-            var iframeWin = window[layero.find('iframe')[0]['name']]; //得到iframe页的窗口对象，执行iframe页的方法：iframeWin.method();
+            var iframeWin = window[layero.find('iframe')[0]['name']];
             var data = {
                 'content':body.find('#content').val(),
                 'contributor':body.find('#contributor').val(),
                 'mark':'3'
             };
+            showloading(true);
             asyncPost('/timeline/insert',data,function (data) {
+                showloading(false);
                 if (data.result) {
                     layer.msg(data.message,{
                         offset: '10px',
@@ -142,7 +146,6 @@ $("#correct").click(function () {
         },
         end : function() {
             layer.closeAll();
-            /*location.reload();*/
         }
     });
 });
