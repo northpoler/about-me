@@ -1,4 +1,4 @@
-package pro.jianbing.aboutme.controller;
+package pro.jianbing.aboutme.controller.manage;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -23,51 +23,17 @@ import java.util.Map;
  * @author DefaultAccount
  */
 @Controller
-@RequestMapping("timeline")
-public class TimelineController {
+@RequestMapping("manage/timeline")
+public class TimelineManageController {
 
     private final TimelineService service;
 
     @Autowired
-    public TimelineController(TimelineService service) {
+    public TimelineManageController(TimelineService service) {
         this.service = service;
     }
 
-    @Autowired
-    private MailUtil mailUtil;
-
-    @GetMapping("add")
-    public String add(){
-        return "timeline_add";
-    }
-
-    @GetMapping("correct")
-    public String correct(){
-        return "timeline_correct";
-    }
-
-    @ResponseBody
-    @PostMapping("insert")
-    public BaseResult insert(Timeline timeline, HttpServletRequest request){
-        BaseResult baseResult;
-        try {
-            timeline.setInsertTime(LocalDateTime.now());
-            timeline.setIp(NetworkUtil.getIpAddress(request));
-            Integer save = service.save(timeline);
-            if (null != save && save>0){
-                mailUtil.sendMailTemplate(timeline.getContent());
-                baseResult = BaseResult.success("提交成功！");
-            } else {
-                baseResult = BaseResult.fail("提交失败");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            baseResult = BaseResult.systemError();
-        }
-        return baseResult;
-    }
-
-    @GetMapping("manage")
+    @GetMapping("")
     public String manage(HttpServletRequest request){
         User user = (User) request.getSession().getAttribute("user");
         if (null == user){
@@ -75,7 +41,7 @@ public class TimelineController {
         } else if (!"0".equals(user.getRole())){
             return "error/unauthorized";
         }
-        return "timeline_manage";
+        return "manage/timeline";
     }
 
     @GetMapping("table")

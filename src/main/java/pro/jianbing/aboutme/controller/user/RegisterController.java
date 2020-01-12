@@ -1,4 +1,4 @@
-package pro.jianbing.aboutme.controller;
+package pro.jianbing.aboutme.controller.user;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;

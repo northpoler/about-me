@@ -280,16 +280,20 @@ editor.customConfig.emotions = [
 ];
 
 $(function () {
-    if ($("#username").length === 0){
-        $("#editor").html("<p>在这里，可以随时记录<b>任何你想记录的信息</b> .......</p>");
-    } else {
+    getContent();
+});
+
+function getContent(){
+    if ($("#username").length != 0){
         asyncGet('/knowledge/get',{},function (data) {
             if (data.result){
                 $("#editor").html(data.data);
             }
         })
+    } else {
+        $("#editor").html("<p>在这里，可以随时记录<b>任何你想记录的信息</b> .......</p>");
     }
-});
+}
 
 $("#edit").click(function () {
     if ($("#username").length === 0){

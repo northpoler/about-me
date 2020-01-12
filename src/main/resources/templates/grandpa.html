@@ -42,7 +42,7 @@
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <blockquote class="layui-elem-quote" style="background-color: lightcyan">
-            欢迎你，
+            欢迎您，
             <span th:if="${session.user}!=null">
                 <span th:text="${session.user.username}"></span>
             </span>
@@ -51,6 +51,10 @@
             </span>！您是第
             <span th:text="${visitCounts}" style="font-weight: bold"></span>
             位访客。
+            <span th:if="${session.user.role}==0">
+                <br>您是超级管理员，
+                <a href="/manage/timeline" style="text-decoration: underline;color: deeppink">点击去后台</a>。
+            </span>
             <hr class="layui-bg-orange">
             <p style="font-size: larger">本页面分两大模块：</p>
             <div class="me-text-center" style="margin: 5px 0px">
@@ -198,6 +202,6 @@
         </div>
     </div>
 </div>
-</body>
 <script th:src="@{../static/js/me/lihechen.js}"></script>
+</body>
 </html>

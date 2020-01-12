@@ -5,17 +5,21 @@
     <meta th:include="top :: top"/>
 </head>
 <body>
-    <div class="layui-row">
-        <table class="layui-hide" id="test" lay-filter="test"></table>
-        <script type="text/html" id="toolbarDemo">
-            <div class="layui-btn-container">
-                <button class="layui-btn layui-btn-sm" onclick="tips()">提示</button>
-            </div>
-        </script>
-    </div>
+<div class="layui-row">
+    <table class="layui-hide" id="test" lay-filter="test"></table>
+    <script type="text/html" id="toolbarDemo">
+        <div class="layui-btn-container">
+            <button class="layui-btn layui-btn-sm" onclick="tips()">提示</button>
+        </div>
+    </script>
+</div>
+<script type="text/html" id="barDemo">
+    <a class="layui-btn layui-btn-xs" lay-event="edit">编辑</a>
+    <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+</script>
 <script>
     var _hmt = _hmt || [];
-    (function() {
+    (function () {
         var hm = document.createElement("script");
         hm.src = "https://hm.baidu.com/hm.js?d214947968792b839fd669a4decaaffc";
         var s = document.getElementsByTagName("script")[0];
@@ -43,28 +47,31 @@
 
         });
     }
+
     layui.use('table', function () {
         var table = layui.table;
 
         table.render({
             elem: '#test'
-            , url: '/timeline/table'
+            , url: 'timeline/table'
             , toolbar: '#toolbarDemo'
             , title: '时间线'
             , cols: [
-                [{type:'numbers'}
-                    , {field: 'id', title: 'ID', width: 80, fixed: 'left', unresize: true, sort: true,hide:true}
-                    , {field: 'occurTime', title: '时间', width:80, edit: 'text',template:'{{occurTime}}'}
-                    , {field: 'content', title: '内容', minWidth: 100, edit: 'text', sort: true,template:'{{content}}'}
-                    , {field: 'contributor', title: '提供者', width:80, edit: 'text', sort: true}
-                    , {field: 'sequence', title: '显示顺序', width:80, edit: 'text', sort: true}
-                    , {field: 'mark', title: '标记', width:60, edit: 'text', sort: true}
+                [{type: 'checkbox'}
+                    , {field: 'id', title: 'ID', width: 80, fixed: 'left', unresize: true, sort: true, hide: true}
+                    , {field: 'occurTime', title: '时间', width: 80, edit: 'text', template: '{{occurTime}}'}
+                    , {field: 'content', title: '内容', minWidth: 100, edit: 'text', sort: true, template: '{{content}}'}
+                    , {field: 'contributor', title: '提供者', width: 80, edit: 'text', sort: true, hide: true}
+                    , {field: 'sequence', title: '显示顺序', width: 80, edit: 'text', sort: true}
+                    , {field: 'mark', title: '标记', width: 60, edit: 'text', sort: true, templet: function(res){
+                        return '<em>'+ res.mark==0?'正常':'新增' +'</em>'+res.mark}}
+                    , {fixed: 'right', title:'操作', toolbar: '#barDemo', width:150}
                 ]
             ]
         });
 
         //监听单元格编辑
-        table.on('edit(test)', function(obj){
+        table.on('edit(test)', function (obj) {
             layer.open({
                 type: 1
                 ,title: false //不显示标题栏
@@ -76,20 +83,20 @@
                 ,btn: ['保存', '不了']
                 ,yes:function(index){
                     var value = obj.value //得到修改后的值
-                        ,data = obj.data //得到所在行所有键值
-                        ,field = obj.field; //得到字段
+                        , data = obj.data //得到所在行所有键值
+                        , field = obj.field; //得到字段
                     var data = {
-                        "id":data.id,
-                        "field":field,
-                        "value":value
+                        "id": data.id,
+                        "field": field,
+                        "value": value
                     };
-                    asyncPost('/timeline/update',data,function (data) {
-                        if (data.result){
-                            layer.msg(data.message,{
+                    asyncPost('timeline/update', data, function (data) {
+                        if (data.result) {
+                            layer.msg(data.message, {
                                 offset: '10px',
-                                icon:1,
-                                time:1000
-                            },function(){
+                                icon: 1,
+                                time: 1000
+                            }, function () {
                                 parent.layer.close(index)
                             });
                         }
@@ -106,12 +113,12 @@
         });
 
         //监听行工具事件
-        table.on('tool(test)', function(obj){
+        table.on('tool(test)', function (obj) {
             var data = obj.data;
-            if(obj.event === 'del'){
-                layer.confirm('真的删除行么', function(index){
-                    asyncPost('/timeline/delete',{"id":data.id},function (data) {
-                        if (data.result){
+            if (obj.event === 'del') {
+                layer.confirm('真的删除行么', function (index) {
+                    asyncPost('timeline/delete', {"id": data.id}, function (data) {
+                        if (data.result) {
                             layer.msg("删除成功！");
                         } else {
                             layer.msg("删除失败！");
@@ -119,12 +126,12 @@
                         obj.del();
                         layer.close(index);
                     });
-                                    });
-            } else if(obj.event === 'edit'){
+                });
+            } else if (obj.event === 'edit') {
                 layer.prompt({
                     formType: 2
-                    ,value: data.email
-                }, function(value, index){
+                    , value: data.email
+                }, function (value, index) {
                     obj.update({
                         email: value
                     });

@@ -1,5 +1,6 @@
 package pro.jianbing.aboutme.service;
 
+import io.netty.util.internal.StringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,7 +47,11 @@ public class KnowledgeService {
 
     public String getByUserId(Long userId){
         try {
-            return knowledgeRepositoty.getByUserId(userId);
+            String knowledge = knowledgeRepositoty.getByUserId(userId);
+            if (StringUtil.isNullOrEmpty(knowledge)){
+                knowledge = "<p>在这里，可以随时记录<b>任何你想记录的信息</b> .......</p>";
+            }
+            return knowledge;
         } catch (Exception e) {
             e.printStackTrace();
             return "内容出错";
