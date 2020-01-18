@@ -232,3 +232,17 @@ $(".anchor").click(function(){
         }
     }
 });
+
+var visitCount = $("#visit_count").val();
+layui.use('layer', function () {
+    var layer = layui.layer;
+    layer.msg(
+        '欢迎，你是第' + visitCount + '位访客！',
+        {
+            offset: 'auto',
+            anim: 4,
+            time: 2000,
+            icon:6
+        }
+    );
+});

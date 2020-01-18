@@ -2,13 +2,8 @@ package pro.jianbing.aboutme.controller.manage;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.common.dto.BaseResult;
-import pro.jianbing.aboutme.common.util.MailUtil;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.TimelineService;
@@ -44,12 +39,12 @@ public class TimelineManageController {
         return "manage/timeline";
     }
 
-    @GetMapping("table")
+    @GetMapping("table/{mark}")
     @ResponseBody
-    public Map<String,Object> getAllCountdown(){
+    public Map<String,Object> getAllCountdown(@PathVariable String mark){
         Map<String,Object> data = null;
         try {
-            List<Timeline> timelines = service.getAllTimelines();
+            List<Timeline> timelines = service.getTimelinesByMark(mark);
             data = new HashMap<>(4);
             data.put("code",0);
             data.put("msg","success");

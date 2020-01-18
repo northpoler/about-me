@@ -39,12 +39,12 @@ public class TimelineService {
         return 0;
     }
 
-    public List<Timeline> getAllTimelines() {
-        return timelineRepositoty.findAllByMarkIsNotContainingOrderByMarkAscSequenceAsc("1");
+    public List<Timeline> getTimelinesByMark(String mark) {
+        return timelineRepositoty.findAllByMarkOrderByOccurTimeAsc(mark);
     }
 
     public List<Timeline> getAllNormalTimelines() {
-        List<Timeline> timelineList = timelineRepositoty.findAllByMarkOrderBySequenceAsc("0");
+        List<Timeline> timelineList = getTimelinesByMark("0");
         timelineList.forEach(TimelineService::changeStyle);
         return timelineList;
     }

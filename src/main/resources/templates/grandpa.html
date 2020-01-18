@@ -41,21 +41,8 @@
 <body class="me-body">
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
+        <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
         <blockquote class="layui-elem-quote" style="background-color: lightcyan">
-            欢迎您，
-            <span th:if="${session.user}!=null">
-                <span th:text="${session.user.username}"></span>
-            </span>
-            <span th:if="${session.user}==null">
-                <span>朋友</span>
-            </span>！您是第
-            <span th:text="${visitCounts}" style="font-weight: bold"></span>
-            位访客。
-            <span th:if="${session.user.role}==0">
-                <br>您是超级管理员，
-                <a href="/manage/timeline" style="text-decoration: underline;color: deeppink">点击去后台</a>。
-            </span>
-            <hr class="layui-bg-orange">
             <p style="font-size: larger">本页面分两大模块：</p>
             <div class="me-text-center" style="margin: 5px 0px">
                 <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>
@@ -181,6 +168,9 @@
                 <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">
                     添加
                 </button>
+
+                <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/timeline" target="_blank"
+                   class="layui-btn layui-btn-radius layui-btn-warm">管理</a>
             </div>
         </div>
         <div class="layui-card">
