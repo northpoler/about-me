@@ -45,7 +45,7 @@ public class MemoController {
         return "memo";
     }
 
-    @RequestMapping(value = "edit/{id}",method = RequestMethod.GET)
+    @GetMapping("edit/{id}")
     public String edit(@PathVariable Long id,Model model,HttpServletRequest request){
         User user = (User)request.getSession().getAttribute("user");
         model.addAttribute("maxSequence",memoService.getMaxSequence(user.getId())+1);
@@ -60,7 +60,7 @@ public class MemoController {
         return "memo_edit";
     }
 
-    @RequestMapping(value = "/{id}",method = RequestMethod.DELETE)
+    @DeleteMapping("/{id}")
     @ResponseBody
     public BaseResult delete(@PathVariable Long id, HttpServletRequest request){
         BaseResult baseResult;
@@ -94,7 +94,7 @@ public class MemoController {
     }
 
     @ResponseBody
-    @RequestMapping(value="update/{id}", method=RequestMethod.POST)
+    @PostMapping("update/{id}")
     public BaseResult update(@PathVariable Long id, @ModelAttribute Memo memo, HttpServletRequest request) {
         BaseResult baseResult;
         try {

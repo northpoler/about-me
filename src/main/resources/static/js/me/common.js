@@ -203,7 +203,7 @@ function asyncGet(url,data,callback) {
 
 function asyncDelete(url,callback) {
     $.ajax({
-        type: 'GET',
+        type: 'DELETE',
         dataType: 'json',
         url: url,
         cache: false,
