@@ -9,15 +9,14 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.common.util.EncryptionUtil;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.UserService;
 
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.UUID;
 
@@ -25,7 +24,7 @@ import java.util.UUID;
  * @author DefaultAccount
  */
 @Controller
-public class LoginController {
+public class LoginController extends BaseController {
 
     private final UserService userService;
     private final LikeService likeService;
@@ -39,9 +38,9 @@ public class LoginController {
     }
 
     @GetMapping("login")
-    public String login(Model model, HttpServletRequest request){
+    public String login(Model model){
         String variantSalt = UUID.randomUUID().toString();
-        request.getSession().setAttribute("variantSalt",variantSalt);
+        getSession().setAttribute("variantSalt",variantSalt);
         model.addAttribute("variantSalt", variantSalt);
         model.addAttribute("staticSalt",salt);
         return "login";
@@ -49,10 +48,10 @@ public class LoginController {
 
     @GetMapping("logout")
     @ResponseBody
-    public BaseResult logout(HttpServletRequest request, HttpServletResponse response){
+    public BaseResult logout(HttpServletResponse response){
         BaseResult baseResult;
         try {
-            request.getSession().removeAttribute("user");
+            getSession().removeAttribute("user");
             Cookie cookie = new Cookie("remember", "");
             //若我们这里不设置path，则只要访问“/login”时才会带该cooke
             cookie.setPath("/");
@@ -68,11 +67,11 @@ public class LoginController {
 
     @PostMapping("login/check")
     @ResponseBody
-    public BaseResult checkLogin(User user, HttpServletRequest request, HttpServletResponse response) {
+    public BaseResult checkLogin(User user, HttpServletResponse response) {
         BaseResult baseResult;
         try {
             User result = userService.FindUserByUsername(user.getUsername());
-            String variantSalt = (String)request.getSession().getAttribute("variantSalt");
+            String variantSalt = (String)getSession().getAttribute("variantSalt");
             if (StringUtils.isEmpty(variantSalt)){
                 baseResult = BaseResult.fail("长时间未操作，请刷新网页后重新登陆");
             } else if (null == result) {
@@ -81,9 +80,9 @@ public class LoginController {
                 String password = DigestUtils.md5DigestAsHex((result.getPassword() + variantSalt).getBytes());
                 if (user.getPassword().equals(password)){
                     // 保存登录信息
-                    String ipAddress = NetworkUtil.getIpAddress(request);
+                    String ipAddress = getIpByRequest();
                     userService.updateLoginInfo(ipAddress,result.getId());
-                    request.getSession().setAttribute("user",result);
+                    getSession().setAttribute("user",result);
                     //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
                     String loginToken = generateLoginToken(result.getUsername(), result.getPassword(), result.getId());
                     Cookie cookie = new Cookie("remember", loginToken);
@@ -91,8 +90,8 @@ public class LoginController {
                     cookie.setPath("/");
                     cookie.setMaxAge(30*24*3600);
                     response.addCookie(cookie);
-                    likeService.updateNullByUserIdAndIp(result.getId(),NetworkUtil.getIpAddress(request));
-                    request.getSession().removeAttribute("variantSalt");
+                    likeService.updateNullByUserIdAndIp(result.getId(),getIpByRequest());
+                    getSession().removeAttribute("variantSalt");
                     baseResult = BaseResult.success("登录成功！");
                 } else {
                     baseResult = BaseResult.fail("用户名或密码错误！");

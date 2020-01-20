@@ -8,15 +8,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.common.util.EncryptionUtil;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.UserService;
 
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.time.LocalDateTime;
 
@@ -25,7 +24,7 @@ import java.time.LocalDateTime;
  */
 @Controller
 @RequestMapping("register")
-public class RegisterController {
+public class RegisterController extends BaseController {
 
     private final UserService userService;
     private final LikeService likeService;
@@ -46,7 +45,7 @@ public class RegisterController {
 
     @PostMapping("save")
     @ResponseBody
-    public BaseResult checkLogin(User user, HttpServletRequest request, HttpServletResponse response) {
+    public BaseResult checkLogin(User user, HttpServletResponse response) {
         BaseResult baseResult;
         try {
             User result = userService.FindUserByUsername(user.getUsername());
@@ -55,12 +54,12 @@ public class RegisterController {
                 user.setRole("1");
                 user.setMark("0");
                 user.setCreated(LocalDateTime.now());
-                String ipAddress = NetworkUtil.getIpAddress(request);
+                String ipAddress = getIpByRequest();
                 user.setLastTime(LocalDateTime.now());
                 user.setLastIP(ipAddress);
                 int save = userService.saveUser(user);
                 if (1==save){
-                    request.getSession().setAttribute("user",user);
+                    getSession().setAttribute("user",user);
                     //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
                     String loginToken = generateLoginToken(user.getUsername(), user.getPassword(), user.getId());
                     Cookie cookie = new Cookie("remember", loginToken);
@@ -68,7 +67,7 @@ public class RegisterController {
                     cookie.setPath("/");
                     cookie.setMaxAge(30*24*3600);
                     response.addCookie(cookie);
-                    likeService.updateNullByUserIdAndIp(user.getId(),NetworkUtil.getIpAddress(request));
+                    likeService.updateNullByUserIdAndIp(user.getId(),getIpByRequest());
                     baseResult = BaseResult.success("注册成功,已自动登录!");
                 } else {
                     baseResult = BaseResult.fail("注册出错！");

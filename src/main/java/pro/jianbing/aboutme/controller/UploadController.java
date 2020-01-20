@@ -6,10 +6,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LogoService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +19,7 @@ import java.util.Map;
  */
 @Controller
 @RequestMapping("upload")
-public class UploadController {
+public class UploadController extends BaseController {
 
     private final LogoService logoService;
 
@@ -30,12 +30,12 @@ public class UploadController {
 
     @PostMapping("")
     @ResponseBody
-    public Map<String, Object> upload(MultipartFile file, HttpServletRequest request) {
+    public Map<String, Object> upload(MultipartFile file) {
         Map<String, Object> map = new HashMap<>(3);
         try {
             String oldName = file.getOriginalFilename();
-            String path = request.getServletContext().getRealPath("/static/upload/");
-            User user = (User)request.getSession().getAttribute("user");
+            String path = getRequest().getServletContext().getRealPath("/static/upload/");
+            User user = getUser();
             String fileName = System.currentTimeMillis()+"_"+user.getId()+oldName.substring(oldName.lastIndexOf("."));
             // 把上传的图片保存一份在本地（根据当前系统是Windows或是Linux来决定保存路径）
             File localFile;

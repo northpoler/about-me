@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
@@ -18,7 +19,7 @@ import javax.servlet.http.HttpServletRequest;
  */
 @Controller
 @RequestMapping("user")
-public class UserController {
+public class UserController extends BaseController {
 
     private final UserService userService;
 
@@ -28,18 +29,18 @@ public class UserController {
     }
 
     @GetMapping("edit")
-    public String edit(Model model, HttpServletRequest request){
-        User user = (User)request.getSession().getAttribute("user");
+    public String edit(Model model){
+        User user = getUser();
         model.addAttribute("user",user);
         return "user_edit";
     }
 
     @PostMapping("edit")
     @ResponseBody
-    public BaseResult update(User user, HttpServletRequest request){
+    public BaseResult update(User user){
         BaseResult baseResult;
         try {
-            User userTemp = (User)request.getSession().getAttribute("user");
+            User userTemp = getUser();
             User result = userService.FindUserByUsernameAndUserId(user.getUsername(),userTemp.getId());
             if (null == result){
                 userTemp.setUsername(user.getUsername());
@@ -47,7 +48,7 @@ public class UserController {
                 int save = userService.saveUser(userTemp);
                 if (1==save){
                     baseResult = BaseResult.success("修改成功,已自动登录!");
-                    request.getSession().setAttribute("user",userTemp);
+                    getSession().setAttribute("user",userTemp);
                 } else {
                     baseResult = BaseResult.fail("修改出错！");
                 }

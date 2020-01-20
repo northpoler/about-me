@@ -4,13 +4,8 @@ import io.netty.util.internal.StringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Knowledge;
-import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.repository.KnowledgeRepositoty;
-
-import javax.servlet.http.HttpServletRequest;
-import java.time.LocalDateTime;
 
 /**
  * @author DefaultAccount
@@ -27,13 +22,8 @@ public class KnowledgeService {
     }
 
     @Transactional
-    public Integer save(Knowledge knowledge, HttpServletRequest request){
+    public Integer save(Knowledge knowledge){
         try {
-            String ipAddress = NetworkUtil.getIpAddress(request);
-            knowledge.setIp(ipAddress);
-            knowledge.setEditTime(LocalDateTime.now());
-            User user = (User)request.getSession().getAttribute("user");
-            knowledge.setUserId(user.getId());
             Knowledge save = knowledgeRepositoty.save(knowledge);
             if (save!=null){
                 return 1;

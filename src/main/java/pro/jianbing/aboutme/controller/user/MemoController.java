@@ -4,12 +4,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.MemoService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,7 +18,7 @@ import java.util.List;
  */
 @Controller
 @RequestMapping("memo")
-public class MemoController {
+public class MemoController extends BaseController {
     private final MemoService memoService;
 
     @Autowired
@@ -27,9 +27,9 @@ public class MemoController {
     }
 
     @GetMapping("")
-    public String getMemoList(Model model, HttpServletRequest request){
+    public String getMemoList(Model model){
         List<Memo> memoList = new ArrayList<>(5);
-        User user = (User)request.getSession().getAttribute("user");
+        User user = getUser();
         if (null!=user){
             memoList = memoService.getMemoList(user.getId());
         }
@@ -46,8 +46,8 @@ public class MemoController {
     }
 
     @GetMapping("edit/{id}")
-    public String edit(@PathVariable Long id,Model model,HttpServletRequest request){
-        User user = (User)request.getSession().getAttribute("user");
+    public String edit(@PathVariable Long id,Model model){
+        User user = getUser();
         model.addAttribute("maxSequence",memoService.getMaxSequence(user.getId())+1);
         Memo old;
         // id小于0表示添加
@@ -62,10 +62,10 @@ public class MemoController {
 
     @DeleteMapping("/{id}")
     @ResponseBody
-    public BaseResult delete(@PathVariable Long id, HttpServletRequest request){
+    public BaseResult delete(@PathVariable Long id){
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             memoService.delete(id,user.getId());
             baseResult = BaseResult.success("删除成功！");
         } catch (Exception e) {
@@ -77,10 +77,10 @@ public class MemoController {
 
     @ResponseBody
     @PostMapping("")
-    public BaseResult insert(Memo memo, HttpServletRequest request){
+    public BaseResult insert(Memo memo){
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             if (null!=user){
                 memo.setUserId(user.getId());
             }
@@ -95,10 +95,10 @@ public class MemoController {
 
     @ResponseBody
     @PostMapping("update/{id}")
-    public BaseResult update(@PathVariable Long id, @ModelAttribute Memo memo, HttpServletRequest request) {
+    public BaseResult update(@PathVariable Long id, @ModelAttribute Memo memo) {
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             if (null!=user){
                 memo.setUserId(user.getId());
             }

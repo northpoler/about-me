@@ -5,15 +5,14 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LogoService;
 
-import javax.servlet.http.HttpServletRequest;
-
 @Controller
 @RequestMapping("/logo")
-public class LogoController {
+public class LogoController extends BaseController {
 
     private final
     LogoService logoService;
@@ -29,10 +28,10 @@ public class LogoController {
     }
 
     @PostMapping("save")
-    public BaseResult saveLogo(String src, HttpServletRequest request){
+    public BaseResult saveLogo(String src){
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             baseResult = null == user? BaseResult.fail("请先登录！"):BaseResult.success("添加成功！");
         } catch (Exception e) {
             e.printStackTrace();

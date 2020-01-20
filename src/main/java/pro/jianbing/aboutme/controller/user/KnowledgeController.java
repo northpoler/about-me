@@ -4,19 +4,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Knowledge;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.KnowledgeService;
 
-import javax.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
 
 /**
  * @author DefaultAccount
  */
 @RequestMapping("knowledge")
 @Controller
-public class KnowledgeController {
+public class KnowledgeController extends BaseController {
 
     private final
     KnowledgeService knowledgeService;
@@ -33,10 +34,10 @@ public class KnowledgeController {
 
     @GetMapping("get")
     @ResponseBody
-    public BaseResult get(Model model,HttpServletRequest request){
+    public BaseResult get(Model model){
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             String knowledge = knowledgeService.getByUserId(user.getId());
             model.addAttribute("knowledge",knowledge);
             baseResult = BaseResult.success("",knowledge);
@@ -49,10 +50,13 @@ public class KnowledgeController {
 
     @PostMapping("save")
     @ResponseBody
-    public BaseResult save(Knowledge knowledge,HttpServletRequest request){
+    public BaseResult save(Knowledge knowledge){
         BaseResult baseResult;
         try {
-            Integer result = knowledgeService.save(knowledge, request);
+            knowledge.setIp(getIpByRequest());
+            knowledge.setEditTime(LocalDateTime.now());
+            knowledge.setUserId(getUser().getId());
+            Integer result = knowledgeService.save(knowledge);
             baseResult = result>0?BaseResult.success("保存成功！"):BaseResult.fail("保存失败！");
         } catch (Exception e) {
             e.printStackTrace();

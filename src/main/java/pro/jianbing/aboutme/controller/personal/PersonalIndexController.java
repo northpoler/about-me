@@ -3,20 +3,18 @@ package pro.jianbing.aboutme.controller.personal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
-
-import javax.servlet.http.HttpServletRequest;
-import java.security.Principal;
 
 /**
  * @author 李建兵
  */
 @Controller
-public class PersonalIndexController {
+public class PersonalIndexController extends BaseController {
     @GetMapping("personal/index")
-    public String personalIndex(HttpServletRequest request, Principal principal, Model model){
-        User user = (User) request.getSession().getAttribute("user");
+    public String personalIndex(Model model){
+        User user = getUser();
         if (null == user){
             return "error/login";
         }

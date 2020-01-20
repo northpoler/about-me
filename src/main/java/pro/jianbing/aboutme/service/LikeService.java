@@ -45,15 +45,9 @@ public class LikeService{
         return likeRepositoty.countPersonalLikesToday(userId);
     }
 
-    public void insertLike(HttpServletRequest request) {
-        Like like = new Like();
+    public void insertLike(Like like) {
         like.setId(UUID.randomUUID().toString().replaceAll("-",""));
-        like.setIp(NetworkUtil.getIpAddress(request));
         like.setLikeTime(LocalDateTime.now());
-        User user = (User) request.getSession().getAttribute("user");
-        if (null!=user){
-            like.setUserId(user.getId());
-        }
         likeMapper.insertLike(like);
     }
 

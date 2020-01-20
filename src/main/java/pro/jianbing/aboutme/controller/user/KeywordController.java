@@ -2,14 +2,13 @@ package pro.jianbing.aboutme.controller.user;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.common.util.CueWordUtil;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Keyword;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.KeywordService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +19,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/keyword")
-public class KeywordController {
+public class KeywordController extends BaseController {
 
     private final
     KeywordService keywordService;
@@ -31,15 +30,15 @@ public class KeywordController {
     }
 
     @PostMapping("insert")
-    public BaseResult saveKeyword(@RequestParam("keyword") String word, HttpServletRequest request){
+    public BaseResult saveKeyword(@RequestParam("keyword") String word){
         BaseResult baseResult;
         try {
             Keyword keyword = new Keyword();
             keyword.setKeyword(word);
-            keyword.setIp(NetworkUtil.getIpAddress(request));
+            keyword.setIp(getIpByRequest());
             keyword.setSearchTime(LocalDateTime.now());
             keyword.setMark("0");
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             if (null!=user){
                 keyword.setUserId(user.getId());
             }

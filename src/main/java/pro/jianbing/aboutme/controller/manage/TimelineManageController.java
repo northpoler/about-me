@@ -3,6 +3,7 @@ package pro.jianbing.aboutme.controller.manage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.entity.User;
@@ -19,7 +20,7 @@ import java.util.Map;
  */
 @Controller
 @RequestMapping("manage/timeline")
-public class TimelineManageController {
+public class TimelineManageController extends BaseController {
 
     private final TimelineService service;
 
@@ -29,8 +30,8 @@ public class TimelineManageController {
     }
 
     @GetMapping("")
-    public String manage(HttpServletRequest request){
-        User user = (User) request.getSession().getAttribute("user");
+    public String manage(){
+        User user = getUser();
         if (null == user){
             return "error/login";
         } else if (!"0".equals(user.getRole())){

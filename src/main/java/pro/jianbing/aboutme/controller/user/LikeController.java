@@ -4,17 +4,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.entity.Like;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/like")
-public class LikeController {
+public class LikeController extends BaseController {
 
     private final
     LikeService likeService;
@@ -25,8 +26,14 @@ public class LikeController {
     }
 
     @GetMapping("insert")
-    public Integer insertLike(HttpServletRequest request){
-        likeService.insertLike(request);
+    public Integer insertLike(){
+        Like like = new Like();
+        like.setIp(getIpByRequest());
+        User user = getUser();
+        if (null!=user){
+            like.setUserId(user.getId());
+        }
+        likeService.insertLike(like);
         return likeService.getSumLikes();
     }
 
@@ -57,11 +64,10 @@ public class LikeController {
     }
 
     @GetMapping("count/personal/all")
-    public BaseResult getCountPersonalLikes(HttpServletRequest request){
+    public BaseResult getCountPersonalLikes(){
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
-            int sumLikes = likeService.getSumPersonalLikes(user.getId());
+            int sumLikes = likeService.getSumPersonalLikes(getUser().getId());
             baseResult = BaseResult.success(sumLikes);
         } catch (Exception e) {
             e.printStackTrace();
@@ -71,11 +77,10 @@ public class LikeController {
     }
 
     @GetMapping("count/personal/today")
-    public BaseResult getCountPersonalLikesToday(HttpServletRequest request){
+    public BaseResult getCountPersonalLikesToday(){
         BaseResult baseResult;
         try {
-            User user = (User)request.getSession().getAttribute("user");
-            int sumLikesToday = likeService.getSumPersonalLikesToday(user.getId());
+            int sumLikesToday = likeService.getSumPersonalLikesToday(getUser().getId());
             baseResult = BaseResult.success(sumLikesToday);
         } catch (Exception e) {
             e.printStackTrace();

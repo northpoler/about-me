@@ -6,25 +6,20 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.common.util.MailUtil;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Timeline;
-import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.TimelineService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author DefaultAccount
  */
 @Controller
 @RequestMapping("timeline")
-public class TimelineController {
+public class TimelineController extends BaseController {
 
     private final TimelineService service;
 
@@ -48,11 +43,11 @@ public class TimelineController {
 
     @ResponseBody
     @PostMapping("insert")
-    public BaseResult insert(Timeline timeline, HttpServletRequest request){
+    public BaseResult insert(Timeline timeline){
         BaseResult baseResult;
         try {
             timeline.setInsertTime(LocalDateTime.now());
-            timeline.setIp(NetworkUtil.getIpAddress(request));
+            timeline.setIp(getIpByRequest());
             Integer save = service.save(timeline);
             if (null != save && save>0){
                 mailUtil.sendMailTemplate(timeline.getContent());

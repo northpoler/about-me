@@ -4,13 +4,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Countdown;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.pojo.CountdownDto;
 import pro.jianbing.aboutme.service.CountdownService;
 
-import javax.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -19,7 +19,7 @@ import java.time.format.DateTimeFormatter;
  */
 @RequestMapping("countdown")
 @Controller
-public class CountdownController {
+public class CountdownController extends BaseController {
 
     private final CountdownService countdownService;
 
@@ -30,10 +30,10 @@ public class CountdownController {
 
     @ResponseBody
     @GetMapping("get")
-    public BaseResult getUserCountdown(HttpServletRequest request){
+    public BaseResult getUserCountdown(){
         BaseResult baseResult;
         try {
-            CountdownDto countdown = getCountdown(request);
+            CountdownDto countdown = getCountdown();
             baseResult = BaseResult.success(countdown);
         } catch (Exception e) {
             e.printStackTrace();
@@ -43,14 +43,14 @@ public class CountdownController {
     }
 
     @GetMapping("edit")
-    public String edit(HttpServletRequest request, Model model){
-        model.addAttribute("countdownDto",getCountdown(request));
+    public String edit(Model model){
+        model.addAttribute("countdownDto",getCountdown());
         return "countdown_edit";
     }
 
     @ResponseBody
     @PostMapping("update")
-    public BaseResult update(CountdownDto countdownDto, HttpServletRequest request){
+    public BaseResult update(CountdownDto countdownDto){
         BaseResult baseResult;
         try {
             Countdown countdown = new Countdown();
@@ -63,7 +63,7 @@ public class CountdownController {
             LocalDateTime dateTime = LocalDateTime
                     .parse(countdownDto.getDate()+" "+time, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             countdown.setEndTime(dateTime);
-            User user = (User)request.getSession().getAttribute("user");
+            User user = getUser();
             if (null!=user){
                 countdown.setUserId(user.getId());
             }
@@ -80,8 +80,8 @@ public class CountdownController {
         return baseResult;
     }
 
-    private CountdownDto getCountdown(HttpServletRequest request){
-        User user = (User) request.getSession().getAttribute("user");
+    private CountdownDto getCountdown(){
+        User user = getUser();
         Countdown countdown = new Countdown();
         if (null != user){
             countdown.setUserId(user.getId());
