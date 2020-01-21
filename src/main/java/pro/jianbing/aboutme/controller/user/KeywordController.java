@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.CueWordUtil;
 import pro.jianbing.aboutme.entity.Keyword;
 import pro.jianbing.aboutme.entity.User;
@@ -37,7 +38,7 @@ public class KeywordController extends BaseController {
             keyword.setKeyword(word);
             keyword.setIp(getIpByRequest());
             keyword.setSearchTime(LocalDateTime.now());
-            keyword.setMark("0");
+            keyword.setMark(GlobalString.MARK_NORMAL);
             User user = getUser();
             if (null!=user){
                 keyword.setUserId(user.getId());

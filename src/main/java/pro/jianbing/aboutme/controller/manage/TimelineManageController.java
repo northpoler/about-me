@@ -3,15 +3,12 @@ package pro.jianbing.aboutme.controller.manage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
-import pro.jianbing.aboutme.common.cache.HotSpotDataCache;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.TimelineService;
 
-import javax.servlet.http.HttpServletRequest;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,9 +26,6 @@ public class TimelineManageController extends BaseController {
     public TimelineManageController(TimelineService service) {
         this.service = service;
     }
-
-    @Autowired
-    private HotSpotDataCache hotSpotDataCache;
 
     @GetMapping("")
     public String manage(){
@@ -69,7 +63,6 @@ public class TimelineManageController extends BaseController {
         try {
             Integer result = service.update(timeline,field,value);
             baseResult = result > 0?BaseResult.success(MOD_SUCCESS):BaseResult.fail(MOD_FAIL);
-            hotSpotDataCache.refresh();
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();

@@ -54,7 +54,7 @@ public class RegisterController extends BaseController {
             if (null == result){
                 // 保存用户信息
                 user.setRole("1");
-                user.setMark("0");
+                user.setMark(GlobalString.MARK_NORMAL);
                 user.setCreated(LocalDateTime.now());
                 String ipAddress = getIpByRequest();
                 user.setLastTime(LocalDateTime.now());

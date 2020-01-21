@@ -20,4 +20,8 @@ public class GlobalString {
     public static final String COOKIE_REMEMBER = "remember";
 
     public static final String TIMELINES = "timelines";
+    /**
+     * 标记：正常
+     */
+    public static final String MARK_NORMAL = "0";
 }

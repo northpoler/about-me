@@ -31,11 +31,8 @@ public class SearchController extends BaseController {
 
     @GetMapping("")
     public String search(Model model){
-        String domain = String.valueOf(getSession().getAttribute("domain"));
-        if (null!=domain){
-            List<Link> linkList = linkService.getLinkList(domain);
-            model.addAttribute("links",linkList);
-        }
+        List<Link> linkList = linkService.getLinkList();
+        model.addAttribute("links",linkList);
         User user = getUser();
         String logo;
         if (null!=user){

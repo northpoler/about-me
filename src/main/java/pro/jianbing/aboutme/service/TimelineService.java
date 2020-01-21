@@ -2,6 +2,8 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import pro.jianbing.aboutme.common.cache.HotSpotDataCache;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.repository.TimelineRepositoty;
 
@@ -21,6 +23,9 @@ public class TimelineService {
     public TimelineService(TimelineRepositoty timelineRepositoty) {
         this.timelineRepositoty = timelineRepositoty;
     }
+
+    @Autowired
+    private HotSpotDataCache hotSpotDataCache;
 
     private static void changeStyle(Timeline e) {
         e.setContent(e.getContent().replaceAll("--", "<br>"));
@@ -44,7 +49,7 @@ public class TimelineService {
     }
 
     public List<Timeline> getAllNormalTimelines() {
-        List<Timeline> timelineList = getTimelinesByMark("0");
+        List<Timeline> timelineList = getTimelinesByMark(GlobalString.MARK_NORMAL);
         timelineList.forEach(TimelineService::changeStyle);
         return timelineList;
     }
@@ -63,6 +68,9 @@ public class TimelineService {
             line.setSequence(Integer.parseInt(value));
         }
         Timeline save = timelineRepositoty.save(line);
+        if (GlobalString.MARK_NORMAL.equals(line.getMark())){
+            new Thread(() -> hotSpotDataCache.refresh()).start();
+        }
         if (save!=null){
             return 1;
         }

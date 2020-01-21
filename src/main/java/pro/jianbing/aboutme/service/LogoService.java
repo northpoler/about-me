@@ -2,6 +2,7 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Logo;
 import pro.jianbing.aboutme.repository.LogoRepositoty;
 
@@ -22,7 +23,7 @@ public class LogoService {
     }
 
     public String getLogoByUserId(Long userId){
-        Logo logo = logoRepositoty.findByUserIdAndMark(userId,"0");
+        Logo logo = logoRepositoty.findByUserIdAndMark(userId, GlobalString.MARK_NORMAL);
         if (null==logo || null==logo.getSrc()){
             return "../static/image/logo_cat.png";
         }

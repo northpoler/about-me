@@ -6,6 +6,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Memo;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.MemoService;
@@ -34,7 +35,7 @@ public class MemoController extends BaseController {
             memoList = memoService.getMemoList(user.getId());
         }
         if (memoList.size()==0){
-            Memo memo = new Memo("百度","https://www.baidu.com",1L,"0");
+            Memo memo = new Memo("百度","https://www.baidu.com",1L, GlobalString.MARK_NORMAL);
             memoList.add(memo);
             if (null!=user){
                 memo.setUserId(user.getId());
