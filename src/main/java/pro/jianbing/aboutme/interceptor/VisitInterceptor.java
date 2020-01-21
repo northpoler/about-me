@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.EncryptionUtil;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
@@ -61,19 +62,19 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
             visit.setIp(ipAddress);
             visit.setAddress(addressByIp);
             visit.setTarget(subUrl);
-            User user = (User) request.getSession().getAttribute("user");
+            User user = (User) request.getSession().getAttribute(GlobalString.ATTRIBUTE_USER);
             if (null!=user){
                 visit.setUserId(user.getId());
             }
             visit.setVisitTime(LocalDateTime.now());
             visitService.saveVisit(visit);
         }
-        if (session.getAttribute("user") == null){
+        if (session.getAttribute(GlobalString.ATTRIBUTE_USER) == null){
             String loginToken = "";
             Cookie[] cookies = request.getCookies();
             if (cookies != null && cookies.length >0){
                 for (Cookie cookie : cookies){
-                    if ("remember".equals(cookie.getName())){
+                    if (GlobalString.COOKIE_REMEMBER.equals(cookie.getName())){
                         loginToken = cookie.getValue();
                     }
                 }
@@ -84,13 +85,13 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                 if (strs.length==3){
                     User user = userService.FindUserByUsername(strs[0]);
                     if (null!=user && strs[1].equals(user.getPassword())){
-                        request.getSession().setAttribute("user",user);
+                        request.getSession().setAttribute(GlobalString.ATTRIBUTE_USER,user);
                     }
                 }
             }
         }
         if (subUrl.indexOf(MANAGE_URL)==0) {
-            User user = (User) session.getAttribute("user");
+            User user = (User) session.getAttribute(GlobalString.ATTRIBUTE_USER);
             if (null == user || !"0".equals(user.getRole())){
                 response.sendRedirect(request.getContextPath()+"/unauthorized");
             }

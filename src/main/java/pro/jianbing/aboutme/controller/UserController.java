@@ -9,10 +9,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.UserService;
-
-import javax.servlet.http.HttpServletRequest;
 
 /**
  * @author DefaultAccount
@@ -31,7 +30,7 @@ public class UserController extends BaseController {
     @GetMapping("edit")
     public String edit(Model model){
         User user = getUser();
-        model.addAttribute("user",user);
+        model.addAttribute(GlobalString.ATTRIBUTE_USER,user);
         return "user_edit";
     }
 
@@ -48,7 +47,7 @@ public class UserController extends BaseController {
                 int save = userService.saveUser(userTemp);
                 if (1==save){
                     baseResult = BaseResult.success("修改成功,已自动登录!");
-                    getSession().setAttribute("user",userTemp);
+                    getSession().setAttribute(GlobalString.ATTRIBUTE_USER,userTemp);
                 } else {
                     baseResult = BaseResult.fail("修改出错！");
                 }

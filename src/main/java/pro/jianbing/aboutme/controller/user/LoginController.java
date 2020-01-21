@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalConfigurationItem;
+import pro.jianbing.aboutme.common.global.GlobalObject;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.EncryptionUtil;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
@@ -28,8 +31,6 @@ public class LoginController extends BaseController {
 
     private final UserService userService;
     private final LikeService likeService;
-    @Value("${myself.password.salt}")
-    private String salt;
 
     @Autowired
     public LoginController(UserService userService, LikeService likeService) {
@@ -40,6 +41,7 @@ public class LoginController extends BaseController {
     @GetMapping("login")
     public String login(Model model){
         String variantSalt = UUID.randomUUID().toString();
+        String salt = GlobalObject.CONFIGURATION_MAP.get(GlobalConfigurationItem.PASSWORD_SALT);
         getSession().setAttribute("variantSalt",variantSalt);
         model.addAttribute("variantSalt", variantSalt);
         model.addAttribute("staticSalt",salt);
@@ -51,8 +53,8 @@ public class LoginController extends BaseController {
     public BaseResult logout(HttpServletResponse response){
         BaseResult baseResult;
         try {
-            getSession().removeAttribute("user");
-            Cookie cookie = new Cookie("remember", "");
+            getSession().removeAttribute(GlobalString.ATTRIBUTE_USER);
+            Cookie cookie = new Cookie(GlobalString.COOKIE_REMEMBER, "");
             //若我们这里不设置path，则只要访问“/login”时才会带该cooke
             cookie.setPath("/");
             cookie.setMaxAge(0);
@@ -82,10 +84,10 @@ public class LoginController extends BaseController {
                     // 保存登录信息
                     String ipAddress = getIpByRequest();
                     userService.updateLoginInfo(ipAddress,result.getId());
-                    getSession().setAttribute("user",result);
+                    getSession().setAttribute(GlobalString.ATTRIBUTE_USER,result);
                     //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
                     String loginToken = generateLoginToken(result.getUsername(), result.getPassword(), result.getId());
-                    Cookie cookie = new Cookie("remember", loginToken);
+                    Cookie cookie = new Cookie(GlobalString.COOKIE_REMEMBER, loginToken);
                     //若我们这里不设置path，则只要访问“/login”时才会带该cooke
                     cookie.setPath("/");
                     cookie.setMaxAge(30*24*3600);

@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalConfigurationItem;
+import pro.jianbing.aboutme.common.global.GlobalObject;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.EncryptionUtil;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
@@ -28,8 +31,6 @@ public class RegisterController extends BaseController {
 
     private final UserService userService;
     private final LikeService likeService;
-    @Value("${myself.password.salt}")
-    private String salt;
 
     @Autowired
     public RegisterController(UserService userService, LikeService likeService) {
@@ -39,6 +40,7 @@ public class RegisterController extends BaseController {
 
     @GetMapping("")
     public String login(Model model){
+        String salt = GlobalObject.CONFIGURATION_MAP.get(GlobalConfigurationItem.PASSWORD_SALT);
         model.addAttribute("staticSalt",salt);
         return "register";
     }
@@ -59,10 +61,10 @@ public class RegisterController extends BaseController {
                 user.setLastIP(ipAddress);
                 int save = userService.saveUser(user);
                 if (1==save){
-                    getSession().setAttribute("user",user);
+                    getSession().setAttribute(GlobalString.ATTRIBUTE_USER,user);
                     //将Session设置到Cookie中（留服务器判断浏览器是否登录使用！）
                     String loginToken = generateLoginToken(user.getUsername(), user.getPassword(), user.getId());
-                    Cookie cookie = new Cookie("remember", loginToken);
+                    Cookie cookie = new Cookie(GlobalString.COOKIE_REMEMBER, loginToken);
                     //若我们这里不设置path，则只要访问“/login”时才会带该cooke
                     cookie.setPath("/");
                     cookie.setMaxAge(30*24*3600);

@@ -1,6 +1,7 @@
 package pro.jianbing.aboutme.common.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
 
@@ -25,7 +26,7 @@ public class BaseController {
     public User getUser() {
         User user = null;
         try {
-            user = (User) request.getSession().getAttribute("user");
+            user = (User) request.getSession().getAttribute(GlobalString.ATTRIBUTE_USER);
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -4,6 +4,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import pro.jianbing.aboutme.common.controller.BaseController;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.User;
 
@@ -19,7 +20,7 @@ public class PersonalIndexController extends BaseController {
             return "error/login";
         }
         String addressByIp = NetworkUtil.getAddressByIp(user.getLastIP());
-        model.addAttribute("user",user);
+        model.addAttribute(GlobalString.ATTRIBUTE_USER,user);
         model.addAttribute("address",addressByIp);
         return "personal_index";
     }

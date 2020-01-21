@@ -53,7 +53,7 @@ public class KeywordController extends BaseController {
 
     @GetMapping("tips")
     public Map<String,Object> getCueWords(String keywords){
-        Map<String,Object> result = new HashMap<>();
+        Map<String,Object> result = new HashMap<>(3);
         try {
             List<String> cueWords = CueWordUtil.getCueWords(keywords);
             result.put("code",0);

@@ -1,6 +1,4 @@
-package pro.jianbing.aboutme.common;
-
-import pro.jianbing.aboutme.common.dto.SystemConfiguration;
+package pro.jianbing.aboutme.common.global;
 
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -10,11 +8,11 @@ import java.util.WeakHashMap;
  * @BelongsPackage: pro.jianbing.aboutme.common
  * @Author: jianbing
  * @CreateTime: 2020-01-20 17:23
- * @Description: ${Description}
+ * @Description: 全局对象
  */
 public class GlobalObject {
     /**
      * 系统设置配置缓存Map
      */
-    public final static Map<String, SystemConfiguration> CONFIGURATION_MAP = new WeakHashMap<>();
+    public final static Map<String, String> CONFIGURATION_MAP = new WeakHashMap<>();
 }
