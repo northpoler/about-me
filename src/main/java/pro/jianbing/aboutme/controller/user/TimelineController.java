@@ -51,9 +51,9 @@ public class TimelineController extends BaseController {
             Integer save = service.save(timeline);
             if (null != save && save>0){
                 mailUtil.sendMailTemplate(timeline.getContent());
-                baseResult = BaseResult.success("提交成功！");
+                baseResult = BaseResult.success(ADD_SUCCESS);
             } else {
-                baseResult = BaseResult.fail("提交失败");
+                baseResult = BaseResult.fail(ADD_FAIL);
             }
         } catch (Exception e) {
             e.printStackTrace();

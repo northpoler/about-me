@@ -3,6 +3,7 @@ package pro.jianbing.aboutme.controller.manage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
+import pro.jianbing.aboutme.common.cache.HotSpotDataCache;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.entity.Timeline;
@@ -28,6 +29,9 @@ public class TimelineManageController extends BaseController {
     public TimelineManageController(TimelineService service) {
         this.service = service;
     }
+
+    @Autowired
+    private HotSpotDataCache hotSpotDataCache;
 
     @GetMapping("")
     public String manage(){
@@ -64,7 +68,8 @@ public class TimelineManageController extends BaseController {
         BaseResult baseResult;
         try {
             Integer result = service.update(timeline,field,value);
-            baseResult = result > 0?BaseResult.success("修改成功！"):BaseResult.fail("修改失败！");
+            baseResult = result > 0?BaseResult.success(MOD_SUCCESS):BaseResult.fail(MOD_FAIL);
+            hotSpotDataCache.refresh();
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();

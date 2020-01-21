@@ -19,6 +19,15 @@ public class BaseController {
     @Autowired
     private HttpServletRequest request;
 
+    protected static final String ADD_SUCCESS = "添加成功！";
+    protected static final String ADD_FAIL = "添加失败！";
+    protected static final String MOD_SUCCESS = "修改成功！";
+    protected static final String MOD_FAIL = "修改失败！";
+    protected static final String DEL_SUCCESS = "删除成功！";
+    protected static final String DEL_FAIL = "删除失败！";
+    protected static final String SAVE_SUCCESS = "保存成功！";
+    protected static final String SAVE_FAIL = "保存失败！";
+
     /**
      * 获取当前登录的用户
      * @return

@@ -57,7 +57,7 @@ public class KnowledgeController extends BaseController {
             knowledge.setEditTime(LocalDateTime.now());
             knowledge.setUserId(getUser().getId());
             Integer result = knowledgeService.save(knowledge);
-            baseResult = result>0?BaseResult.success("保存成功！"):BaseResult.fail("保存失败！");
+            baseResult = result>0?BaseResult.success(SAVE_SUCCESS):BaseResult.fail(SAVE_FAIL);
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();

@@ -69,9 +69,9 @@ public class CountdownController extends BaseController {
             }
             Integer save = countdownService.save(countdown);
             if (null != save && save>0){
-                baseResult = BaseResult.success("编辑成功！");
+                baseResult = BaseResult.success(MOD_SUCCESS);
             } else {
-                baseResult = BaseResult.success("编辑失败！");
+                baseResult = BaseResult.success(MOD_FAIL);
             }
         } catch (Exception e) {
             e.printStackTrace();

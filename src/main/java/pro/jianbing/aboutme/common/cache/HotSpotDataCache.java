@@ -1,11 +1,12 @@
-package pro.jianbing.aboutme.common;
+package pro.jianbing.aboutme.common.cache;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import pro.jianbing.aboutme.common.dto.SystemConfiguration;
 import pro.jianbing.aboutme.common.global.GlobalObject;
-import pro.jianbing.aboutme.service.system.SystemConfigurationService;
+import pro.jianbing.aboutme.common.global.GlobalString;
+import pro.jianbing.aboutme.entity.Timeline;
+import pro.jianbing.aboutme.service.TimelineService;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -19,17 +20,16 @@ import java.util.List;
  * @Description: ${Description}
  */
 @Component
-public class SystemCache {
+public class HotSpotDataCache {
 
     @Autowired
-    private SystemConfigurationService configurationService;
+    private TimelineService timelineService;
 
     @PostConstruct
     public void init() {
-        // 把系统配置存放缓存中
-        List<SystemConfiguration> configurations = configurationService.getAll();
-        GlobalObject.CONFIGURATION_MAP.clear();
-        configurations.forEach(e -> GlobalObject.CONFIGURATION_MAP.put(e.getItem(),e.getValue()));
+        List<Timeline> timelines = timelineService.getAllNormalTimelines();
+        GlobalObject.HOT_DATA_MAP.clear();
+        GlobalObject.HOT_DATA_MAP.put(GlobalString.TIMELINES,timelines);
     }
 
     @PreDestroy

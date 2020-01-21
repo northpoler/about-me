@@ -18,4 +18,6 @@ public class GlobalString {
      * cookie的对象：remember
      */
     public static final String COOKIE_REMEMBER = "remember";
+
+    public static final String TIMELINES = "timelines";
 }

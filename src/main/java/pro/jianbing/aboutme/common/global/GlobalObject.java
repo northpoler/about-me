@@ -15,4 +15,9 @@ public class GlobalObject {
      * 系统设置配置缓存Map
      */
     public final static Map<String, String> CONFIGURATION_MAP = new WeakHashMap<>();
+
+    /**
+     * 热点数据Map
+     */
+    public final static Map<String, Object> HOT_DATA_MAP = new WeakHashMap<>();
 }

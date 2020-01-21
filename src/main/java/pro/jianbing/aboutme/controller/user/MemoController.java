@@ -67,7 +67,7 @@ public class MemoController extends BaseController {
         try {
             User user = getUser();
             memoService.delete(id,user.getId());
-            baseResult = BaseResult.success("删除成功！");
+            baseResult = BaseResult.success(DEL_SUCCESS);
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();
@@ -104,7 +104,7 @@ public class MemoController extends BaseController {
             }
             memo.setId(id);
             Integer save = memoService.update(memo);
-            baseResult = save>0? BaseResult.success("更新成功！"):BaseResult.fail("更新失败！");
+            baseResult = save>0? BaseResult.success(MOD_SUCCESS):BaseResult.fail(MOD_FAIL);
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();
