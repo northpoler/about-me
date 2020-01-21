@@ -26,15 +26,23 @@ public class LikeController extends BaseController {
     }
 
     @GetMapping("insert")
-    public Integer insertLike(){
-        Like like = new Like();
-        like.setIp(getIpByRequest());
-        User user = getUser();
-        if (null!=user){
-            like.setUserId(user.getId());
+    public BaseResult insertLike(){
+        BaseResult baseResult;
+        try {
+            Like like = new Like();
+            like.setIp(getIpByRequest());
+            User user = getUser();
+            if (null!=user){
+                like.setUserId(user.getId());
+            }
+            likeService.insertLike(like);
+            int sumLikes = likeService.getSumLikes();
+            baseResult = BaseResult.success(sumLikes);
+        } catch (Exception e) {
+            e.printStackTrace();
+            baseResult = BaseResult.systemError();
         }
-        likeService.insertLike(like);
-        return likeService.getSumLikes();
+        return baseResult;
     }
 
     @GetMapping("count/all")
