@@ -1,7 +1,7 @@
 package pro.jianbing.aboutme.common.global;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 /**
  * @BelongsProject: about-me
@@ -14,10 +14,10 @@ public class GlobalObject {
     /**
      * 系统设置配置缓存Map
      */
-    public final static Map<String, String> CONFIGURATION_MAP = new WeakHashMap<>();
+    public final static Map<String, String> CONFIGURATION_MAP = new HashMap<>();
 
     /**
      * 热点数据Map
      */
-    public final static Map<String, Object> HOT_DATA_MAP = new WeakHashMap<>();
+    public final static Map<String, Object> HOT_DATA_MAP = new HashMap<>();
 }
