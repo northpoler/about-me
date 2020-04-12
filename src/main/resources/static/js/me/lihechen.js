@@ -150,6 +150,10 @@ $("#correct").click(function () {
     });
 });
 
+function downloadPic() {
+    window.location.href="download/picture/li_hechen/jpg";
+}
+
 // 记录点击献花按钮的时间，以控制点击频率
 var clickTime = new Date().getTime();
 

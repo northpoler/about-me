@@ -22,6 +22,6 @@ public class PersonalIndexController extends BaseController {
         String addressByIp = NetworkUtil.getAddressByIp(user.getLastIP());
         model.addAttribute(GlobalString.ATTRIBUTE_USER,user);
         model.addAttribute("address",addressByIp);
-        return "personal_index";
+        return "manage/personal_index";
     }
 }

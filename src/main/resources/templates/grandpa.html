@@ -62,10 +62,9 @@
             <div class="layui-card-body">
                 <img alt="《继古开今图》" th:src="@{../static/image/grandpa/grandpa.jpg}"/>
                 <br/><br/>
-                <a th:href="@{../static/image/grandpa/li_hechen.jpg}" download="《继古开今》(李贺臣同志纪念图)">
-                    <span style="text-decoration: underline;color: deeppink">点击下载原图</span></a>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" onclick="downloadPic()">点击下载原图</button>
+                <span class="me-tip">若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可</span>
                 <br>
-                <p class="me-tip">若用微信点击无反应，可以点击页面右上角的三个小点，选择“在浏览器打开”，再下载即可</p>
             </div>
         </div>
         <div class="layui-card">
