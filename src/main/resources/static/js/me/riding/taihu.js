@@ -1,6 +1,18 @@
-window.onload = getCountdown;
+var visitCount = $("#visit_count").val();
+layui.use('layer', function () {
+    var layer = layui.layer;
+    layer.msg(
+        '欢迎，你是第' + visitCount + '位访客！',
+        {
+            offset: 'auto',
+            anim: 4,
+            time: 2000,
+            icon: 6
+        }
+    );
+});
 
-var title;
+getCountdown();
 
 function getCountdown() {
     var now = new Date();
@@ -52,17 +64,3 @@ function countdown() {
 function getFormedStyle(source, len) {
     return (Array(len).join('0') + source).slice(-len);
 }
-
-var visitCount = $("#visit_count").val();
-layui.use('layer', function () {
-    var layer = layui.layer;
-    layer.msg(
-        '欢迎，你是第' + visitCount + '位访客！',
-        {
-            offset: 'auto',
-            anim: 4,
-            time: 2000,
-            icon: 6
-        }
-    );
-});
