@@ -5,10 +5,9 @@
     <title>你有新的消息</title>
 </head>
 <body>
-<p>你好，有人提交了新的时间线信息！<span style="font-weight: bold;color: deeppink;">主体内容如下：</span></p>
+<p>你好，有人提交了新的<span th:text="${type}"></span>！<span style="font-weight: bold;color: deeppink;">主体内容如下：</span></p>
 <div style="background-color: lightcyan;padding: 7px 20px;">
     <p th:text="${content}"></p>
 </div>
-<a href="http://www.jianbing.pro/timeline/manage">查看详情>>></a>
 </body>
 </html>

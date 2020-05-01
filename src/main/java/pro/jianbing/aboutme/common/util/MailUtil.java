@@ -11,6 +11,7 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
+import pro.jianbing.aboutme.common.enums.EmailTypeEnum;
 
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
@@ -110,10 +111,11 @@ public class MailUtil {
             e.printStackTrace();
         }
     }
-    public void sendMailTemplate(String message) {
+    public void sendMailTemplate(String message, EmailTypeEnum emailType) {
         try {
             Context context = new Context();
             context.setVariable("content", message);
+            context.setVariable("type", emailType.getValue());
             String content = templateEngine.process("email", context);
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true);

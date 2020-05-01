@@ -1,5 +1,7 @@
 package pro.jianbing.aboutme.common.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
@@ -16,6 +18,7 @@ import javax.servlet.http.HttpSession;
  * @Description: ${Description}
  */
 public class BaseController {
+    protected static final Logger logger = LoggerFactory.getLogger(BaseController.class);
     @Autowired
     private HttpServletRequest request;
 

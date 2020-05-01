@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.enums.EmailTypeEnum;
 import pro.jianbing.aboutme.common.util.MailUtil;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.service.TimelineService;
@@ -50,7 +51,7 @@ public class TimelineController extends BaseController {
             timeline.setIp(getIpByRequest());
             Integer save = service.save(timeline);
             if (null != save && save>0){
-                mailUtil.sendMailTemplate(timeline.getContent());
+                mailUtil.sendMailTemplate(timeline.getContent(), EmailTypeEnum.TIMELINE);
                 baseResult = BaseResult.success(ADD_SUCCESS);
             } else {
                 baseResult = BaseResult.fail(ADD_FAIL);

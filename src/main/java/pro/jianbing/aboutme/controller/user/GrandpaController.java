@@ -30,7 +30,7 @@ public class GrandpaController {
     }
 
     @GetMapping("")
-    public String grandpa( Model model){
+    public String grandpa(Model model){
         try {
             int sumLikes = likeService.getSumLikes();
             Long visitCounts = visitService.getCountByTarget("/grandpa");

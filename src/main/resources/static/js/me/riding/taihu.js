@@ -64,3 +64,40 @@ function countdown() {
 function getFormedStyle(source, len) {
     return (Array(len).join('0') + source).slice(-len);
 }
+
+$("#join").click(function () {
+    layer.open({
+        content: '微信或电我：1700 520 9060'
+        ,title: '欢迎'
+        ,btn: ['确定']
+        ,yes: function(index, layero){
+            layer.close(index);
+        }
+    });
+});
+
+$("#advise").click(function () {
+    layer.prompt({
+        formType: 2,
+        value: '在这里写下对这次行程的建议或其他想说的话',
+        title: '提建议'
+    }, function(value, index, elem){
+        showloading(true);
+        asyncPost('/riding/taihu/advise',{'advise':value},function (data) {
+            showloading(false);
+            if (data.result) {
+                layer.msg(data.message,{
+                    icon:1,
+                    time:1500
+                },function(){
+                    parent.layer.close(index)
+                });
+            } else {
+                layer.msg(data.message,{
+                    icon:2,
+                    time:1500
+                },function(){});
+            }
+        });
+    });
+});
