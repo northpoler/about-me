@@ -31,6 +31,10 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
      */
     private static final String GRANDPA_URL = "/grandpa";
     /**
+     * 太湖骑行
+     */
+    private static final String TAIHU_URL = "/riding/taihu";
+    /**
      * 主页（搜索用）
      */
     private static final String INDEX_URL = "/";
@@ -55,7 +59,7 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
             subUrl = subUrl.substring(0,subUrl.indexOf(";jsessionid"));
         }
         //如果访问特定页面，记录访问信息
-        if (GRANDPA_URL.equals(subUrl)||INDEX_URL.equals(subUrl)){
+        if (GRANDPA_URL.equals(subUrl)||INDEX_URL.equals(subUrl)||TAIHU_URL.equals(subUrl)){
             Visit visit = new Visit();
             String ipAddress = NetworkUtil.getIpAddress(request);
             String addressByIp = NetworkUtil.getAddressByIp(ipAddress);

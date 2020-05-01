@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh">
+<head>
+    <title>环太湖骑行</title>
+    <meta name="keywords" content="太湖,骑行,环太湖骑行">
+    <meta name="description" content="李建兵2020年国庆环太湖骑行计划和记录">
+    <meta th:include="top :: top"/>
+    <style>
+        .layui-card-header {
+            font-weight: bold;
+            font-size: large;
+            text-align: center;
+            color: deeppink;
+            background-color: lightcyan;
+        }
+
+        .layui-card-body {
+            font-size: large;
+            background-color: lightcyan;
+        }
+
+        img {
+            width: 100%;
+        }
+
+        .layui-field-title {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body class="me-body">
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
+        <blockquote class="layui-elem-quote" style="background-color: lightcyan">
+            <p style="font-size: larger" class="layui-hide" id="main_title">距离计划开始还有：</p>
+            <div class="me-text-center me-text-stress" style="font-size: larger;margin: 1em 0em" id="count_down">
+
+            </div>
+        </blockquote>
+        <fieldset class="layui-elem-field layui-field-title">
+            <legend>计划概览</legend>
+        </fieldset>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                路线图
+            </div>
+            <div class="layui-card-body">
+                <img alt="路线图" th:src="@{../../static/image/riding/taihu/line.jpg}"/>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                计划概况
+            </div>
+            <div class="layui-card-body">
+                <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;2020/10/01-2020/10/08(2号出发)</p>
+                <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;393.2km（湖岸线）</p>
+                <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;湖州出发，逆时针方向</p>
+                <p><i class="layui-icon layui-icon-user me-text-stress"></i>&nbsp;2-4人（期待人数，目前
+                    <span class="me-text-stress" th:text="${ridingTaihuNumber}"></span>人）</p>
+                <p><i class="layui-icon layui-icon-flag me-text-stress"></i>&nbsp;逢雨而停 遇景而止 环湖而行 顺心为主</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                所需物品
+            </div>
+            <div class="layui-card-body">
+                <p><span class="layui-badge-dot"></span>&nbsp;单车：到湖州租赁，轻装上阵</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;衣物：慢骑行，无需专业套装</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;摄备：有云台或大疆的私我
+                    <i class="layui-icon layui-icon-face-surprised me-text-stress"></i></p>
+                <p><span class="layui-badge-dot"></span>&nbsp;其他：身体健康，可日骑百里</p>
+            </div>
+        </div>
+        <fieldset class="layui-elem-field layui-field-title">
+            <legend>详细计划</legend>
+        </fieldset>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-01
+            </div>
+            <div class="layui-card-body">
+                <img alt="湖州" th:src="@{../../static/image/riding/taihu/wuxing.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;国庆第一天到湖州吴兴区，准备装备+休息修整</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-02
+            </div>
+            <div class="layui-card-body">
+                <img alt="太湖湾大桥" th:src="@{../../static/image/riding/taihu/wujiang.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-03
+            </div>
+            <div class="layui-card-body">
+                <img alt="洞庭东山" th:src="@{../../static/image/riding/taihu/dongshan.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达苏州市吴中区的洞庭东山休憩，这是太湖最大的半岛</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-04
+            </div>
+            <div class="layui-card-body">
+                <img alt="西洞庭山" th:src="@{../../static/image/riding/taihu/xishan.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，到达太湖中最大的岛，西洞庭山，并夜宿于此。</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-05
+            </div>
+            <div class="layui-card-body">
+                <img alt="东南大学无锡分校" th:src="@{../../static/image/riding/taihu/seu.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;一路赏，一路行。直达无锡，夜游东南大学无锡分校</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-06
+            </div>
+            <div class="layui-card-body">
+                <img alt="常州太湖湾" th:src="@{../../static/image/riding/taihu/changzhou.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;依次经过鼋头渚、龙头渚，在常州太湖湾附近歇脚。</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-07
+            </div>
+            <div class="layui-card-body">
+                <img alt="冲线" th:src="@{../../static/image/riding/taihu/finish.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;绕太湖西段一路骑行，直达终点（起点）。</p>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                2020-10-08
+            </div>
+            <div class="layui-card-body">
+                <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
+                <p class="me-tip">图片来源网络，如侵权请联系删除</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班。</p>
+            </div>
+        </div>
+        <fieldset class="layui-elem-field layui-field-title">
+            <legend>写在最后</legend>
+        </fieldset>
+        <div class="layui-card">
+            <div class="layui-card-header">
+                招募
+            </div>
+            <div class="layui-card-body">
+                <p>
+                    目前包括我共<span class="me-text-stress" th:text="${ridingTaihuNumber}"></span>人，如有意愿可联系我
+                    <i class="layui-icon layui-icon-face-smile me-text-stress"></i>
+                </p>
+            </div>
+        </div>
+        <div style="font-size: small;text-align: center;color: gray;margin: 3em 0em 2em 0em">
+            <a href="http://www.beian.miit.gov.cn" target="_blank">备案号：皖ICP备19001037号</a>
+        </div>
+    </div>
+</div>
+<script th:src="@{../../static/js/me/riding/taihu.js}"></script>
+</body>
+</html>
