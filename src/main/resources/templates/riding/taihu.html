@@ -77,8 +77,18 @@
                 路线示意
             </div>
             <div class="layui-card-body">
-                <span>湖州吴兴</span>
-                <div class="layui-slider-wrap-btn me-text-center" style="border: 2px solid #009688;width: 20px;height: 20px">1</div>
+                <div style="margin: 1em 0">
+                    <div id="slideLine" style="margin: 1em 0"></div>
+                    <div class="me-text-center">
+                        <button class="layui-btn layui-btn-warm adjust-slider" id="plus_btn_negative_five">-5</button>
+                        <button class="layui-btn layui-btn-warm adjust-slider" id="plus_btn_negative_one">-1</button>
+                        <button class="layui-btn layui-btn-normal adjust-slider" id="plus_btn_positive_one">+1</button>
+                        <button class="layui-btn layui-btn-normal adjust-slider" id="plus_btn_positive_five">+5</button>
+                    </div>
+                </div>
+                <p><span class="layui-badge-dot"></span>&nbsp;<span id="slideLine_distance">0km</span></p>
+                <p><span class="layui-badge-dot"></span>&nbsp;<span id="slideLine_time">2020-10-02</span></p>
+                <p><span class="layui-badge-dot"></span>&nbsp;<span id="slideLine_place">湖州市吴兴区</span></p>
             </div>
         </div>
         <div class="layui-card">
