@@ -49,11 +49,9 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         StringBuffer url = request.getRequestURL();
-        log.info("拦截请求："+url);
         String subUrl = url.substring(7);
         int lastIndex = subUrl.indexOf("/");
         subUrl = subUrl.substring(lastIndex);
-        log.info("具体的请求是："+subUrl);
         HttpSession session = request.getSession();
         if (subUrl.contains(";jsessionid")){
             subUrl = subUrl.substring(0,subUrl.indexOf(";jsessionid"));
