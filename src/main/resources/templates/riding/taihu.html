@@ -64,7 +64,14 @@
                 路线示意
             </div>
             <div class="layui-card-body">
-                <div style="margin: 1em 0">
+                <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
+                    <span id="slideLine_distance">0km【剩余452km】</span></p>
+                <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;
+                    <span id="slideLine_time">2020-10-02</span></p>
+                <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
+                    <span id="slideLine_place">湖州市吴兴区</span></p>
+                <hr>
+                <div style="margin: 2em 0">
                     <div id="slideLine" style="margin: 1em 0"></div>
                     <div class="me-text-center">
                         <button class="layui-btn layui-btn-warm adjust-slider">-5</button>
@@ -74,13 +81,6 @@
                     </div>
                 </div>
                 <p class="me-tip">可直接在线上点击，或通过按钮微调(PC端可拖拽、长按)</p>
-                <hr>
-                <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
-                    <span id="slideLine_distance">0km【剩余452km】</span></p>
-                <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;
-                    <span id="slideLine_time">2020-10-02</span></p>
-                <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
-                    <span id="slideLine_place">湖州市吴兴区</span></p>
             </div>
         </div>
         <div class="layui-card">
@@ -102,11 +102,11 @@
         </div>
         <div class="layui-card">
             <div class="layui-card-header">
-                所需物品
+                所需准备
             </div>
             <div class="layui-card-body">
                 <p><i class="layui-icon layui-icon-console me-text-stress"></i>&nbsp;
-                    单车：到湖州租赁，轻装上阵</p>
+                    单车：出发地租赁，轻装上阵</p>
                 <p><i class="layui-icon layui-icon-template-1 me-text-stress"></i>&nbsp;
                     衣物：慢骑行，无需专业套装</p>
                 <p><i class="layui-icon layui-icon-video me-text-stress"></i>&nbsp;
@@ -204,6 +204,10 @@
                 <p class="me-tip">图片来源网络，如侵权请联系删除</p>
                 <p><span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班。</p>
             </div>
+        </div>
+        <div style="padding: 0 1em">
+            <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;|
+                参加<span th:text="${ridingTaihuNumber}"></span>人(含本人)</p>
         </div>
         <div class="me-text-center" style="margin: 3em 0">
             <button type="button" class="layui-btn layui-btn-normal" id="advise">
