@@ -83,7 +83,7 @@ window.onload = function () {
     // 获取倒计时
     getCountdown();
     // 如果是移动端进行的调整
-    if(navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i)){
+    if(isMobile()){
         // 更改搜索引擎
         document.searchForm.action="http://m.baidu.com/s";
     }

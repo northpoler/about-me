@@ -64,27 +64,10 @@ function countdown() {
 function getFormedStyle(source, len) {
     return (Array(len).join('0') + source).slice(-len);
 }
-layui.use('slider', function(){
-    var slider = layui.slider;
 
-    //渲染
-    lineSlider = slider.render({
-        elem: '#slideLine'  //绑定元素
-        ,max: 452
-        ,setTips: function(value){ //自定义提示文本
-            return value + 'km';
-        }
-        ,change: function(value){
-            changeSildeLine(value);
-        }
-    });
-});
-
-$(function () {
-    setAdjustBtn(0);
-});
-
-$(".adjust-slider").mousedown(function(e){
+var adjustSliders = $(".adjust-slider");
+var lineSlider;
+adjustSliders.mousedown(function(e){
     var distance = parseInt($(this).html());
     timer=setInterval(function(){
         var value = $(".layui-slider-tips").html();
@@ -100,11 +83,11 @@ $(".adjust-slider").mousedown(function(e){
         //按住期间执行的代码
     },200)
 });
-$(".adjust-slider").mouseup(function(e){
+adjustSliders.mouseup(function(e){
     clearInterval(timer);
 });
 
-$(".adjust-slider").click(function () {
+adjustSliders.click(function () {
     var distance = parseInt($(this).html());
     if ($(this).hasClass("layui-btn-disabled")) {
         return false;
@@ -122,11 +105,11 @@ function sildeValueAdjust(adjustValue) {
     distance = distance + parseInt(adjustValue);
     setAdjustBtn(distance);
     lineSlider.setValue(distance);
-    changeSildeLine(distance+"km");
+    changeSlideLine(distance+"km");
 }
 
 function setAdjustBtn(value) {
-    $(".adjust-slider").each(function () {
+    adjustSliders.each(function () {
         var distance = parseInt($(this).html());
         if (distance + value < 0 || distance + value > 452) {
             $(this).addClass("layui-btn-disabled");
@@ -136,58 +119,73 @@ function setAdjustBtn(value) {
     });
 }
 
-function changeSildeLine(value) {
-    $("#slideLine_distance").html(value);
+function changeSlideLine(value) {
     var distance = parseInt(value.substr(0,value.length-2));
+    $("#slideLine_distance").html(value+"【剩余:"+(452-distance)+"km】");
     setAdjustBtn(distance);
     if (distance<=82){
-        $("#slideLine_time").html('2020-10-02');
+        $("#slideLine_time").html('2020-10-02【第1天，剩5天】');
         if (distance<=5) {
-            $("#slideLine_place").html('湖州市吴兴区');
+            $("#slideLine_place").html('湖州市·吴兴区');
         } else if (distance <= 39) {
-            $("#slideLine_place").html('湖州市长兴县');
+            $("#slideLine_place").html('湖州市·长兴县');
         } else {
-            $("#slideLine_place").html('无锡市宜兴市');
+            $("#slideLine_place").html('无锡市·宜兴市');
         }
     } else if (82 < distance && distance <=175) {
-        $("#slideLine_time").html('2020-10-03');
+        $("#slideLine_time").html('2020-10-03【第2天，剩4天】');
         if (distance<=87) {
-            $("#slideLine_place").html('常州市武进区');
+            $("#slideLine_place").html('常州市·武进区');
         } else {
-            $("#slideLine_place").html('无锡市滨湖区');
+            $("#slideLine_place").html('无锡市·滨湖区');
         }
     } else if (175 < distance && distance <= 252) {
-        $("#slideLine_time").html('2020-10-04');
+        $("#slideLine_time").html('2020-10-04【第3天，剩3天】');
         if (distance<=179) {
-            $("#slideLine_place").html('无锡市滨湖区');
+            $("#slideLine_place").html('无锡市·滨湖区');
         } else if (distance <= 184) {
-            $("#slideLine_place").html('苏州市相城区');
+            $("#slideLine_place").html('苏州市·相城区');
         } else if (distance <= 199) {
-            $("#slideLine_place").html('苏州市虎丘区');
+            $("#slideLine_place").html('苏州市·虎丘区');
         } else {
-            $("#slideLine_place").html('苏州市吴中区');
+            $("#slideLine_place").html('苏州市·吴中区');
         }
     } else if (252 < distance && distance <=333) {
-        $("#slideLine_time").html('2020-10-05');
-        $("#slideLine_place").html('苏州市吴中区');
+        $("#slideLine_time").html('2020-10-05【第4天，剩2天】');
+        $("#slideLine_place").html('苏州市·吴中区');
     } else if (333 < distance && distance <=394) {
-        $("#slideLine_time").html('2020-10-06');
+        $("#slideLine_time").html('2020-10-06【第5天，剩1天】');
         if (distance<=379) {
-            $("#slideLine_place").html('苏州市吴中区');
+            $("#slideLine_place").html('苏州市·吴中区');
         } else {
-            $("#slideLine_place").html('苏州市吴江区');
+            $("#slideLine_place").html('苏州市·吴江区');
         }
     } else {
-        $("#slideLine_time").html('2020-10-07');
+        $("#slideLine_time").html('2020-10-07【第6天，最后1天】');
         if (distance<=429) {
-            $("#slideLine_place").html('苏州市吴江区');
+            $("#slideLine_place").html('苏州市·吴江区');
         } else {
-            $("#slideLine_place").html('湖州市吴兴区');
+            $("#slideLine_place").html('湖州市·吴兴区');
         }
     }
 }
 
-
+layui.use('slider', function(){
+    var slider = layui.slider;
+    //渲染
+    lineSlider = slider.render({
+        elem: '#slideLine'  //绑定元素
+        , max: 452
+        , setTips: function (value) { //自定义提示文本
+            return value + 'km';
+        }
+        , change: function (value) {
+            changeSlideLine(value);
+        }
+    });
+    var defaultDistance = Math.floor(Math.random()*200+22);
+    lineSlider.setValue(defaultDistance);
+});
 
 $("#join").click(function () {
     layer.open({
@@ -370,11 +368,11 @@ var initPhotoSwipeFromDOM = function(gallerySelector) {
             },
             fullscreenEl : false, // 是否支持全屏按钮
             shareButtons: [
-                {id:'wechat', label:'分享微信', url:'#'},
-                {id:'weibo', label:'新浪微博', url:'#'},
+                /*{id:'wechat', label:'分享微信', url:'#'},
+                {id:'weibo', label:'新浪微博', url:'#'},*/
                 {id:'download', label:'保存图片', url:'{{raw_image_url}}', download:true}
             ], // 分享按钮
-
+            tapToClose: true, //默认关闭
             // define gallery index (for URL)
             galleryUID: galleryElement.getAttribute('data-pswp-uid'),
 
