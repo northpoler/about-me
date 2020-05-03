@@ -436,3 +436,39 @@ var initPhotoSwipeFromDOM = function(gallerySelector) {
 
 // execute above function
 initPhotoSwipeFromDOM('.my-gallery');
+$(document).ready(function () {
+    var mySwiper = new Swiper ('.swiper-container', {
+        direction: 'horizontal', // 垂直切换选项
+        loop: true, // 循环模式选项
+
+        // 如果需要分页器
+        pagination: {
+            el: '.swiper-pagination',
+            /*type: 'bullets',*/
+            //type: 'fraction',
+            //type : 'progressbar',
+            //type : 'custom',
+            clickable :true,
+            /*renderBullet: function (index, className) {
+                return '<span class="' + className + '">' + (index + 1) + '</span>';
+            },*/
+        },
+
+        // 如果需要前进后退按钮
+        navigation: {
+            nextEl: '.swiper-button-next',
+            prevEl: '.swiper-button-prev',
+        },
+        autoplay: true,//自动播放
+        grabCursor : true,//显示抓手
+        //autoHeight: true, //高度随内容变化
+        //preloadImages:false,//是否加载所有图片才初始化
+        //updateOnImagesReady : true,//加载完图片后是否重新初始化
+        // 如果需要滚动条
+        scrollbar: {
+            el: '.swiper-scrollbar',
+            hide: true
+        },
+        zoom : true,
+    })
+});
