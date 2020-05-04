@@ -49,6 +49,16 @@
         .swiper-slide > .layui-card > .layui-card-body {
             padding-bottom: 2em;
         }
+        .layui-colla-title {
+            background-color: #d1fffc;
+        }
+        .layui-colla-item {
+            background-color: #f1ffff;
+        }
+        .me-dot {
+            color: #1E9FFF;
+            padding: 0 0.2em;
+        }
     </style>
 </head>
 <body class="me-body">
@@ -56,13 +66,9 @@
     <div class="layui-col-md6 layui-col-md-offset3">
         <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
         <blockquote class="layui-elem-quote" style="background-color: lightcyan">
-            <p style="font-size: larger" class="layui-hide" id="main_title">距离计划开始还有：</p>
             <div class="me-text-center me-text-stress"
-                 style="font-size: larger;margin: 1em 0em" id="count_down"></div>
+                 style="font-size: larger;margin: 0.5em 0" id="count_down"></div>
         </blockquote>
-        <fieldset class="layui-elem-field layui-field-title">
-            <legend>计划概览</legend>
-        </fieldset>
         <div class="layui-card">
             <div class="layui-card-header">
                 路线全图
@@ -84,11 +90,11 @@
             </div>
             <div class="layui-card-body">
                 <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
-                    <span id="slideLine_distance">0km【剩余452km】</span></p>
+                    <span id="slideLine_distance">0km<span class="me-dot">●</span>余452km<span class="me-dot">●</span>0%</span></p>
                 <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;
-                    <span id="slideLine_time">2020-10-02</span></p>
+                    <span id="slideLine_time">10-02<span class="me-dot">●</span>第1天<span class="me-dot">●</span>余5天</span></p>
                 <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
-                    <span id="slideLine_place">湖州市吴兴区</span></p>
+                    <span id="slideLine_place">湖州市<span class="me-dot">●</span>吴兴区</span></p>
                 <hr>
                 <div style="margin: 2em 0">
                     <div id="slideLine" style="margin: 1em 0"></div>
@@ -113,26 +119,8 @@
                     393.2km(湖岸线)~452km(估)</p>
                 <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
                     湖州起止，顺时针环湖</p>
-                <p><i class="layui-icon layui-icon-user me-text-stress"></i>&nbsp;
-                    2-4人(最佳人数，目前<span class="me-text-stress" th:text="${ridingTaihuNumber}"></span>人)</p>
                 <p><i class="layui-icon layui-icon-flag me-text-stress"></i>&nbsp;
                     环湖而行 遇景则止 逢雨即停</p>
-            </div>
-        </div>
-        <div class="layui-card">
-            <div class="layui-card-header">
-                所需准备
-            </div>
-            <div class="layui-card-body">
-                <p><i class="layui-icon layui-icon-console me-text-stress"></i>&nbsp;
-                    单车：出发地租赁，轻装上阵</p>
-                <p><i class="layui-icon layui-icon-template-1 me-text-stress"></i>&nbsp;
-                    衣物：慢骑行，无需专业套装</p>
-                <p><i class="layui-icon layui-icon-video me-text-stress"></i>&nbsp;
-                    摄备：手机云台和大疆暂无
-                    <i class="layui-icon layui-icon-face-surprised me-text-stress"></i></p>
-                <p><i class="layui-icon layui-icon-more me-text-stress"></i>&nbsp;
-                    其他：身体健康，可日骑百里</p>
             </div>
         </div>
         <fieldset class="layui-elem-field layui-field-title">
@@ -147,8 +135,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="湖州" th:src="@{../../static/image/riding/taihu/wuxing.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息修整。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息修整</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;start</p>
                         </div>
                     </div>
@@ -160,8 +148,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="常州太湖湾" th:src="@{../../static/image/riding/taihu/changzhou.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约82km</p>
                         </div>
                     </div>
@@ -173,8 +161,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="东南大学无锡分校" th:src="@{../../static/image/riding/taihu/seu.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;依次经过鼋头渚、龙头渚。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约93km</p>
                         </div>
                     </div>
@@ -186,8 +174,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="西洞庭山" th:src="@{../../static/image/riding/taihu/xishan.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约77km</p>
                         </div>
                     </div>
@@ -199,8 +187,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="洞庭东山" th:src="@{../../static/image/riding/taihu/dongshan.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约81km</p>
                         </div>
                     </div>
@@ -212,8 +200,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="太湖湾大桥" th:src="@{../../static/image/riding/taihu/wujiang.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约61km</p>
                         </div>
                     </div>
@@ -225,8 +213,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="冲线" th:src="@{../../static/image/riding/taihu/finish.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约58km</p>
                         </div>
                     </div>
@@ -238,8 +226,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
-                            <p class="me-tip">图片来源网络，如侵权请联系删除</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班。</p>
+                            <p class="me-tip">网图，侵删</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;end</p>
                         </div>
                     </div>
@@ -253,7 +241,44 @@
             <!-- 如果需要滚动条 -->
             <!--<div class="swiper-scrollbar"></div>-->
         </div>
-        <div style="padding: 1em">
+        <div class="layui-card" style="margin: 1em 0">
+            <div class="layui-card-header">
+                常见问题
+            </div>
+            <div class="layui-card-body" style="padding: 0">
+                <div class="layui-collapse" lay-accordion>
+                    <div class="layui-colla-item">
+                        <h2 class="layui-colla-title">1、没有长途骑行经验可以参加吗？</h2>
+                        <div class="layui-colla-content layui-show">
+                            <p><span class="layui-badge-dot"></span>&nbsp;当然可以！400多km，6天完成，平均每天约70km，拖鞋+哈罗都可以轻松完成~</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;提前一两周适应性锻炼下会更好！</p>
+                        </div>
+                    </div>
+                    <div class="layui-colla-item">
+                        <h2 class="layui-colla-title">2、需要准备什么东西？</h2>
+                        <div class="layui-colla-content">
+                            <p><span class="layui-badge-dot"></span>&nbsp;一两套速干的换洗衣物即可，单车可以在出发地租赁</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;如果有手机云台或者大疆，那就更好啦！可以完美记录整个行程~</p>
+                        </div>
+                    </div>
+                    <div class="layui-colla-item">
+                        <h2 class="layui-colla-title">3、路途中意见不一怎么办？</h2>
+                        <div class="layui-colla-content">
+                            <p><span class="layui-badge-dot"></span>&nbsp;全程分为了6段，每个人轮流当队长，队员需要以队长的意见为准</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;当然，队长也要尽量照顾到大多数的想法，同时做出科学合理的决策</p>
+                        </div>
+                    </div>
+                    <div class="layui-colla-item">
+                        <h2 class="layui-colla-title">4、食宿问题怎么解决？</h2>
+                        <div class="layui-colla-content">
+                            <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
+                            <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="padding-left: 1em">
             <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;|
                 参加<span th:text="${ridingTaihuNumber}"></span>人(含本人)</p>
         </div>

@@ -1,4 +1,4 @@
-var visitCount = $("#visit_count").val();
+/*var visitCount = $("#visit_count").val();
 layui.use('layer', function () {
     var layer = layui.layer;
     layer.msg(
@@ -10,6 +10,10 @@ layui.use('layer', function () {
             icon: 6
         }
     );
+});*/
+
+layui.use('element', function(){
+    var element = layui.element;
 });
 
 getCountdown();
@@ -19,12 +23,10 @@ function getCountdown() {
     var holiday_start = new Date("OCT 1 2020 00:00:00");
     var holiday_end = new Date("OCT 8 2020 00:00:00");
     if (holiday_start.getTime() > now.getTime()) {
-        $("#main_title").removeClass('layui-hide');
         end = holiday_start;
         isEnd = false;
         countdown();
     } else if (holiday_end.getTime() > now.getTime()) {
-        $("#main_title").addClass('layui-hide');
         $("#count_down").html('骑行活动进行中！');
     } else {
         $("#count_down").html('骑行计划已完结！');
@@ -57,8 +59,8 @@ function countdown() {
     minutes = getFormedStyle(minutes, 2);
     seconds = getFormedStyle(seconds, 2);
     milliseconds = getFormedStyle(milliseconds, 3);
-    $("#count_down").html(days + "天" + hours + "小时" + minutes + "分" + seconds + "秒" + milliseconds/* + "毫秒"*/);
-    setTimeout(countdown, 33);
+    $("#count_down").html("即将开始："+days + "天" + hours + "小时" + minutes + "分" + seconds + "秒"/* + milliseconds + "毫秒"*/);
+    setTimeout(countdown, 333);
 }
 
 function getFormedStyle(source, len) {
@@ -121,51 +123,52 @@ function setAdjustBtn(value) {
 
 function changeSlideLine(value) {
     var distance = parseInt(value.substr(0,value.length-2));
-    $("#slideLine_distance").html(value+"【剩余:"+(452-distance)+"km】");
+    $("#slideLine_distance").html(value+'<span class="me-dot">●</span>余'+(452-distance)+'km<span class="me-dot">●</span>'
+                                     + Math.round(distance*100/452*Math.pow(10, 2))/Math.pow(10, 2) +'%');
     setAdjustBtn(distance);
     if (distance<=82){
-        $("#slideLine_time").html('2020-10-02【第1天，剩5天】');
+        $("#slideLine_time").html('10-02<span class="me-dot">●</span>第1天<span class="me-dot">●</span>余5天');
         if (distance<=5) {
-            $("#slideLine_place").html('湖州市·吴兴区');
+            $("#slideLine_place").html('湖州市<span class="me-dot">●</span>吴兴区');
         } else if (distance <= 39) {
-            $("#slideLine_place").html('湖州市·长兴县');
+            $("#slideLine_place").html('湖州市<span class="me-dot">●</span>长兴县');
         } else {
-            $("#slideLine_place").html('无锡市·宜兴市');
+            $("#slideLine_place").html('无锡市<span class="me-dot">●</span>宜兴市');
         }
     } else if (82 < distance && distance <=175) {
-        $("#slideLine_time").html('2020-10-03【第2天，剩4天】');
+        $("#slideLine_time").html('10-03<span class="me-dot">●</span>第2天<span class="me-dot">●</span>余4天');
         if (distance<=87) {
-            $("#slideLine_place").html('常州市·武进区');
+            $("#slideLine_place").html('常州市<span class="me-dot">●</span>武进区');
         } else {
-            $("#slideLine_place").html('无锡市·滨湖区');
+            $("#slideLine_place").html('无锡市<span class="me-dot">●</span>滨湖区');
         }
     } else if (175 < distance && distance <= 252) {
-        $("#slideLine_time").html('2020-10-04【第3天，剩3天】');
+        $("#slideLine_time").html('10-04<span class="me-dot">●</span>第3天<span class="me-dot">●</span>余3天');
         if (distance<=179) {
-            $("#slideLine_place").html('无锡市·滨湖区');
+            $("#slideLine_place").html('无锡市<span class="me-dot">●</span>滨湖区');
         } else if (distance <= 184) {
-            $("#slideLine_place").html('苏州市·相城区');
+            $("#slideLine_place").html('苏州市<span class="me-dot">●</span>相城区');
         } else if (distance <= 199) {
-            $("#slideLine_place").html('苏州市·虎丘区');
+            $("#slideLine_place").html('苏州市<span class="me-dot">●</span>虎丘区');
         } else {
-            $("#slideLine_place").html('苏州市·吴中区');
+            $("#slideLine_place").html('苏州市<span class="me-dot">●</span>吴中区');
         }
     } else if (252 < distance && distance <=333) {
-        $("#slideLine_time").html('2020-10-05【第4天，剩2天】');
-        $("#slideLine_place").html('苏州市·吴中区');
+        $("#slideLine_time").html('10-05<span class="me-dot">●</span>第4天<span class="me-dot">●</span>余2天');
+        $("#slideLine_place").html('苏州市<span class="me-dot">●</span>吴中区');
     } else if (333 < distance && distance <=394) {
-        $("#slideLine_time").html('2020-10-06【第5天，剩1天】');
+        $("#slideLine_time").html('10-06<span class="me-dot">●</span>第5天<span class="me-dot">●</span>余1天');
         if (distance<=379) {
-            $("#slideLine_place").html('苏州市·吴中区');
+            $("#slideLine_place").html('苏州市<span class="me-dot">●</span>吴中区');
         } else {
-            $("#slideLine_place").html('苏州市·吴江区');
+            $("#slideLine_place").html('苏州市<span class="me-dot">●</span>吴江区');
         }
     } else {
-        $("#slideLine_time").html('2020-10-07【第6天，最后1天】');
+        $("#slideLine_time").html('10-07<span class="me-dot">●</span>第6天<span class="me-dot">●</span>最后1天');
         if (distance<=429) {
-            $("#slideLine_place").html('苏州市·吴江区');
+            $("#slideLine_place").html('苏州市<span class="me-dot">●</span>吴江区');
         } else {
-            $("#slideLine_place").html('湖州市·吴兴区');
+            $("#slideLine_place").html('湖州市<span class="me-dot">●</span>吴兴区');
         }
     }
 }
@@ -469,6 +472,6 @@ $(document).ready(function () {
             el: '.swiper-scrollbar',
             hide: true
         },
-        zoom : true,
+        //zoom : true,// 图片可缩放
     })
 });
