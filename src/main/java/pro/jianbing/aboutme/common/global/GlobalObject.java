@@ -20,4 +20,9 @@ public class GlobalObject {
      * 热点数据Map
      */
     public final static Map<String, Object> HOT_DATA_MAP = new HashMap<>();
+
+    /**
+     * 访问量Map
+     */
+    public final static Map<String, Long> VISIT_COUNT = new HashMap<>();
 }

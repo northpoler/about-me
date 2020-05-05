@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import pro.jianbing.aboutme.common.global.GlobalObject;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Timeline;
+import pro.jianbing.aboutme.service.CompanionService;
 import pro.jianbing.aboutme.service.TimelineService;
 
 import javax.annotation.PostConstruct;
@@ -24,12 +25,16 @@ public class HotSpotDataCache {
 
     @Autowired
     private TimelineService timelineService;
+    @Autowired
+    private CompanionService companionService;
 
     @PostConstruct
     public void init() {
         List<Timeline> timelines = timelineService.getAllNormalTimelines();
+        int companionCounts = companionService.countMembers();
         GlobalObject.HOT_DATA_MAP.clear();
         GlobalObject.HOT_DATA_MAP.put(GlobalString.TIMELINES,timelines);
+        GlobalObject.HOT_DATA_MAP.put(GlobalString.COMPANION_COUNT_TAIHU,companionCounts);
     }
 
     @PreDestroy
@@ -37,7 +42,7 @@ public class HotSpotDataCache {
 
     }
 
-    @Scheduled(cron = "0 0 0 * * ?")
+    @Scheduled(cron = "22 22 2 * * ?")
     public void refresh() {
         // 定时刷新缓存
         init();

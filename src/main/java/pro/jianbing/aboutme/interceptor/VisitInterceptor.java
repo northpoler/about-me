@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+import pro.jianbing.aboutme.common.enums.UrlEnum;
+import pro.jianbing.aboutme.common.global.GlobalObject;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.common.util.EncryptionUtil;
 import pro.jianbing.aboutme.common.util.NetworkUtil;
@@ -57,7 +59,7 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
             subUrl = subUrl.substring(0,subUrl.indexOf(";jsessionid"));
         }
         //如果访问特定页面，记录访问信息
-        if (GRANDPA_URL.equals(subUrl)||INDEX_URL.equals(subUrl)||TAIHU_URL.equals(subUrl)){
+        if (UrlEnum.hasValue(subUrl)){
             Visit visit = new Visit();
             String ipAddress = NetworkUtil.getIpAddress(request);
             String addressByIp = NetworkUtil.getAddressByIp(ipAddress);
@@ -70,6 +72,10 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
             }
             visit.setVisitTime(LocalDateTime.now());
             visitService.saveVisit(visit);
+            UrlEnum urlEnum = UrlEnum.getEnumByValue(subUrl);
+            if (null != urlEnum) {
+                GlobalObject.VISIT_COUNT.put(urlEnum.getCode(),GlobalObject.VISIT_COUNT.get(urlEnum.getCode())+1);
+            }
         }
         if (session.getAttribute(GlobalString.ATTRIBUTE_USER) == null){
             String loginToken = "";

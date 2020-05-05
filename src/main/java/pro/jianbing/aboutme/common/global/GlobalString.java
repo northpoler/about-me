@@ -18,8 +18,14 @@ public class GlobalString {
      * cookie的对象：remember
      */
     public static final String COOKIE_REMEMBER = "remember";
-
+    /**
+     * 时间线
+     */
     public static final String TIMELINES = "timelines";
+    /**
+     * 同伴人数（太湖骑行）
+     */
+    public static final String COMPANION_COUNT_TAIHU = "companionCountTaihu";
     /**
      * 标记：正常
      */

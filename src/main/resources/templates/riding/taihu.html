@@ -15,15 +15,15 @@
     <meta name="author" content="787331940@qq.com(李建兵)">
     <script src="http://libs.baidu.com/jquery/2.1.4/jquery.min.js"></script>
     <link rel="stylesheet" type="text/css" href="https://www.layuicdn.com/layui/css/layui.css" />
-    <link rel="shortcut icon" th:href="@{../static/image/favicon.ico}"/>
-    <link rel="stylesheet" type="text/css" th:href="@{../static/css/me/common.css}" />
+    <link rel="shortcut icon" th:href="@{../../static/image/favicon.ico}"/>
+    <link rel="stylesheet" type="text/css" th:href="@{../../static/css/me/common.css}" />
     <script src="https://www.layuicdn.com/layui/layui.js"></script>
-    <script th:src="@{../static/js/me/common.js}"></script>
-    <link href="https://cdn.bootcdn.net/ajax/libs/photoswipe/4.1.3/photoswipe.min.css" rel="stylesheet">
+    <script th:src="@{../../static/js/me/common.js}"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/photoswipe/4.1.3/photoswipe.min.css" rel="stylesheet"/>
     <script src="https://cdn.bootcdn.net/ajax/libs/photoswipe/4.1.3/photoswipe.min.js"></script>
-    <link href="https://cdn.bootcdn.net/ajax/libs/photoswipe/4.1.3/default-skin/default-skin.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/photoswipe/4.1.3/default-skin/default-skin.min.css" rel="stylesheet"/>
     <script src="https://cdn.bootcdn.net/ajax/libs/photoswipe/4.1.3/photoswipe-ui-default.min.js"></script>
-    <link crossorigin="anonymous" integrity="sha384-K0w/+I56zyFo/F95X8Bf9XmzXnLxPBsAD86HY3tb95VR17XZRythRpX+Zw8/av9a" href="https://lib.baomitu.com/Swiper/5.3.7/css/swiper.min.css" rel="stylesheet">
+    <link crossorigin="anonymous" integrity="sha384-K0w/+I56zyFo/F95X8Bf9XmzXnLxPBsAD86HY3tb95VR17XZRythRpX+Zw8/av9a" href="https://lib.baomitu.com/Swiper/5.3.7/css/swiper.min.css" rel="stylesheet"/>
     <script crossorigin="anonymous" integrity="sha384-sDrARk+KBYvP1/Kq29RQa0VlkDiIFdrn0qG9H9ao9MbX489pSjAXQZ6GlijuoPUD" src="https://lib.baomitu.com/Swiper/5.3.7/js/swiper.min.js"></script>
     <style>
         .layui-card-header {
@@ -50,14 +50,17 @@
             padding-bottom: 2em;
         }
         .layui-colla-title {
+            font-size: medium;
+        }
+        .layui-colla-title {
             background-color: #d1fffc;
         }
         .layui-colla-item {
             background-color: #f1ffff;
         }
-        .me-dot {
-            color: #1E9FFF;
-            padding: 0 0.2em;
+        .me-more-info {
+            color: grey;
+            padding: 0 0.5em;
         }
     </style>
 </head>
@@ -65,6 +68,7 @@
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
+        <input type="hidden" th:value="${status}" id="status"/>
         <blockquote class="layui-elem-quote" style="background-color: lightcyan">
             <div class="me-text-center me-text-stress"
                  style="font-size: larger;margin: 0.5em 0" id="count_down"></div>
@@ -90,11 +94,11 @@
             </div>
             <div class="layui-card-body">
                 <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
-                    <span id="slideLine_distance">0km<span class="me-dot">●</span>余452km<span class="me-dot">●</span>0%</span></p>
+                    <span id="slideLine_distance"></span></p>
                 <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;
-                    <span id="slideLine_time">10-02<span class="me-dot">●</span>第1天<span class="me-dot">●</span>余5天</span></p>
+                    <span id="slideLine_time"></span></p>
                 <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
-                    <span id="slideLine_place">湖州市<span class="me-dot">●</span>吴兴区</span></p>
+                    <span id="slideLine_place"></span></p>
                 <hr>
                 <div style="margin: 2em 0">
                     <div id="slideLine" style="margin: 1em 0"></div>
@@ -273,6 +277,22 @@
                         <div class="layui-colla-content">
                             <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
+                        </div>
+                    </div>
+                    <div class="layui-colla-item">
+                        <h2 class="layui-colla-title">5、有多少人参加了？现在来得及吗？</h2>
+                        <div class="layui-colla-content">
+                            <p><span class="layui-badge-dot"></span>
+                                加上我本人一共是<span th:text="${ridingTaihuNumber}"></span>人
+                            </p>
+                            <p><span class="layui-badge-dot"></span>
+                                <span th:text="想参加就赶紧和我说吧" th:if="${status==0 && ridingTaihuNumber==1}"></span>
+                                <span th:text="赶紧来三人行吧" th:if="${status==0 && ridingTaihuNumber==2}"></span>
+                                <span th:text="三缺一赶紧来吧" th:if="${status==0 && ridingTaihuNumber==3}"></span>
+                                <span th:text="快来壮大我们的队伍吧" th:if="${status==0 && ridingTaihuNumber>3}"></span>
+                                <span th:text="活动已经开始啦，如果赶得上就中途插入吧" th:if="${status==1}"></span>
+                                <span th:text="活动已经结束啦，期待下次活动的相遇吧" th:if="${status==2}"></span>
+                            </p>
                         </div>
                     </div>
                 </div>
