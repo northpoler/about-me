@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>参与人管理</title>
+    <meta th:include="top :: top"/>
+</head>
+<body>
+<div class="layui-row">
+    <table class="layui-hide" id="data" lay-filter="test"></table>
+    <script type="text/html" id="tool_bar">
+        <div class="layui-btn-container">
+            <button class="layui-btn layui-btn-sm" onclick="add()">添加</button>
+        </div>
+    </script>
+</div>
+<script type="text/html" id="bar">
+    <a class="layui-btn layui-btn-xs" lay-event="edit"><i class="layui-icon layui-icon-edit"></i></a>
+    <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del"><i class="layui-icon layui-icon-delete"></i></a>
+</script>
+<script th:src="@{../../static/js/me/manage/companion.js}"></script>
+</body>
+</html>

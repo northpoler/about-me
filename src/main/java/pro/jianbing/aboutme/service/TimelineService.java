@@ -69,7 +69,7 @@ public class TimelineService {
         }
         Timeline save = timelineRepositoty.save(line);
         if (GlobalString.MARK_NORMAL.equals(line.getMark())){
-            new Thread(() -> hotSpotDataCache.refresh()).start();
+            new Thread(() -> hotSpotDataCache.initTimelines()).start();
         }
         if (save!=null){
             return 1;

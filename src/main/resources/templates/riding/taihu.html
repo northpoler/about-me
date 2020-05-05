@@ -309,6 +309,8 @@
             <button type="button" class="layui-btn layui-btn-normal" id="join">
                 一起去
             </button>
+            <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank"
+               class="layui-btn layui-btn-warm">参与人</a>
         </div>
         <hr>
         <div style="font-size: small;text-align: center;color: gray;margin: 3em 0em 2em 0em">

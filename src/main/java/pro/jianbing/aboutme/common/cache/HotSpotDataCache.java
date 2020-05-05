@@ -37,6 +37,14 @@ public class HotSpotDataCache {
         GlobalObject.HOT_DATA_MAP.put(GlobalString.COMPANION_COUNT_TAIHU,companionCounts);
     }
 
+    public void initCompanionCount(){
+        GlobalObject.HOT_DATA_MAP.put(GlobalString.COMPANION_COUNT_TAIHU,companionService.countMembers());
+    }
+
+    public void initTimelines(){
+        GlobalObject.HOT_DATA_MAP.put(GlobalString.TIMELINES,timelineService.getAllNormalTimelines());
+    }
+
     @PreDestroy
     public void destroy() {
 
