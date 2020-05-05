@@ -29,18 +29,6 @@ import java.time.LocalDateTime;
 public class VisitInterceptor extends HandlerInterceptorAdapter {
     private static final Logger log = LoggerFactory.getLogger(VisitInterceptor.class);
     /**
-     * 李贺臣页面
-     */
-    private static final String GRANDPA_URL = "/grandpa";
-    /**
-     * 太湖骑行
-     */
-    private static final String TAIHU_URL = "/riding/taihu";
-    /**
-     * 主页（搜索用）
-     */
-    private static final String INDEX_URL = "/";
-    /**
      * 管理端页面url开头
      */
     private static final String MANAGE_URL = "/manage";
