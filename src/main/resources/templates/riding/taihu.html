@@ -62,6 +62,18 @@
             color: grey;
             padding: 0 0.5em;
         }
+        .bottom-btn {
+            position: fixed;
+            bottom: 0;
+            padding: 10px 0;
+            width: 100%;
+            font-size: larger;
+            text-align: center;
+            color: gray;
+            z-index: 999;
+            background-color: white;
+            box-shadow: 0px 0px 15px #888888;
+        }
     </style>
 </head>
 <body class="me-body">
@@ -69,15 +81,9 @@
     <div class="layui-col-md6 layui-col-md-offset3">
         <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
         <input type="hidden" th:value="${status}" id="status"/>
-        <blockquote class="layui-elem-quote" style="background-color: lightcyan">
-            <div class="me-text-center me-text-stress"
-                 style="font-size: larger;margin: 0.5em 0" id="count_down"></div>
-        </blockquote>
-        <div class="layui-card">
-            <div class="layui-card-header">
-                路线全图
-            </div>
-            <div class="layui-card-body">
+        <div class="layui-card" style="margin-bottom: 0">
+            <div class="layui-card-header layui-hide"></div>
+            <div class="layui-card-body" style="padding: 10px 0 0 0">
                 <!--data-pswp-uid在每个相册中必须是唯一的，data-size指定放大时图片显示的宽和高-->
                 <div class="my-gallery" data-pswp-uid="1" style="margin-top: -20px">
                     <figure style="margin: 0">
@@ -89,7 +95,7 @@
             </div>
         </div>
         <div class="layui-card">
-            <div class="layui-card-header">
+            <div class="layui-card-header" id="count_down">
                 路线示意
             </div>
             <div class="layui-card-body">
@@ -100,7 +106,7 @@
                 <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
                     <span id="slideLine_place"></span></p>
                 <hr>
-                <div style="margin: 2em 0">
+                <div style="margin: 2em 0 1em 0">
                     <div id="slideLine" style="margin: 1em 0"></div>
                     <div class="me-text-center">
                         <button class="layui-btn layui-btn-warm adjust-slider">-5</button>
@@ -139,7 +145,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="湖州" th:src="@{../../static/image/riding/taihu/wuxing.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;start</p>
                         </div>
@@ -152,7 +157,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="常州太湖湾" th:src="@{../../static/image/riding/taihu/changzhou.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约82km</p>
                         </div>
@@ -165,7 +169,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="东南大学无锡分校" th:src="@{../../static/image/riding/taihu/seu.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约93km</p>
                         </div>
@@ -178,7 +181,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="西洞庭山" th:src="@{../../static/image/riding/taihu/xishan.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约77km</p>
                         </div>
@@ -191,7 +193,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="洞庭东山" th:src="@{../../static/image/riding/taihu/dongshan.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约81km</p>
                         </div>
@@ -204,7 +205,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="太湖湾大桥" th:src="@{../../static/image/riding/taihu/wujiang.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约61km</p>
                         </div>
@@ -217,7 +217,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="冲线" th:src="@{../../static/image/riding/taihu/finish.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约58km</p>
                         </div>
@@ -230,7 +229,6 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
-                            <p class="me-tip">网图，侵删</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;end</p>
                         </div>
@@ -298,23 +296,48 @@
                 </div>
             </div>
         </div>
-        <div style="padding-left: 1em">
+        <div style="padding-left: 1em" class="show-pc">
             <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;|
                 参加<span th:text="${ridingTaihuNumber}"></span>人(含本人)</p>
         </div>
-        <div class="me-text-center" style="margin: 3em 0">
-            <button type="button" class="layui-btn layui-btn-normal" id="advise">
+        <div class="me-text-center show-pc" style="margin: 3em 0">
+            <button type="button" class="layui-btn layui-btn-normal" onclick="advise()">
                 提建议
             </button>
-            <button type="button" class="layui-btn layui-btn-normal" id="join">
+            <button type="button" class="layui-btn layui-btn-normal" onclick="join()">
                 一起去
             </button>
             <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank"
                class="layui-btn layui-btn-warm">参与人</a>
         </div>
-        <hr>
+        <div class="show-mobile bottom-btn">
+            <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
+                <p class="me-tip"><i class="layui-icon layui-icon-read"></i>
+                    浏览<span th:text="${visitCounts}"></span>次</p>
+                <p class="me-tip"><i class="layui-icon layui-icon-username"></i>
+                    参加&nbsp;&nbsp;
+                    <span th:text="${ridingTaihuNumber}"></span>
+                    &nbsp;&nbsp;人
+                    <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank">
+                        <i class="layui-icon layui-icon-edit"></i>
+                    </a>
+                </p>
+            </div>
+            <div class="layui-col-sm8 layui-col-xs8" style="text-align: right;padding-right: 10px">
+                <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" onclick="advise()">
+                    提建议
+                </button>
+                <button type="button" class="layui-btn layui-btn-radius layui-btn-warm" onclick="join()">
+                    一起去
+                </button>
+            </div>
+            <div class="layui-row">
+            </div>
+        </div>
+        <hr class="show-pc">
         <div style="font-size: small;text-align: center;color: gray;margin: 3em 0em 2em 0em">
             <a href="http://www.beian.miit.gov.cn" target="_blank">备案号：皖ICP备19001037号</a></div>
+        <div class="show-mobile" style="height: 80px"></div>
     </div>
 </div>
 <!-- Root element of PhotoSwipe. Must have class pswp. -->

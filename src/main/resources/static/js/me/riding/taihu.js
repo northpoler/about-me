@@ -11,6 +11,17 @@ layui.use('layer', function () {
         }
     );
 });*/
+setBtnType();
+
+function setBtnType(){
+    if (isMobile()){
+        $(".show-mobile").removeClass("layui-hide");
+        $(".show-pc").addClass("layui-hide");
+    } else {
+        $(".show-pc").removeClass("layui-hide");
+        $(".show-mobile").addClass("layui-hide");
+    }
+}
 
 layui.use('element', function(){
     var element = layui.element;
@@ -197,22 +208,33 @@ layui.use('slider', function(){
     lineSlider.setValue(defaultDistance);
 });
 
-$("#join").click(function () {
+function join() {
     layer.open({
         content: '微信或电我：1700 520 9060(李建兵)'
         ,title: '欢迎'
-        ,btn: ['确定']
+        ,btn: ['复制号码','确定']
         ,yes: function(index, layero){
+            var oInput = document.createElement('input');
+            oInput.value = '17005209060';
+            document.body.appendChild(oInput);
+            oInput.select(); // 选择对象
+            document.execCommand("Copy");
+            oInput.className = 'oInput';
+            oInput.style.display='none';
+            layer.msg('复制成功！', {offset: 'auto', anim: 0, time: 999});
+            layer.close(index);
+        }
+        ,btn2: function(index, layero){
             layer.close(index);
         }
     });
-});
+}
 
-$("#advise").click(function () {
+function advise() {
     layer.prompt({
         formType: 2,
-        value: '在这里写下对这次行程的建议或其他想说的话',
-        title: '提建议'
+        value: '',
+        title: '对这次行程的建议或其他想说的话'
     }, function(value, index, elem){
         showloading(true);
         asyncPost('/riding/taihu/advise',{'advise':value},function (data) {
@@ -232,7 +254,8 @@ $("#advise").click(function () {
             }
         });
     });
-});
+}
+
 var initPhotoSwipeFromDOM = function(gallerySelector) {
 
     // 解析来自DOM元素幻灯片数据（URL，标题，大小...）
