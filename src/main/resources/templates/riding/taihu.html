@@ -72,7 +72,8 @@
             color: gray;
             z-index: 999;
             background-color: white;
-            box-shadow: 0px 0px 15px #888888;
+            box-shadow: 0px 0px 15px pink;
+            border-top: 1px solid pink;
         }
     </style>
 </head>
@@ -87,8 +88,8 @@
                 <!--data-pswp-uid在每个相册中必须是唯一的，data-size指定放大时图片显示的宽和高-->
                 <div class="my-gallery" data-pswp-uid="1" style="margin-top: -20px">
                     <figure style="margin: 0">
-                        <a th:href="@{../../static/image/riding/taihu/line.jpg}" data-size="1032x911">
-                            <img alt="路线图" th:src="@{../../static/image/riding/taihu/line.jpg}" style="width: 100%"/>
+                        <a href="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" data-size="1032x911">
+                            <img alt="路线图" src="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" style="width: 100%"/>
                         </a>
                     </figure>
                 </div>
@@ -144,7 +145,7 @@
                             2020-10-01
                         </div>
                         <div class="layui-card-body">
-                            <img alt="湖州" th:src="@{../../static/image/riding/taihu/wuxing.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;start</p>
                         </div>
@@ -156,7 +157,7 @@
                             2020-10-02
                         </div>
                         <div class="layui-card-body">
-                            <img alt="常州太湖湾" th:src="@{../../static/image/riding/taihu/changzhou.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约82km</p>
                         </div>
@@ -168,7 +169,7 @@
                             2020-10-03
                         </div>
                         <div class="layui-card-body">
-                            <img alt="东南大学无锡分校" th:src="@{../../static/image/riding/taihu/seu.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约93km</p>
                         </div>
@@ -180,7 +181,7 @@
                             2020-10-04
                         </div>
                         <div class="layui-card-body">
-                            <img alt="西洞庭山" th:src="@{../../static/image/riding/taihu/xishan.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约77km</p>
                         </div>
@@ -192,7 +193,7 @@
                             2020-10-05
                         </div>
                         <div class="layui-card-body">
-                            <img alt="洞庭东山" th:src="@{../../static/image/riding/taihu/dongshan.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约81km</p>
                         </div>
@@ -204,7 +205,7 @@
                             2020-10-06
                         </div>
                         <div class="layui-card-body">
-                            <img alt="太湖湾大桥" th:src="@{../../static/image/riding/taihu/wujiang.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约61km</p>
                         </div>
@@ -216,7 +217,7 @@
                             2020-10-07
                         </div>
                         <div class="layui-card-body">
-                            <img alt="冲线" th:src="@{../../static/image/riding/taihu/finish.jpg}"/>
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
                             <p><span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
                             <p><span class="layui-badge-dot"></span>&nbsp;约58km</p>
                         </div>
@@ -313,11 +314,9 @@
         <div class="show-mobile bottom-btn">
             <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
                 <p class="me-tip"><i class="layui-icon layui-icon-read"></i>
-                    浏览<span th:text="${visitCounts}"></span>次</p>
+                    浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次</p>
                 <p class="me-tip"><i class="layui-icon layui-icon-username"></i>
-                    参加&nbsp;&nbsp;
-                    <span th:text="${ridingTaihuNumber}"></span>
-                    &nbsp;&nbsp;人
+                    参加&nbsp;<span th:text="${ridingTaihuNumber}"></span>&nbsp;人
                     <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank">
                         <i class="layui-icon layui-icon-edit"></i>
                     </a>
