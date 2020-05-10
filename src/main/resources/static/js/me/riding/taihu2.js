@@ -85,11 +85,13 @@ adjustSliders.mousedown(function(e){
             value = '0km';
         }
         var sumDistance = distance + parseInt(value.substr(0,value.length-2));
-        if (sumDistance <0 || sumDistance > 452) {
-            return false;
-        } else {
-            sildeValueAdjust(distance);
+        if (sumDistance < 0) {
+            sumDistance = 0;
+        } else if (sumDistance > 452) {
+            sumDistance = 452;
         }
+        lineSlider.setValue(distance);
+        changeSlideLine(sumDistance+"km");
         //按住期间执行的代码
     },200)
 });
@@ -99,11 +101,7 @@ adjustSliders.mouseup(function(e){
 
 adjustSliders.click(function () {
     var distance = parseInt($(this).html());
-    if ($(this).hasClass("layui-btn-disabled")) {
-        return false;
-    } else {
-        sildeValueAdjust(distance);
-    }
+    sildeValueAdjust(distance);
 });
 
 function sildeValueAdjust(adjustValue) {
@@ -113,27 +111,26 @@ function sildeValueAdjust(adjustValue) {
     }
     var distance = parseInt(value.substr(0,value.length-2));
     distance = distance + parseInt(adjustValue);
-    setAdjustBtn(distance);
+    if (distance <= 0) {
+        distance = 0;
+    } else if (distance >= 452) {
+        distance = 452;
+    }
     lineSlider.setValue(distance);
     changeSlideLine(distance+"km");
 }
 
-function setAdjustBtn(value) {
-    adjustSliders.each(function () {
-        var distance = parseInt($(this).html());
-        if (distance + value < 0 || distance + value > 452) {
-            $(this).addClass("layui-btn-disabled");
-        } else {
-            $(this).removeClass("layui-btn-disabled");
-        }
-    });
-}
-
 function changeSlideLine(value) {
     var distance = parseInt(value.substr(0,value.length-2));
-    $("#slideLine_distance").html(value+'/452km<span class="me-more-info">'
+    if (distance <= 0) {
+        distance = 0;
+        layer.msg("已到始点~",{time:1000, anim: 0});
+    } else if (distance >= 452) {
+        distance = 452;
+        layer.msg("已到终点~",{time:1000, anim: 0});
+    }
+    $("#slideLine_distance").html(distance+'km/452km<span class="me-more-info">'
         +Math.round(distance*100/452*Math.pow(10, 2))/Math.pow(10, 2) +'%')+'</span>';
-    setAdjustBtn(distance);
     if (distance<=82){
         $("#slideLine_time").html('2020-10-02 <span class="me-more-info">1/6</span>');
         if (distance<=5) {

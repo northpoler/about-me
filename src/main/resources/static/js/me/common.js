@@ -221,3 +221,16 @@ function asyncDelete(url,callback) {
 function isMobile() {
     return navigator.userAgent.match(/(iPhone|iPod|Android|ios)/i);
 }
+
+/**
+ * 区分客户端类型，来决定显示不同的内容
+ */
+function distinguishClientType(){
+    if (isMobile()){
+        $(".show-mobile").removeClass("layui-hide");
+        $(".show-pc").addClass("layui-hide");
+    } else {
+        $(".show-pc").removeClass("layui-hide");
+        $(".show-mobile").addClass("layui-hide");
+    }
+}
