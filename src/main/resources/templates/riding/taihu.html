@@ -31,12 +31,10 @@
             font-size: large;
             text-align: center;
             color: deeppink;
-            background-color: lightcyan;
         }
 
         .layui-card-body {
             font-size: large;
-            background-color: lightcyan;
         }
 
         img {
@@ -48,15 +46,11 @@
         }
         .swiper-slide > .layui-card > .layui-card-body {
             padding-bottom: 2em;
+            padding-left: 0;
+            padding-right: 0;
         }
         .layui-colla-title {
             font-size: medium;
-        }
-        .layui-colla-title {
-            background-color: #d1fffc;
-        }
-        .layui-colla-item {
-            background-color: #f1ffff;
         }
         .me-more-info {
             color: grey;
@@ -70,7 +64,6 @@
             z-index: 999;
             background-color: white;
             box-shadow: 0px 0px 15px grey;
-            border-top: 1px solid grey;
         }
         @-webkit-keyframes flash {
             0% {
@@ -95,27 +88,43 @@
         }
     </style>
 </head>
-<body class="me-body">
+<body>
+<input type="hidden" th:value="${visitCounts}" id="visit_count"/>
+<input type="hidden" th:value="${status}" id="status"/>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
-        <input type="hidden" th:value="${status}" id="status"/>
-        <div class="layui-card" style="margin-bottom: 0">
-            <div class="layui-card-header layui-hide"></div>
-            <div class="layui-card-body" style="padding: 10px 0 0 0">
-                <!--data-pswp-uid在每个相册中必须是唯一的，data-size指定放大时图片显示的宽和高-->
-                <div class="my-gallery" data-pswp-uid="1" style="margin-top: -20px">
-                    <figure style="margin: 0">
-                        <a href="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" data-size="1032x911">
-                            <img alt="路线图" src="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" style="width: 100%"/>
-                        </a>
-                    </figure>
-                </div>
-            </div>
+        <img alt="头图" th:src="@{../../static/image/riding/taihu/head.jpg}"/>
+        <div class="layui-card-header" id="count_down">
+            路线示意
         </div>
+    </div>
+</div>
+<div class="layui-row" style="overflow: hidden">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <div class="my-gallery" data-pswp-uid="1" style="margin-top: -20px">
+            <figure style="margin: 0">
+                <a href="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" data-size="1032x911">
+                    <img alt="路线图" src="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" style="width: 100%"/>
+                </a>
+            </figure>
+        </div>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <img alt="起始" th:src="@{../../static/image/riding/taihu/start.jpg}"/>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <img alt="距离" th:src="@{../../static/image/riding/taihu/distance.jpg}"/>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
         <div class="layui-card">
-            <div class="layui-card-header" id="count_down">
-                路线示意
+            <div class="layui-card-header">
+                路线详情
             </div>
             <div class="layui-card-body">
                 <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
@@ -135,25 +144,18 @@
                     </div>
                 </div>
                 <p class="me-tip">可直接在线上点击，或通过按钮微调(PC端可拖拽、长按)</p>
+                <p class="me-tip">若加载失败，请刷新页面重试</p>
             </div>
         </div>
-        <div class="layui-card">
-            <div class="layui-card-header">
-                计划概况
-            </div>
-            <div class="layui-card-body">
-                <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;
-                    10-01~10-08 (2020)</p>
-                <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
-                    湖州起止 顺时针环湖</p>
-                <p><i class="layui-icon layui-icon-note me-text-stress"></i>&nbsp;
-                    途径 两省四市九县区</p>
-                <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
-                    393.2km(湖岸线)~452km(估)</p>
-                <p><i class="layui-icon layui-icon-flag me-text-stress"></i>&nbsp;
-                    贴湖而行 遇景则止 逢雨即停</p>
-            </div>
-        </div>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <img alt="flag" th:src="@{../../static/image/riding/taihu/flag.jpg}"/>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
         <fieldset class="layui-elem-field layui-field-title">
             <legend>详细计划</legend>
         </fieldset>
@@ -166,8 +168,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;start</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;start</p>
                         </div>
                     </div>
                 </div>
@@ -178,8 +180,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;约82km</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约82km</p>
                         </div>
                     </div>
                 </div>
@@ -190,8 +192,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;约93km</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约93km</p>
                         </div>
                     </div>
                 </div>
@@ -202,8 +204,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;约77km</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约77km</p>
                         </div>
                     </div>
                 </div>
@@ -214,8 +216,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;约81km</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约81km</p>
                         </div>
                     </div>
                 </div>
@@ -226,8 +228,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;约61km</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约61km</p>
                         </div>
                     </div>
                 </div>
@@ -238,8 +240,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
-                            <p><span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;约58km</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约58km</p>
                         </div>
                     </div>
                 </div>
@@ -250,8 +252,8 @@
                         </div>
                         <div class="layui-card-body">
                             <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
-                            <p><span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;end</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
+                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;end</p>
                         </div>
                     </div>
                 </div>
@@ -264,59 +266,66 @@
             <!-- 如果需要滚动条 -->
             <!--<div class="swiper-scrollbar"></div>-->
         </div>
-        <div class="layui-card" style="margin: 1em 0">
-            <div class="layui-card-header">
-                常见问题
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3" style="background-color: #262626;color: white;padding-top: 10px;padding-bottom: 10px">
+        <fieldset class="layui-elem-field layui-field-title">
+            <legend>常见问题</legend>
+        </fieldset>
+        <fieldset class="layui-elem-field">
+            <legend>没有长途骑行经验可以参加吗？</legend>
+            <div class="layui-field-box">
+                <p><span class="layui-badge-dot"></span>&nbsp;当然可以！400多km，6天完成，平均每天约70km，拖鞋+哈罗都可以轻松完成~</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;提前一两周适应性锻炼下会更好！</p>
             </div>
-            <div class="layui-card-body" style="padding: 0">
-                <div class="layui-collapse" lay-accordion>
-                    <div class="layui-colla-item">
-                        <h2 class="layui-colla-title">1、没有长途骑行经验可以参加吗？</h2>
-                        <div class="layui-colla-content layui-show">
-                            <p><span class="layui-badge-dot"></span>&nbsp;当然可以！400多km，6天完成，平均每天约70km，拖鞋+哈罗都可以轻松完成~</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;提前一两周适应性锻炼下会更好！</p>
-                        </div>
-                    </div>
-                    <div class="layui-colla-item">
-                        <h2 class="layui-colla-title">2、需要准备什么东西？</h2>
-                        <div class="layui-colla-content">
-                            <p><span class="layui-badge-dot"></span>&nbsp;一两套速干的换洗衣物即可，单车可以在出发地租赁</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;如果有手机云台或者大疆，那就更好啦！可以完美记录整个行程~</p>
-                        </div>
-                    </div>
-                    <div class="layui-colla-item">
-                        <h2 class="layui-colla-title">3、路途中意见不一怎么办？</h2>
-                        <div class="layui-colla-content">
-                            <p><span class="layui-badge-dot"></span>&nbsp;全程分为了6段，每个人轮流当队长，队员需要以队长的意见为准</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;当然，队长也要尽量照顾到大多数的想法，同时做出科学合理的决策</p>
-                        </div>
-                    </div>
-                    <div class="layui-colla-item">
-                        <h2 class="layui-colla-title">4、食宿问题怎么解决？</h2>
-                        <div class="layui-colla-content">
-                            <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
-                            <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
-                        </div>
-                    </div>
-                    <div class="layui-colla-item">
-                        <h2 class="layui-colla-title">5、有多少人参加了？现在来得及吗？</h2>
-                        <div class="layui-colla-content">
-                            <p><span class="layui-badge-dot"></span>
-                                加上我本人一共是<span th:text="${ridingTaihuNumber}"></span>人
-                            </p>
-                            <p><span class="layui-badge-dot"></span>
-                                <span th:text="想参加就赶紧和我说吧" th:if="${status==0 && ridingTaihuNumber==1}"></span>
-                                <span th:text="赶紧来三人行吧" th:if="${status==0 && ridingTaihuNumber==2}"></span>
-                                <span th:text="三缺一赶紧来吧" th:if="${status==0 && ridingTaihuNumber==3}"></span>
-                                <span th:text="快来壮大我们的队伍吧" th:if="${status==0 && ridingTaihuNumber>3}"></span>
-                                <span th:text="活动已经开始啦，如果赶得上就中途插入吧" th:if="${status==1}"></span>
-                                <span th:text="活动已经结束啦，期待下次活动的相遇吧" th:if="${status==2}"></span>
-                            </p>
-                        </div>
-                    </div>
-                </div>
+        </fieldset>
+        <fieldset class="layui-elem-field">
+            <legend>需要准备什么东西？</legend>
+            <div class="layui-field-box">
+                <p><span class="layui-badge-dot"></span>&nbsp;一两套速干的换洗衣物即可，单车可以在出发地租赁</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;如果有手机云台或者大疆，那就更好啦！可以完美记录整个行程~</p>
             </div>
-        </div>
+        </fieldset>
+        <fieldset class="layui-elem-field">
+            <legend>路途中意见不一怎么办？</legend>
+            <div class="layui-field-box">
+                <p><span class="layui-badge-dot"></span>&nbsp;全程分为了6段，每个人轮流当队长，队员需要以队长的意见为准</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;当然，队长也要尽量照顾到大多数的想法，同时做出科学合理的决策</p>
+            </div>
+        </fieldset>
+        <fieldset class="layui-elem-field">
+            <legend>食宿问题怎么解决？</legend>
+            <div class="layui-field-box">
+                <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
+            </div>
+        </fieldset>
+        <fieldset class="layui-elem-field">
+            <legend>有多少人参加了？现在来得及吗？</legend>
+            <div class="layui-field-box">
+                <p><span class="layui-badge-dot"></span>
+                    加上我本人一共是<span th:text="${ridingTaihuNumber}"></span>人
+                </p>
+                <p><span class="layui-badge-dot"></span>
+                    <span th:text="想参加就赶紧和我说吧" th:if="${status==0 && ridingTaihuNumber==1}"></span>
+                    <span th:text="赶紧来三人行吧" th:if="${status==0 && ridingTaihuNumber==2}"></span>
+                    <span th:text="三缺一赶紧来吧" th:if="${status==0 && ridingTaihuNumber==3}"></span>
+                    <span th:text="快来壮大我们的队伍吧" th:if="${status==0 && ridingTaihuNumber>3}"></span>
+                    <span th:text="活动已经开始啦，如果赶得上就中途插入吧" th:if="${status==1}"></span>
+                    <span th:text="活动已经结束啦，期待下次活动的相遇吧" th:if="${status==2}"></span>
+                </p>
+            </div>
+        </fieldset>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <img alt="一起吧" th:src="@{../../static/image/riding/taihu/together.jpg}"/>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
         <div style="padding-left: 1em" class="show-pc">
             <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;|
                 参加<span th:text="${ridingTaihuNumber}"></span>人(含本人)</p>
@@ -333,9 +342,9 @@
         </div>
         <div class="show-mobile bottom-btn">
             <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
-                <p style="font-size: small"><i class="layui-icon layui-icon-read"></i>
+                <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-read"></i>
                     浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次</p>
-                <p style="font-size: small"><i class="layui-icon layui-icon-username"></i>
+                <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-username"></i>
                     参加&nbsp;<span th:text="${ridingTaihuNumber}"></span>&nbsp;人
                     <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank">
                         <i class="layui-icon layui-icon-edit"></i>
@@ -354,8 +363,12 @@
             </div>
         </div>
         <hr class="show-pc">
-        <div style="font-size: small;text-align: center;color: gray;margin: 3em 0em 2em 0em">
-            <a href="http://www.beian.miit.gov.cn" target="_blank">备案号：皖ICP备19001037号</a></div>
+    </div>
+</div>
+<div class="layui-row" style="background-color: #0C0C0C">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <div style="font-size: small;text-align: center;padding: 3em 0em 2em 0em">
+            <a href="http://www.beian.miit.gov.cn" target="_blank" style="color: white">备案号：皖ICP备19001037号</a></div>
         <div class="show-mobile" style="height: 80px"></div>
     </div>
 </div>
