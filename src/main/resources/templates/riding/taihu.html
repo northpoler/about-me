@@ -86,6 +86,15 @@
             -webkit-animation-iteration-count: infinite;
             -webkit-animation-timing-function: ease-in-out;
         }
+        .question {
+            margin-bottom: 20px;
+            background-color: #494949;
+            padding: 5px;
+        }
+        .question-ask {
+            font-size: larger;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -270,51 +279,43 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3" style="background-color: #262626;color: white;padding-top: 10px;padding-bottom: 10px">
-        <fieldset class="layui-elem-field layui-field-title">
+        <fieldset class="layui-elem-field">
             <legend>常见问题</legend>
-        </fieldset>
-        <fieldset class="layui-elem-field">
-            <legend>没有长途骑行经验可以参加吗？</legend>
             <div class="layui-field-box">
-                <p><span class="layui-badge-dot"></span>&nbsp;当然可以！400多km，6天完成，平均每天约70km，拖鞋+哈罗都可以轻松完成~</p>
-                <p><span class="layui-badge-dot"></span>&nbsp;提前一两周适应性锻炼下会更好！</p>
-            </div>
-        </fieldset>
-        <fieldset class="layui-elem-field">
-            <legend>需要准备什么东西？</legend>
-            <div class="layui-field-box">
-                <p><span class="layui-badge-dot"></span>&nbsp;一两套速干的换洗衣物即可，单车可以在出发地租赁</p>
-                <p><span class="layui-badge-dot"></span>&nbsp;如果有手机云台或者大疆，那就更好啦！可以完美记录整个行程~</p>
-            </div>
-        </fieldset>
-        <fieldset class="layui-elem-field">
-            <legend>路途中意见不一怎么办？</legend>
-            <div class="layui-field-box">
-                <p><span class="layui-badge-dot"></span>&nbsp;全程分为了6段，每个人轮流当队长，队员需要以队长的意见为准</p>
-                <p><span class="layui-badge-dot"></span>&nbsp;当然，队长也要尽量照顾到大多数的想法，同时做出科学合理的决策</p>
-            </div>
-        </fieldset>
-        <fieldset class="layui-elem-field">
-            <legend>食宿问题怎么解决？</legend>
-            <div class="layui-field-box">
-                <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
-                <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
-            </div>
-        </fieldset>
-        <fieldset class="layui-elem-field">
-            <legend>有多少人参加了？现在来得及吗？</legend>
-            <div class="layui-field-box">
-                <p><span class="layui-badge-dot"></span>
-                    加上我本人一共是<span th:text="${ridingTaihuNumber}"></span>人
-                </p>
-                <p><span class="layui-badge-dot"></span>
-                    <span th:text="想参加就赶紧和我说吧" th:if="${status==0 && ridingTaihuNumber==1}"></span>
-                    <span th:text="赶紧来三人行吧" th:if="${status==0 && ridingTaihuNumber==2}"></span>
-                    <span th:text="三缺一赶紧来吧" th:if="${status==0 && ridingTaihuNumber==3}"></span>
-                    <span th:text="快来壮大我们的队伍吧" th:if="${status==0 && ridingTaihuNumber>3}"></span>
-                    <span th:text="活动已经开始啦，如果赶得上就中途插入吧" th:if="${status==1}"></span>
-                    <span th:text="活动已经结束啦，期待下次活动的相遇吧" th:if="${status==2}"></span>
-                </p>
+                <div class="question">
+                    <p class="question-ask">1、没有长途骑行经验可以参加吗？</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;当然可以！400多km，6天完成，平均每天约70km，拖鞋+哈罗都可以轻松完成~</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;提前一两周适应性锻炼下会更好！</p>
+                </div>
+                <div class="question">
+                    <p class="question-ask">2、需要准备什么东西？</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;一两套速干的换洗衣物即可，单车可以在出发地租赁</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;如果有手机云台或者大疆，那就更好啦！可以完美记录整个行程~</p>
+                </div>
+                <div class="question">
+                    <p class="question-ask">3、路途中意见不一怎么办？</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;全程分为了6段，每个人轮流当队长，队员需要以队长的意见为准</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;当然，队长也要尽量照顾到大多数的想法，同时做出科学合理的决策</p>
+                </div>
+                <div class="question">
+                    <p class="question-ask">4、食宿问题怎么解决？</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
+                </div>
+                <div class="question">
+                    <p class="question-ask">5、有多少人参加了，现在来得及吗？</p>
+                    <p><span class="layui-badge-dot"></span>
+                        加上我本人一共是<span th:text="${ridingTaihuNumber}"></span>人
+                    </p>
+                    <p><span class="layui-badge-dot"></span>
+                        <span th:text="想参加就赶紧和我说吧" th:if="${status==0 && ridingTaihuNumber==1}"></span>
+                        <span th:text="赶紧来三人行吧" th:if="${status==0 && ridingTaihuNumber==2}"></span>
+                        <span th:text="三缺一赶紧来吧" th:if="${status==0 && ridingTaihuNumber==3}"></span>
+                        <span th:text="快来壮大我们的队伍吧" th:if="${status==0 && ridingTaihuNumber>3}"></span>
+                        <span th:text="活动已经开始啦，如果赶得上就中途插入吧" th:if="${status==1}"></span>
+                        <span th:text="活动已经结束啦，期待下次活动的相遇吧" th:if="${status==2}"></span>
+                    </p>
+                </div>
             </div>
         </fieldset>
     </div>
