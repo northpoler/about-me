@@ -32,29 +32,11 @@
             text-align: center;
             color: deeppink;
         }
-
-        .layui-card-body {
-            font-size: large;
-        }
-
         img {
             width: 100%;
         }
-
         .layui-field-title {
             margin-top: 30px;
-        }
-        .swiper-slide > .layui-card > .layui-card-body {
-            padding-bottom: 2em;
-            padding-left: 0;
-            padding-right: 0;
-        }
-        .layui-colla-title {
-            font-size: medium;
-        }
-        .me-more-info {
-            color: grey;
-            padding: 0 0.5em;
         }
         .bottom-btn {
             position: fixed;
@@ -63,8 +45,8 @@
             width: 100%;
             z-index: 999;
             background-color: white;
-            border-top: 1px solid grey;
-            /*box-shadow: 0px 0px 15px grey;*/
+            /*border-top: 1px solid aqua;*/
+            box-shadow: 0px 0px 5px grey;
         }
         @-webkit-keyframes flash {
             0% {
@@ -88,13 +70,27 @@
             -webkit-animation-timing-function: ease-in-out;
         }
         .question {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             background-color: #494949;
             padding: 5px;
+            font-size: medium;
         }
         .question-ask {
-            font-size: larger;
+            font-size: large;
             margin-bottom: 10px;
+        }
+        .plan-head {
+            font-size: large;
+            color: deeppink;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .plan-body {
+            padding-bottom: 30px;
+            font-size: medium;
+        }
+        .me-tip {
+            font-size: medium;
         }
     </style>
 </head>
@@ -130,7 +126,7 @@
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>起止 - 启行</legend>
             <div class="layui-field-box" style="font-size: medium">
-                <p>国庆八天假，时间充裕。</p>
+                <p>国庆中秋假，共计八天。</p>
                 <p>第一天汇集，次日出发。</p>
                 <p>于湖州启程，湖州结束。</p>
                 <p>顺时针方向，贴湖骑行。</p>
@@ -145,13 +141,15 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div class="layui-card">
-            <div class="layui-card-header">
-                路线详情
-            </div>
-            <div class="layui-card-body">
+        <fieldset class="layui-elem-field" style="margin-top: 10px">
+            <legend>路线详情</legend>
+            <div class="layui-field-box" style="font-size: medium">
                 <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
-                    <span id="slideLine_distance"></span></p>
+                    <span id="slideLine_distance">
+                        看到这句话，说明滑动条加载失败，请
+                        <a href="" style="text-decoration: underline;color: #007DDB">点我刷新页面</a>
+                        重试。
+                    </span></p>
                 <p><i class="layui-icon layui-icon-time me-text-stress"></i>&nbsp;
                     <span id="slideLine_time"></span></p>
                 <p><i class="layui-icon layui-icon-location me-text-stress"></i>&nbsp;
@@ -166,17 +164,24 @@
                         <button class="layui-btn layui-btn-normal adjust-slider">+5</button>
                     </div>
                 </div>
-                <p class="me-tip"><span class="layui-badge-dot"></span>&nbsp;点击滑动条/通过按钮微调(PC端可拖拽、长按)</p>
-                <p class="me-tip"><span class="layui-badge-dot"></span>&nbsp;若滑动条加载失败，请
-                    <a href="" style="text-decoration: underline;color: deeppink">点我刷新页面</a>
-                    重试</p>
+                <p class="me-tip"><span class="layui-badge-dot"></span>&nbsp;直接点击滑动条，或通过按钮微调</p>
+                <p class="me-tip"><span class="layui-badge-dot"></span>&nbsp;电脑端可拖拽、长按按钮</p>
             </div>
-        </div>
+        </fieldset>
     </div>
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <img src="https://s1.ax1x.com/2020/05/16/YyqB7R.jpg" alt="flag" border="0">
+        <fieldset class="layui-elem-field" style="margin-top: 10px">
+            <legend>不拼命原则</legend>
+            <div class="layui-field-box" style="font-size: medium">
+                <p>八天假期，时间充裕。</p>
+                <p>一边骑行，一边赏景。</p>
+                <p>日头高了，就去乘凉。</p>
+                <p>乌云来了，就去避雨。</p>
+            </div>
+        </fieldset>
     </div>
 </div>
 <div class="layui-row">
@@ -187,99 +192,83 @@
         <div class="swiper-container">
             <div class="swiper-wrapper">
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-01
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;start</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-01
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;start</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-02
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约82km</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-02
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约82km</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-03
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约93km</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-03
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约93km</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-04
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约77km</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-04
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约77km</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-05
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约81km</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-05
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约81km</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-06
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约61km</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-06
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约61km</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-07
-                        </div>
-                        <div class="layui-card-body">
-                            <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约58km</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-07
+                    </div>
+                    <div class="plan-body">
+                        <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约58km</p>
                     </div>
                 </div>
                 <div class="swiper-slide">
-                    <div class="layui-card">
-                        <div class="layui-card-header">
-                            2020-10-08
-                        </div>
-                        <div class="layui-card-body">
-                            <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
-                            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;end</p>
-                        </div>
+                    <div class="plan-head">
+                        2020-10-08
+                    </div>
+                    <div class="plan-body">
+                        <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
+                        <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;end</p>
                     </div>
                 </div>
             </div>
