@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="zh">
 <head>
-    <title>环太湖骑行</title>
+    <title>建兵 | 环太湖骑行</title>
     <meta name="keywords" content="太湖,骑行,环太湖骑行">
     <meta name="description" content="李建兵2020年国庆环太湖骑行计划和记录">
     <meta charset="utf-8">
@@ -92,6 +92,33 @@
         .me-tip {
             font-size: medium;
         }
+        .me-more-info {
+            color: grey;
+            padding: 0 0.5em;
+        }
+        .pic-div,.plan-pic-div{
+            animation:mymove 5s infinite; /*animation 时间 播放次数*/
+            animation-direction:alternate; /*是否循环交替反向播放动画*/
+            /*Safari 和 Chrome:*/
+            -webkit-animation:mymove 5s infinite;
+        }
+        @keyframes mymove
+        {
+            0% {background: #eeeeee;}
+            25% {background: #dddddd;}
+            50% {background: #dadada;}
+            75% {background:#dddddd;}
+            100% {background:#eeeeee;}
+        }
+        /*Safari 和 Chrome:*/
+        @-webkit-keyframes mymove
+        {
+            0% {background: #eeeeee;}
+            25% {background: #dddddd;}
+            50% {background: #dadada;}
+            75% {background:#dddddd;}
+            100% {background:#eeeeee;}
+        }
     </style>
 </head>
 <body>
@@ -99,15 +126,17 @@
 <input type="hidden" th:value="${status}" id="status"/>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <img src="https://s1.ax1x.com/2020/05/16/Yyq0B9.jpg" alt="head" border="0">
+        <div id="head_pic_div" class="pic-div">
+            <img src="https://s1.ax1x.com/2020/05/16/Yyq0B9.jpg" alt="head" border="0">
+        </div>
         <div class="layui-card-header" id="count_down">
-            路线示意
+            倒计时
         </div>
     </div>
 </div>
 <div class="layui-row" style="overflow: hidden">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div class="my-gallery" data-pswp-uid="1" style="margin-top: -20px">
+        <div class="my-gallery pic-div" id="map_pic_div" data-pswp-uid="1" style="margin-top: -20px">
             <figure style="margin: 0">
                 <a href="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" data-size="1032x911">
                     <img alt="路线图" src="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" style="width: 100%"/>
@@ -122,7 +151,9 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <img src="https://s1.ax1x.com/2020/05/16/YyqwnJ.jpg" alt="start" border="0">
+        <div id="start_pic_div" class="pic-div">
+            <img src="https://s1.ax1x.com/2020/05/16/YyqwnJ.jpg" alt="start" border="0">
+        </div>
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>起止 - 启行</legend>
             <div class="layui-field-box" style="font-size: medium">
@@ -136,7 +167,9 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <img src="https://s1.ax1x.com/2020/05/16/YyqrA1.jpg" alt="distance" border="0">
+        <div id="distance_pic_div" class="pic-div">
+            <img src="https://s1.ax1x.com/2020/05/16/YyqrA1.jpg" alt="distance" border="0">
+        </div>
     </div>
 </div>
 <div class="layui-row">
@@ -172,7 +205,9 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <img src="https://s1.ax1x.com/2020/05/16/YyqB7R.jpg" alt="flag" border="0">
+        <div id="flag_pic_div" class="pic-div">
+            <img src="https://s1.ax1x.com/2020/05/16/YyqB7R.jpg" alt="flag" border="0">
+        </div>
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>不拼命原则</legend>
             <div class="layui-field-box" style="font-size: medium">
@@ -196,7 +231,9 @@
                         2020-10-01
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;start</p>
                     </div>
@@ -206,7 +243,9 @@
                         2020-10-02
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约82km</p>
                     </div>
@@ -216,7 +255,9 @@
                         2020-10-03
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约93km</p>
                     </div>
@@ -226,7 +267,9 @@
                         2020-10-04
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约77km</p>
                     </div>
@@ -236,7 +279,9 @@
                         2020-10-05
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约81km</p>
                     </div>
@@ -246,7 +291,9 @@
                         2020-10-06
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约61km</p>
                     </div>
@@ -256,7 +303,9 @@
                         2020-10-07
                     </div>
                     <div class="plan-body">
-                        <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
+                        <div class="plan-pic-div">
+                            <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;约58km</p>
                     </div>
@@ -266,7 +315,9 @@
                         2020-10-08
                     </div>
                     <div class="plan-body">
-                        <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
+                        <div class="plan-pic-div">
+                            <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
+                        </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;end</p>
                     </div>
@@ -327,7 +378,9 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <img src="https://s1.ax1x.com/2020/05/16/YyqaX4.jpg" alt="together" border="0">
+        <div id="together_pic_div" class="pic-div">
+            <img src="https://s1.ax1x.com/2020/05/16/YyqaX4.jpg" alt="together" border="0">
+        </div>
     </div>
 </div>
 <div class="layui-row">
