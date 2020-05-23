@@ -104,7 +104,7 @@ public final class NetworkUtil {
      * @return
      */
     public static String getAddressByIp(String ip){
-        logger.info("用户上次登陆的IP : " + ip);
+        logger.info("IP : " + ip);
         Map<String,String> params = new HashMap<>(11);
         params.put("query", ip);
         params.put("co", "");
@@ -126,7 +126,7 @@ public final class NetworkUtil {
             String substring = result.substring(result.indexOf("location")+11);
             location = substring.substring(0, substring.indexOf(" "));
         }
-        logger.info("解析出的上次登陆的地理地址 : " + location);
+        logger.info("解析出的地理地址 : " + location);
         return location;
     }
 
