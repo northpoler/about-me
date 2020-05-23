@@ -50,9 +50,9 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
         if (UrlEnum.hasValue(subUrl)){
             Visit visit = new Visit();
             String ipAddress = NetworkUtil.getIpAddress(request);
-            String addressByIp = NetworkUtil.getAddressByIp(ipAddress);
+            /*String addressByIp = NetworkUtil.getAddressByIp(ipAddress);*/
             visit.setIp(ipAddress);
-            visit.setAddress(addressByIp);
+            /*visit.setAddress(addressByIp);*/
             visit.setTarget(subUrl);
             User user = (User) request.getSession().getAttribute(GlobalString.ATTRIBUTE_USER);
             if (null!=user){
