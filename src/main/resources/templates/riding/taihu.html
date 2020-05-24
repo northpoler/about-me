@@ -119,6 +119,19 @@
             75% {background:#dddddd;}
             100% {background:#eeeeee;}
         }
+        #btn-together {
+            margin-left: -4px;
+            border-top-right-radius: 19px;
+            border-bottom-right-radius: 19px;
+            letter-spacing: 2px;
+            padding: 0 30px 0 20px;
+        }
+        #btn-advise {
+            border-top-left-radius: 19px;
+            border-bottom-left-radius: 19px;
+            letter-spacing: 2px;
+            padding: 0 20px 0 30px;
+        }
     </style>
 </head>
 <body>
@@ -355,21 +368,21 @@
                 </div>
                 <div class="question">
                     <p class="question-ask">4、食宿问题怎么解决？</p>
-                    <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊（零食+自热饭）</p>
-                    <p><span class="layui-badge-dot"></span>&nbsp;青旅+酒店，暂不考虑露营</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;早餐和晚饭饭店解决，午餐可以饭店或公园野炊</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;住宿的话，尽量靠近湖岸的经济型连锁酒店</p>
                 </div>
                 <div class="question">
                     <p class="question-ask">5、有多少人参加了，现在来得及吗？</p>
                     <p><span class="layui-badge-dot"></span>
-                        加上我本人一共是<span th:text="${ridingTaihuNumber}"></span>人
+                        加上我本人一共是<span style="font-weight: bold;color: deepskyblue;padding: 0 0.5em" th:text="${ridingTaihuNumber}"></span>人
                     </p>
                     <p><span class="layui-badge-dot"></span>
-                        <span th:text="想参加就赶紧和我说吧" th:if="${status==0 && ridingTaihuNumber==1}"></span>
-                        <span th:text="赶紧来三人行吧" th:if="${status==0 && ridingTaihuNumber==2}"></span>
-                        <span th:text="三缺一赶紧来吧" th:if="${status==0 && ridingTaihuNumber==3}"></span>
-                        <span th:text="快来壮大我们的队伍吧" th:if="${status==0 && ridingTaihuNumber>3}"></span>
-                        <span th:text="活动已经开始啦，如果赶得上就中途插入吧" th:if="${status==1}"></span>
-                        <span th:text="活动已经结束啦，期待下次活动的相遇吧" th:if="${status==2}"></span>
+                        <span th:text="快来一起参加吧！" th:if="${status==0 && ridingTaihuNumber==1}"></span>
+                        <span th:text="赶紧来三人行吧！" th:if="${status==0 && ridingTaihuNumber==2}"></span>
+                        <span th:text="三缺一赶紧来吧！" th:if="${status==0 && ridingTaihuNumber==3}"></span>
+                        <span th:text="快来壮大我们的队伍吧！" th:if="${status==0 && ridingTaihuNumber>3}"></span>
+                        <span th:text="活动已经开始啦，如果赶得上就中途插入吧！" th:if="${status==1}"></span>
+                        <span th:text="活动已经结束啦，期待下次活动的相遇吧！" th:if="${status==2}"></span>
                     </p>
                 </div>
             </div>
@@ -411,10 +424,10 @@
                 </p>
             </div>
             <div class="layui-col-sm8 layui-col-xs8" style="text-align: right;padding-right: 10px">
-                <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" onclick="advise()">
+                <button type="button" id="btn-advise" class="layui-btn layui-btn-normal" onclick="advise()">
                     提建议
                 </button>
-                <button type="button" class="layui-btn layui-btn-radius layui-btn-warm flash" onclick="join()">
+                <button type="button" id="btn-together" class="layui-btn layui-btn-warm flash" onclick="join()">
                     一起去
                 </button>
             </div>

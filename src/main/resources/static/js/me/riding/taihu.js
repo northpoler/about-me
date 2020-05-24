@@ -1,16 +1,3 @@
-/*var visitCount = $("#visit_count").val();
-layui.use('layer', function () {
-    var layer = layui.layer;
-    layer.msg(
-        '欢迎，你是第' + visitCount + '位访客！',
-        {
-            offset: 'auto',
-            anim: 4,
-            time: 2000,
-            icon: 6
-        }
-    );
-});*/
 distinguishClientType();
 
 var width = $("#head_pic_div").width();
@@ -19,7 +6,7 @@ $("#map_pic_div").css("height",width/1032*911+"px");
 $("#start_pic_div").css("height",width/1920*906+"px");
 $("#distance_pic_div").css("height",width/1920*1791+"px");
 $("#flag_pic_div").css("height",width/1920*1381+"px");
-$("#together_pic_div").css("height",width/1920*1381+"px");
+$("#together_pic_div").css("height",width/1920*1184+"px");
 $(".plan_pic_div").css("height",width/1080*720+"px");
 
 layui.use('element', function(){
