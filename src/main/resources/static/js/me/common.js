@@ -234,3 +234,30 @@ function distinguishClientType(){
         $(".show-mobile").addClass("layui-hide");
     }
 }
+
+/**
+ * 获取指定长度的随机字符串
+ * @param length
+ * @returns {string}
+ */
+function randomString(length) {
+    var chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    var result = '';
+    for (var i = length; i > 0; --i) result += chars[Math.floor(Math.random() * chars.length)];
+    return result;
+}
+
+/**
+ * 发送心跳
+ * @param clientId
+ * @param pageName
+ * @param callback
+ */
+function sendHeartbeat(clientId,pageName,callback) {
+    var data = {
+        clientId: clientId,
+        pageName: pageName,
+        sendTime: new Date().getTime()
+    };
+    asyncGet("/heartbeat",data,callback);
+}

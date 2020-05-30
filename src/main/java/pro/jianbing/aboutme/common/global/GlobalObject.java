@@ -1,5 +1,7 @@
 package pro.jianbing.aboutme.common.global;
 
+import net.jodah.expiringmap.ExpiringMap;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,4 +27,9 @@ public class GlobalObject {
      * 访问量Map
      */
     public final static Map<String, Long> VISIT_COUNT = new HashMap<>();
+
+    /**
+     * 页面心跳Map
+     */
+    public final static Map<String, ExpiringMap<String, String>> PAGE_HEARTBEAT = new HashMap<>();
 }

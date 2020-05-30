@@ -24,7 +24,7 @@ if (status == 0) {
 
 function getCountdown() {
     var now = new Date();
-    var holiday_start = new Date("OCT 1 2020 00:00:00");
+    var holiday_start = new Date("OCT 2 2020 08:30:00");
     var holiday_end = new Date("OCT 8 2020 00:00:00");
     if (holiday_start.getTime() > now.getTime()) {
         end = holiday_start;
@@ -47,7 +47,7 @@ function countdown() {
         time_start = new Date();
         time_end = end;
     }
-    var remain = time_end.getTime() - time_start.getTime(),//倒计时毫秒数
+    /*var remain = time_end.getTime() - time_start.getTime(),//倒计时毫秒数
         days = parseInt(remain / (60 * 60 * 24 * 1000)),//转换为天
         D = parseInt(remain) - parseInt(days * 60 * 60 * 24 * 1000),//除去天的毫秒数
         hours = parseInt(D / (60 * 60 * 1000)),//除去天的毫秒数转换成小时
@@ -63,7 +63,13 @@ function countdown() {
     minutes = getFormedStyle(minutes, 2);
     seconds = getFormedStyle(seconds, 2);
     milliseconds = getFormedStyle(milliseconds, 3);
-    $("#count_down").html("即将启程："+days + "天" + hours + "小时" + minutes + "分" + seconds + "秒"/* + milliseconds + "毫秒"*/);
+    $("#count_down").html("即将启程："+days + "天" + hours + "小时" + minutes + "分" + seconds + "秒"/!* + milliseconds + "毫秒"*!/);*/
+    var remain = time_end.getTime() - time_start.getTime(),//倒计时毫秒数
+        days = remain / (60 * 60 * 24 * 1000);
+    /*days = String(days).replace(/^(.*\..{6}).*$/,"$1");
+    days = Number(days);*/
+    days = Number(days).toFixed(6)
+    $("#count_down").html("即将启程："+days + "天");
     setTimeout(countdown, 333);
 }
 
@@ -491,3 +497,23 @@ $(document).ready(function () {
         //zoom : true,// 图片可缩放
     })
 });
+
+$(function () {
+    // 发送心跳
+    heartbeat();
+});
+
+function heartbeat() {
+    const clientId = randomString(32);
+    var pageName = $("#page_name").val();
+    if (pageName == null || pageName == '') {
+        pageName = 'RIDING_TAIHU';
+    }
+    setInterval(function () {
+        sendHeartbeat(clientId,pageName,function (data) {
+            if ($("#visit_count_now").size()==1) {
+                $("#visit_count_now").html(data.data);
+            }
+        })
+    },5000);
+}

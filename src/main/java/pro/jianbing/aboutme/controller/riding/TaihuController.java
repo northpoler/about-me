@@ -42,6 +42,7 @@ public class TaihuController extends BaseController {
                 status = 2;
             }
             model.addAttribute("status",status);
+            model.addAttribute("pageName",UrlEnum.RIDING_TAIHU.getCode());
         } catch (Exception e) {
             e.printStackTrace();
         }

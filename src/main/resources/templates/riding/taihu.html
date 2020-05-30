@@ -87,7 +87,7 @@
         }
         .plan-body {
             padding-bottom: 30px;
-            font-size: medium;
+            font-size: large;
         }
         .me-tip {
             font-size: medium;
@@ -132,17 +132,31 @@
             letter-spacing: 2px;
             padding: 0 20px 0 30px;
         }
+        .border-shine {
+            animation: glow 800ms ease-out infinite alternate;
+        }
+        @keyframes glow {
+            0% {
+                border-color: #ff00ff;
+                box-shadow: 0 0 5px rgba(255,0,0,.2), inset 0 0 10px rgba(255,0,0,.2), 0 0 0 #ff00ff;
+            }
+            100% {
+                border-color: #ff0000;
+                box-shadow: 0 0 45px rgba(255,0,0,.6), inset 0 0 20px rgba(255,0,0,.5), 0 0 0 #ff0000;
+            }
+        }
     </style>
 </head>
 <body>
 <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
 <input type="hidden" th:value="${status}" id="status"/>
+<input type="hidden" th:value="${pageName}" id="page_name"/>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <div id="head_pic_div" class="pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/Yyq0B9.jpg" alt="head" border="0">
         </div>
-        <div class="layui-card-header" id="count_down">
+        <div class="layui-card-header border-shine" id="count_down" style="font-size: x-large;color: darkmagenta">
             倒计时
         </div>
     </div>
@@ -169,7 +183,7 @@
         </div>
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>起止 - 启行</legend>
-            <div class="layui-field-box" style="font-size: medium">
+            <div class="layui-field-box" style="font-size: x-large">
                 <p>国庆中秋假，共计八天。</p>
                 <p>第一天汇集，次日出发。</p>
                 <p>于湖州启程，湖州结束。</p>
@@ -189,7 +203,7 @@
     <div class="layui-col-md6 layui-col-md-offset3">
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>路线详情</legend>
-            <div class="layui-field-box" style="font-size: medium">
+            <div class="layui-field-box" style="font-size: large">
                 <p><i class="layui-icon layui-icon-chart me-text-stress"></i>&nbsp;
                     <span id="slideLine_distance">
                         看到这句话，说明滑动条加载失败，请
@@ -223,7 +237,7 @@
         </div>
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>不拼命原则</legend>
-            <div class="layui-field-box" style="font-size: medium">
+            <div class="layui-field-box" style="font-size: x-large">
                 <p>八天假期，时间充裕。</p>
                 <p>一边骑行，一边赏景。</p>
                 <p>日头高了，就去乘凉。</p>
@@ -378,8 +392,8 @@
                     </p>
                     <p><span class="layui-badge-dot"></span>
                         <span th:text="快来一起参加吧！" th:if="${status==0 && ridingTaihuNumber==1}"></span>
-                        <span th:text="赶紧来三人行吧！" th:if="${status==0 && ridingTaihuNumber==2}"></span>
-                        <span th:text="三缺一赶紧来吧！" th:if="${status==0 && ridingTaihuNumber==3}"></span>
+                        <span th:text="快来壮大我们的队伍吧！" th:if="${status==0 && ridingTaihuNumber==2}"></span>
+                        <span th:text="快来壮大我们的队伍吧！" th:if="${status==0 && ridingTaihuNumber==3}"></span>
                         <span th:text="快来壮大我们的队伍吧！" th:if="${status==0 && ridingTaihuNumber>3}"></span>
                         <span th:text="活动已经开始啦，如果赶得上就中途插入吧！" th:if="${status==1}"></span>
                         <span th:text="活动已经结束啦，期待下次活动的相遇吧！" th:if="${status==2}"></span>
@@ -415,7 +429,9 @@
         <div class="show-mobile bottom-btn">
             <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
                 <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-read"></i>
-                    浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次</p>
+                    浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次
+                    <span th:if="${session.user}!=null and ${session.user.role}==0" id="visit_count_now"></span>
+                </p>
                 <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-username"></i>
                     参加&nbsp;<span th:text="${ridingTaihuNumber}"></span>&nbsp;人
                     <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank">
