@@ -68,8 +68,11 @@ function countdown() {
         days = remain / (60 * 60 * 24 * 1000);
     /*days = String(days).replace(/^(.*\..{6}).*$/,"$1");
     days = Number(days);*/
-    days = Number(days).toFixed(6)
-    $("#count_down").html("即将启程："+days + "天");
+    days = Number(days).toFixed(6);
+    let index_dot = days.indexOf(".");
+    let days_head = days.substr(0,index_dot+1);
+    let days_tail = days.substr(index_dot+1);
+    $("#count_down").html("即将启程 ：" + days_head + "<span style='font-size: large'>" + days_tail + "</span>" +" 天");
     setTimeout(countdown, 33);
 }
 
