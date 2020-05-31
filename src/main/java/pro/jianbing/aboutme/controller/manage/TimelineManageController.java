@@ -5,6 +5,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.TimelineService;
@@ -32,7 +33,7 @@ public class TimelineManageController extends BaseController {
         User user = getUser();
         if (null == user){
             return "error/login";
-        } else if (!"0".equals(user.getRole())){
+        } else if (!GlobalString.ROLE_ADMIN.equals(user.getRole())){
             return "error/unauthorized";
         }
         return "manage/timeline";

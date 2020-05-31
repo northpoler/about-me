@@ -70,7 +70,7 @@ function countdown() {
     days = Number(days);*/
     days = Number(days).toFixed(6)
     $("#count_down").html("即将启程："+days + "天");
-    setTimeout(countdown, 333);
+    setTimeout(countdown, 33);
 }
 
 function getFormedStyle(source, len) {
@@ -504,16 +504,20 @@ $(function () {
 });
 
 function heartbeat() {
-    const clientId = randomString(32);
     var pageName = $("#page_name").val();
     if (pageName == null || pageName == '') {
         pageName = 'RIDING_TAIHU';
     }
+    startSendHeartbeat(pageName);
     setInterval(function () {
-        sendHeartbeat(clientId,pageName,function (data) {
-            if ($("#visit_count_now").size()==1) {
-                $("#visit_count_now").html(data.data);
-            }
-        })
-    },5000);
+        startSendHeartbeat(pageName);
+    },7500);
+}
+
+function startSendHeartbeat(pageName) {
+    sendHeartbeat(pageName,function (data) {
+        if ($("#visit_count_now").size()==1) {
+            $("#visit_count_now").html(data.data);
+        }
+    })
 }

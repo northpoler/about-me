@@ -30,4 +30,8 @@ public class GlobalString {
      * 标记：正常
      */
     public static final String MARK_NORMAL = "0";
+    /**
+     * 角色：admin
+     */
+    public static final String ROLE_ADMIN = "0";
 }

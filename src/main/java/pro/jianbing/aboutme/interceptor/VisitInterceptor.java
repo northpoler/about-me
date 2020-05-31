@@ -88,7 +88,7 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
         }
         if (subUrl.indexOf(MANAGE_URL)==0) {
             User user = (User) session.getAttribute(GlobalString.ATTRIBUTE_USER);
-            if (null == user || !"0".equals(user.getRole())){
+            if (null == user || !GlobalString.ROLE_ADMIN.equals(user.getRole())){
                 response.sendRedirect(request.getContextPath()+"/unauthorized");
             }
         }

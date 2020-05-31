@@ -7,10 +7,8 @@ import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Companion;
-import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.CompanionService;
-import pro.jianbing.aboutme.service.TimelineService;
 
 import java.util.HashMap;
 import java.util.List;
@@ -35,7 +33,7 @@ public class CompanionManageController extends BaseController {
         User user = getUser();
         if (null == user) {
             return "error/login";
-        } else if (!"0".equals(user.getRole())) {
+        } else if (!GlobalString.ROLE_ADMIN.equals(user.getRole())) {
             return "error/unauthorized";
         }
         return "manage/companion";

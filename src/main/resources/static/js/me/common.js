@@ -249,13 +249,11 @@ function randomString(length) {
 
 /**
  * 发送心跳
- * @param clientId
  * @param pageName
  * @param callback
  */
-function sendHeartbeat(clientId,pageName,callback) {
+function sendHeartbeat(pageName,callback) {
     var data = {
-        clientId: clientId,
         pageName: pageName,
         sendTime: new Date().getTime()
     };
