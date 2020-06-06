@@ -16,6 +16,8 @@ import pro.jianbing.aboutme.common.enums.EmailTypeEnum;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 发邮件的工具
@@ -123,9 +125,22 @@ public class MailUtil {
             helper.setTo("787331840@qq.com");
             helper.setSubject(emailType.getValue());
             helper.setText(content, true);
-            mailSender.send(mimeMessage);
+            send(mimeMessage);
             logger.info("模板邮件已经发送成功。");
         } catch (MessagingException e) {
+            logger.error("模板邮件发送失败!",e);
+        }
+    }
+
+    /**
+     * 使用线程发送邮件
+     * @param mimeMessage
+     */
+    private void send(MimeMessage mimeMessage){
+        try {
+            ExecutorService executorService = Executors.newSingleThreadExecutor();
+            executorService.execute(() -> mailSender.send(mimeMessage));
+        } catch (Exception e) {
             logger.error("模板邮件发送失败!",e);
         }
     }
