@@ -32,10 +32,15 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
      * 管理端页面url开头
      */
     private static final String MANAGE_URL = "/manage";
+    private final VisitService visitService;
+    private final UserService userService;
+
     @Autowired
-    private VisitService visitService;
-    @Autowired
-    private UserService userService;
+    public VisitInterceptor(UserService userService, VisitService visitService) {
+        this.userService = userService;
+        this.visitService = visitService;
+    }
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         StringBuffer url = request.getRequestURL();

@@ -1,5 +1,7 @@
 package pro.jianbing.aboutme.common.util;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * 加密/解密的工具
  *
@@ -11,6 +13,7 @@ public final class EncryptionUtil {
      * @param str
      * @return
      */
+    @NotNull
     public static String encrypt(String str) {
         str = cnToUnicode(str);
         str = str.replaceAll("\\\\u","q");
@@ -62,7 +65,7 @@ public final class EncryptionUtil {
      * @param str
      * @return
      */
-    public static String decrypt(String str) {
+    public static String decrypt(@NotNull String str) {
         char[] chars = str.toCharArray();
         for (int i = 0; i < chars.length; i++) {
             if ('m' == chars[i]){
@@ -112,13 +115,13 @@ public final class EncryptionUtil {
      * @param cn
      * @return
      */
-    private static String cnToUnicode(String cn) {
+    private static String cnToUnicode(@NotNull String cn) {
         char[] chars = cn.toCharArray();
-        String returnStr = "";
-        for (int i = 0; i < chars.length; i++) {
-            returnStr += "\\u" + Integer.toString(chars[i], 16);
+        StringBuilder returnStr = new StringBuilder();
+        for (char aChar : chars) {
+            returnStr.append("\\u").append(Integer.toString(aChar, 16));
         }
-        return returnStr;
+        return returnStr.toString();
     }
 
     /**

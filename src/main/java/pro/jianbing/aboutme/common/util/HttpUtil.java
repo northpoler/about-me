@@ -73,7 +73,7 @@ public class HttpUtil {
         return doGet(url, null);
     }
 
-    public static String doPost(String url, Map<String, String> param) {
+    private static String doPost(String url, Map<String, String> param) {
         // 创建Httpclient对象
         CloseableHttpClient httpClient = HttpClients.createDefault();
         CloseableHttpResponse response = null;
@@ -98,6 +98,7 @@ public class HttpUtil {
             e.printStackTrace();
         } finally {
             try {
+                assert response != null;
                 response.close();
             } catch (IOException e) {
                 // TODO Auto-generated catch block
