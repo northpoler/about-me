@@ -7,6 +7,7 @@ import pro.jianbing.aboutme.common.global.GlobalObject;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Timeline;
 import pro.jianbing.aboutme.service.CompanionService;
+import pro.jianbing.aboutme.service.LikeService;
 import pro.jianbing.aboutme.service.TimelineService;
 
 import javax.annotation.PostConstruct;
@@ -27,14 +28,18 @@ public class HotSpotDataCache {
     private TimelineService timelineService;
     @Autowired
     private CompanionService companionService;
+    @Autowired
+    private LikeService likeService;
 
     @PostConstruct
     public void init() {
         List<Timeline> timelines = timelineService.getAllNormalTimelines();
         int companionCounts = companionService.countMembers();
+        int sumLikes = likeService.getSumLikes();
         GlobalObject.HOT_DATA_MAP.clear();
         GlobalObject.HOT_DATA_MAP.put(GlobalString.TIMELINES,timelines);
         GlobalObject.HOT_DATA_MAP.put(GlobalString.COMPANION_COUNT_TAIHU,companionCounts);
+        GlobalObject.HOT_DATA_MAP.put(GlobalString.LIKE_COUNT_GRANDPA,sumLikes);
     }
 
     public void initCompanionCount(){

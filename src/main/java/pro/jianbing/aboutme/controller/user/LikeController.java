@@ -6,8 +6,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import pro.jianbing.aboutme.common.controller.BaseController;
 import pro.jianbing.aboutme.common.dto.BaseResult;
+import pro.jianbing.aboutme.common.global.GlobalObject;
+import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Like;
-import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.service.LikeService;
 
 import java.util.List;
@@ -31,13 +32,13 @@ public class LikeController extends BaseController {
         try {
             Like like = new Like();
             like.setIp(getIpByRequest());
-            User user = getUser();
-            if (null!=user){
-                like.setUserId(user.getId());
+            if (null!=getUser()){
+                like.setUserId(getUser().getId());
             }
             likeService.insertLike(like);
-            int sumLikes = likeService.getSumLikes();
-            baseResult = BaseResult.success(sumLikes);
+            int likes = (int)GlobalObject.HOT_DATA_MAP.get(GlobalString.LIKE_COUNT_GRANDPA);
+            GlobalObject.HOT_DATA_MAP.put(GlobalString.LIKE_COUNT_GRANDPA,++likes);
+            baseResult = BaseResult.success(likes);
         } catch (Exception e) {
             e.printStackTrace();
             baseResult = BaseResult.systemError();

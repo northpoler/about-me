@@ -34,4 +34,8 @@ public class GlobalString {
      * 角色：admin
      */
     public static final String ROLE_ADMIN = "0";
+    /**
+     * 李贺臣页面 点赞数
+     */
+    public static final String LIKE_COUNT_GRANDPA = "LIKE_COUNT_GRANDPA";
 }
