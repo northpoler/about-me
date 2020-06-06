@@ -232,6 +232,7 @@ function advise() {
         title: '对这次行程的建议或其他想说的话'
     }, function(value, index, elem){
         showloading(true);
+        $(".layui-layer-btn0").addClass("layui-hide");
         asyncPost('/riding/taihu/advise',{'advise':value},function (data) {
             showloading(false);
             if (data.result) {
@@ -245,7 +246,9 @@ function advise() {
                 layer.msg(data.message,{
                     icon:2,
                     time:1500
-                },function(){});
+                },function(){
+                    $(".layui-layer-btn0").removeClass("layui-hide");
+                });
             }
         });
     });
