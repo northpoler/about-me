@@ -42,11 +42,11 @@
         }
     </style>
 </head>
-<body class="me-body">
+<body>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
-        <blockquote class="layui-elem-quote" style="background-color: lightcyan">
+        <blockquote class="layui-elem-quote show-pc" style="background-color: lightcyan">
             <p style="font-size: larger">本页面分两大模块：</p>
             <div class="me-text-center" style="margin: 5px 0px">
                 <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>
@@ -169,7 +169,7 @@
                         <i class="layui-icon layui-timeline-axis">&#xe63f;</i>
                         <div class="layui-timeline-content layui-text">
                             <h3 class="layui-timeline-title" th:utext ="${line.occurTime}"></h3>
-                            <p th:utext="${line.content}"></p>
+                            <p style="font-size: large" th:utext="${line.content}"></p>
                         </div>
                     </li>
                 </ul>
@@ -177,7 +177,7 @@
                     纠错
                 </button>
                 <button type="button" class="layui-btn layui-btn-radius layui-btn-normal" id="add">
-                    添加
+                    补充
                 </button>
 
                 <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/timeline" target="_blank"
@@ -201,6 +201,35 @@
         <div>
             <img src="https://s1.ax1x.com/2020/06/07/tgtXsx.png" alt="underground" border="0">
         </div>
+    </div>
+</div>
+
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <div style="padding-left: 1em" class="show-pc">
+            <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;
+        </div>
+        <div class="show-mobile me-bottom-btn">
+            <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
+                <p style="font-size: small" class="me-text-center"><br>
+                    &nbsp;<i class="layui-icon layui-icon-read"></i>&nbsp;浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次
+                </p>
+            </div>
+            <div class="layui-col-sm8 layui-col-xs8" style="text-align: right;padding-right: 10px">
+                <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>
+                <a href="#part_two" class="layui-btn layui-btn-normal anchor">人生轨迹图</a>
+            </div>
+            <div class="layui-row">
+            </div>
+        </div>
+        <hr class="show-pc">
+    </div>
+</div>
+<div class="layui-row" style="background-color: white">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <div style="font-size: small;text-align: center;padding: 3em 0 2em 0">
+            <a href="http://www.beian.miit.gov.cn" target="_blank" style="color: black">备案号：皖ICP备19001037号</a></div>
+        <div class="show-mobile" style="height: 80px"></div>
     </div>
 </div>
 <!-- Root element of PhotoSwipe. Must have class pswp. -->

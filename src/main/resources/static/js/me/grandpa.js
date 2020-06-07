@@ -1,3 +1,5 @@
+distinguishClientType();
+
 // 记录当次浏览页面献花的次数
 var userLikes = 0;
 
@@ -237,7 +239,7 @@ $(".anchor").click(function(){
     }
 });
 
-var visitCount = $("#visit_count").val();
+/*var visitCount = $("#visit_count").val();
 layui.use('layer', function () {
     var layer = layui.layer;
     layer.msg(
@@ -249,7 +251,7 @@ layui.use('layer', function () {
             icon:6
         }
     );
-});
+});*/
 var initPhotoSwipeFromDOM = function(gallerySelector) {
 
     // 解析来自DOM元素幻灯片数据（URL，标题，大小...）

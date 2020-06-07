@@ -37,16 +37,6 @@
         .layui-field-title {
             margin-top: 30px;
         }
-        .bottom-btn {
-            position: fixed;
-            bottom: 0;
-            padding: 10px 0;
-            width: 100%;
-            z-index: 999;
-            background-color: white;
-            /*border-top: 1px solid aqua;*/
-            box-shadow: 0px 0px 5px grey;
-        }
         @-webkit-keyframes flash {
             0% {
                 background-color: #FFB800;
@@ -95,29 +85,6 @@
             color: grey;
             padding: 0 0.5em;
         }
-        .pic-div,.plan-pic-div{
-            animation:mymove 5s infinite; /*animation 时间 播放次数*/
-            animation-direction:alternate; /*是否循环交替反向播放动画*/
-            /*Safari 和 Chrome:*/
-            -webkit-animation:mymove 5s infinite;
-        }
-        @keyframes mymove
-        {
-            0% {background: #eeeeee;}
-            25% {background: #dddddd;}
-            50% {background: #dadada;}
-            75% {background:#dddddd;}
-            100% {background:#eeeeee;}
-        }
-        /*Safari 和 Chrome:*/
-        @-webkit-keyframes mymove
-        {
-            0% {background: #eeeeee;}
-            25% {background: #dddddd;}
-            50% {background: #dadada;}
-            75% {background:#dddddd;}
-            100% {background:#eeeeee;}
-        }
         #btn-together {
             margin-left: -4px;
             border-top-right-radius: 19px;
@@ -152,7 +119,7 @@
 <input type="hidden" th:value="${pageName}" id="page_name"/>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div id="head_pic_div" class="pic-div">
+        <div id="head_pic_div" class="me-pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/Yyq0B9.jpg" alt="head" border="0">
         </div>
         <div class="layui-card-header border-shine" id="count_down">
@@ -162,7 +129,7 @@
 </div>
 <div class="layui-row" style="overflow: hidden">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div class="my-gallery pic-div" id="map_pic_div" data-pswp-uid="1" style="margin-top: -20px">
+        <div class="my-gallery me-pic-div" id="map_pic_div" data-pswp-uid="1" style="margin-top: -20px">
             <figure style="margin: 0">
                 <a href="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" data-size="1032x911">
                     <img alt="路线图" src="https://s1.ax1x.com/2020/05/06/YViRfJ.jpg" style="width: 100%"/>
@@ -177,7 +144,7 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div id="start_pic_div" class="pic-div">
+        <div id="start_pic_div" class="me-pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/YyqwnJ.jpg" alt="start" border="0">
         </div>
         <fieldset class="layui-elem-field" style="margin-top: 10px">
@@ -193,7 +160,7 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div id="distance_pic_div" class="pic-div">
+        <div id="distance_pic_div" class="me-pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/YyqrA1.jpg" alt="distance" border="0">
         </div>
     </div>
@@ -231,7 +198,7 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div id="flag_pic_div" class="pic-div">
+        <div id="flag_pic_div" class="me-pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/YyqB7R.jpg" alt="flag" border="0">
         </div>
         <fieldset class="layui-elem-field" style="margin-top: 10px">
@@ -257,7 +224,7 @@
                         2020-10-01
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkAUO.jpg" alt="湖州" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;第一天，准备装备+休息休整</p>
@@ -269,7 +236,7 @@
                         2020-10-02
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkib6.jpg" alt="常州太湖湾" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，在常州太湖湾歇脚</p>
@@ -281,7 +248,7 @@
                         2020-10-03
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkCK1.jpg" alt="东南大学无锡分校" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;经龙头渚过鼋头渚，夜宿东大无锡分校</p>
@@ -293,7 +260,7 @@
                         2020-10-04
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkE5D.jpg" alt="西洞庭山" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;跨过太湖大桥，夜宿于西洞庭山</p>
@@ -305,7 +272,7 @@
                         2020-10-05
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkPDx.jpg" alt="洞庭东山" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;沿湖骑行，到达洞庭东山休憩</p>
@@ -317,7 +284,7 @@
                         2020-10-06
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkkVK.jpg" alt="太湖湾大桥" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;清晨出发，夜宿苏州市吴江区</p>
@@ -329,7 +296,7 @@
                         2020-10-07
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img src="https://s1.ax1x.com/2020/05/06/YVkpvR.jpg" alt="冲线" border="0">
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;绕湖一路骑行，直达终点（起点）</p>
@@ -341,7 +308,7 @@
                         2020-10-08
                     </div>
                     <div class="plan-body">
-                        <div class="plan-pic-div">
+                        <div class="me-plan-pic-div">
                             <img alt="告别" th:src="@{../../static/image/riding/taihu/farewell.jpg}"/>
                         </div>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="layui-badge-dot"></span>&nbsp;还车，返程，休息，上班</p>
@@ -404,7 +371,7 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div id="together_pic_div" class="pic-div">
+        <div id="together_pic_div" class="me-pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/YyqaX4.jpg" alt="together" border="0">
         </div>
     </div>
@@ -425,7 +392,7 @@
             <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank"
                class="layui-btn layui-btn-warm">参与人</a>
         </div>
-        <div class="show-mobile bottom-btn">
+        <div class="show-mobile me-bottom-btn">
             <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
                 <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-read"></i>
                     浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次
