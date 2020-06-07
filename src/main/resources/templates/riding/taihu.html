@@ -111,6 +111,14 @@
                 box-shadow: 0 0 5px rgba(255,0,0,.6), inset 0 0 15px rgba(255,0,0,.5), 0 0 0 #ff0000;
             }
         }
+        .more-activity {
+            height: 200px;
+            text-align: center;
+        }
+        .more-activity > img {
+            height: 100px;
+            width: 100px;
+        }
     </style>
 </head>
 <body>
@@ -324,6 +332,47 @@
             <!-- 如果需要滚动条 -->
             <!--<div class="swiper-scrollbar"></div>-->
         </div>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <fieldset class="layui-elem-field" style="margin-top: 10px">
+            <legend>更多活动</legend>
+            <div class="layui-field-box" style="font-size: x-large">
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="scenicSpot" th:src="@{../../static/image/riding/taihu/scenicSpot.png}"/>
+                    <p style="font-size: xx-large">美景</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="food" th:src="@{../../static/image/riding/taihu/food.png}"/>
+                    <p style="font-size: xx-large">美食</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="poker" th:src="@{../../static/image/riding/taihu/poker.png}"/>
+                    <p style="font-size: xx-large">游戏</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="chat" th:src="@{../../static/image/riding/taihu/chat.png}"/>
+                    <p style="font-size: xx-large">聊天</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="beach" th:src="@{../../static/image/riding/taihu/beach.png}"/>
+                    <p style="font-size: xx-large">沙滩</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="swim" th:src="@{../../static/image/riding/taihu/swim.png}"/>
+                    <p style="font-size: xx-large">游泳</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="picnic" th:src="@{../../static/image/riding/taihu/picnic.png}"/>
+                    <p style="font-size: xx-large">野餐</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs6 more-activity">
+                    <img alt="more" th:src="@{../../static/image/riding/taihu/more.png}"/>
+                    <p style="font-size: xx-large">等等</p>
+                </div>
+            </div>
+        </fieldset>
     </div>
 </div>
 <div class="layui-row">
