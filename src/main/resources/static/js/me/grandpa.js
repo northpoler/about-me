@@ -176,6 +176,7 @@ function like() {
     asyncGet('/like/insert',{"count": before},function (data) {
         if (data.result){
             $("#like").text(data.data);
+            $("#like-mobile").text(data.data);
         }
     });
     var className = document.getElementById("portrait").className;

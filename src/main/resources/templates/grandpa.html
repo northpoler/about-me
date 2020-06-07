@@ -105,19 +105,19 @@
                 </div>
                 <br>
                 <p><span class="layui-badge-dot"></span>&nbsp;实体照片高度为70cm，象征着建国70周年；</p>
-                <p><span class="layui-badge-dot"></span>&nbsp;整图中心有个字：李；</p>
                 <p><span class="layui-badge-dot"></span>&nbsp;整图中心垂直线，从上到下依次经过标题中心、长城烽火台中心、党徽中心；</p>
+                <p><span class="layui-badge-dot"></span>&nbsp;整图中心水平线，从左到右依次经过李贺臣肖像中心、毛泽东肖像底部、毛泽东名讳底部；</p>
                 <p class="me-text-center" style="margin: 10px">
                     <a href="javascript:void(0);" style="color: deeppink" id="show-more" onclick="showMore()">更多 >></a>
                 </p>
                 <div id="info-more" style="display: none">
-                    <p><span class="layui-badge-dot"></span>&nbsp;整图中心水平线，从左到右依次经过李贺臣肖像中心、毛泽东肖像底部、毛泽东名讳底部；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;主标题上沿、建国70周年活动标识上沿、毛泽东肖像顶部在同一水平线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;主标题下沿、建国70周年活动标识下沿、毛泽东肖像眉顶在同一水平线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;李贺臣肖像中心和五星红旗最大星中心在同一垂直线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;五星红旗最大星和党徽下沿在同一水平线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;李贺臣肖像中心和毛泽东名讳下沿在同一水平线；</p>
                     <p><span class="layui-badge-dot"></span>&nbsp;毛泽东肖像中心和右下角主题里李贺臣的“李”在同一垂直线。</p>
+                    <p><span class="layui-badge-dot"></span>&nbsp;整图中心有个字：李；</p>
                     <p class="me-tip">其他细节不一一指出。</p>
                 </div>
             </div>
@@ -211,8 +211,9 @@
         </div>
         <div class="show-mobile me-bottom-btn">
             <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
-                <p style="font-size: small" class="me-text-center"><br>
-                    &nbsp;<i class="layui-icon layui-icon-read"></i>&nbsp;浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次
+                <p style="font-size: small">
+                    瞻阅&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次<br>
+                    献花&nbsp;<span id="like-mobile" th:text="${likes}"></span>&nbsp;束
                 </p>
             </div>
             <div class="layui-col-sm8 layui-col-xs8" style="text-align: right;padding-right: 10px">
