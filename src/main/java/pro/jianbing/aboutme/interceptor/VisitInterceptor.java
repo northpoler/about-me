@@ -21,6 +21,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.time.LocalDateTime;
+import java.util.concurrent.Executors;
 
 /**
  * @author 李建兵
@@ -51,21 +52,11 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
         if (subUrl.contains(";jsessionid")){
             subUrl = subUrl.substring(0,subUrl.indexOf(";jsessionid"));
         }
+        String target = subUrl;
         //如果访问特定页面，记录访问信息
-        if (UrlEnum.hasValue(subUrl)){
-            Visit visit = new Visit();
-            String ipAddress = NetworkUtil.getIpAddress(request);
-            /*String addressByIp = NetworkUtil.getAddressByIp(ipAddress);*/
-            visit.setIp(ipAddress);
-            /*visit.setAddress(addressByIp);*/
-            visit.setTarget(subUrl);
-            User user = (User) request.getSession().getAttribute(GlobalString.ATTRIBUTE_USER);
-            if (null!=user){
-                visit.setUserId(user.getId());
-            }
-            visit.setVisitTime(LocalDateTime.now());
-            visitService.saveVisit(visit);
-            UrlEnum urlEnum = UrlEnum.getEnumByValue(subUrl);
+        if (UrlEnum.hasValue(target)){
+            Executors.newSingleThreadExecutor().execute(() -> saveVisitInfo(target,request));
+            UrlEnum urlEnum = UrlEnum.getEnumByValue(target);
             if (null != urlEnum) {
                 GlobalObject.VISIT_COUNT.put(urlEnum.getCode(),GlobalObject.VISIT_COUNT.get(urlEnum.getCode())+1);
             }
@@ -91,12 +82,32 @@ public class VisitInterceptor extends HandlerInterceptorAdapter {
                 }
             }
         }
-        if (subUrl.indexOf(MANAGE_URL)==0) {
+        if (target.indexOf(MANAGE_URL)==0) {
             User user = (User) session.getAttribute(GlobalString.ATTRIBUTE_USER);
             if (null == user || !GlobalString.ROLE_ADMIN.equals(user.getRole())){
                 response.sendRedirect(request.getContextPath()+"/unauthorized");
             }
         }
         return true;
+    }
+
+    /**
+     * 保存访问信息
+     * @param target 目标路径
+     * @param request 请求
+     */
+    private void saveVisitInfo(String target, HttpServletRequest request){
+        Visit visit = new Visit();
+        String ipAddress = NetworkUtil.getIpAddress(request);
+        /*String addressByIp = NetworkUtil.getAddressByIp(ipAddress);*/
+        visit.setIp(ipAddress);
+        /*visit.setAddress(addressByIp);*/
+        visit.setTarget(target);
+        User user = (User) request.getSession().getAttribute(GlobalString.ATTRIBUTE_USER);
+        if (null!=user){
+            visit.setUserId(user.getId());
+        }
+        visit.setVisitTime(LocalDateTime.now());
+        visitService.saveVisit(visit);
     }
 }
