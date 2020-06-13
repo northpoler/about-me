@@ -1,5 +1,11 @@
 distinguishClientType();
 
+if (isMobile()){
+    var obj = $(".more-activity");
+    obj.removeClass("more-activity");
+    obj.addClass("more-activity-mobile");
+}
+
 var width = $("#head_pic_div").width();
 $("#head_pic_div").css("height",width/1920*1079+"px");
 $("#map_pic_div").css("height",width/1032*911+"px");

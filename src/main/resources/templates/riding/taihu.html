@@ -98,26 +98,26 @@
             letter-spacing: 2px;
             padding: 0 20px 0 30px;
         }
-        .border-shine {
-            animation: glow 800ms ease-out infinite alternate;
-        }
-        @keyframes glow {
-            0% {
-                border-color: #ff00ff;
-                box-shadow: 0 0 0 rgba(255,0,0,.2), inset 0 0 5px rgba(255,0,0,.2), 0 0 0 #ff00ff;
-            }
-            100% {
-                border-color: #ff0000;
-                box-shadow: 0 0 5px rgba(255,0,0,.6), inset 0 0 15px rgba(255,0,0,.5), 0 0 0 #ff0000;
-            }
-        }
         .more-activity {
             height: 180px;
             text-align: center;
+            font-size: xx-large;
         }
         .more-activity > img {
             height: 100px;
             width: 100px;
+        }
+        .more-activity-mobile {
+            height: 120px;
+            text-align: center;
+            font-size: large;
+        }
+        .more-activity-mobile > img {
+            height: 60px;
+            width: 60px;
+        }
+        #count_down {
+            padding: 10px 0;
         }
     </style>
 </head>
@@ -130,9 +130,50 @@
         <div id="head_pic_div" class="me-pic-div">
             <img src="https://s1.ax1x.com/2020/05/16/Yyq0B9.jpg" alt="head" border="0">
         </div>
-        <div class="layui-card-header border-shine" id="count_down">
+        <div class="layui-card-header" id="count_down">
             倒计时
         </div>
+    </div>
+</div>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <fieldset class="layui-elem-field" style="margin-top: 10px">
+            <legend>岂止骑行</legend>
+            <div class="layui-field-box" style="font-size: x-large">
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMMb4.png" alt="scenicSpot" border="0">
+                    <p>美景</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMZ80.png" alt="food" border="0">
+                    <p>美食</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMuKU.png" alt="beach" border="0">
+                    <p>沙滩</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMlVJ.png" alt="swim" border="0">
+                    <p>游泳</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMVCq.png" alt="picnic" border="0">
+                    <p>野餐</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMe2V.png" alt="chat" border="0">
+                    <p>谈心</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMKrF.png" alt="poker" border="0">
+                    <p>游戏</p>
+                </div>
+                <div class="layui-col-md3 layui-col-xs3 more-activity">
+                    <img src="https://s1.ax1x.com/2020/06/07/tRMmvT.png" alt="more" border="0">
+                    <p>等等</p>
+                </div>
+            </div>
+        </fieldset>
     </div>
 </div>
 <div class="layui-row" style="overflow: hidden">
@@ -335,47 +376,6 @@
     </div>
 </div>
 <div class="layui-row">
-    <div class="layui-col-md6 layui-col-md-offset3">
-        <fieldset class="layui-elem-field" style="margin-top: 10px">
-            <legend>更多活动</legend>
-            <div class="layui-field-box" style="font-size: x-large">
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMMb4.png" alt="scenicSpot" border="0">
-                    <p style="font-size: xx-large">美景</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMZ80.png" alt="food" border="0">
-                    <p style="font-size: xx-large">美食</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMKrF.png" alt="poker" border="0">
-                    <p style="font-size: xx-large">游戏</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMe2V.png" alt="chat" border="0">
-                    <p style="font-size: xx-large">聊天</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMuKU.png" alt="beach" border="0">
-                    <p style="font-size: xx-large">沙滩</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMlVJ.png" alt="swim" border="0">
-                    <p style="font-size: xx-large">游泳</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMVCq.png" alt="picnic" border="0">
-                    <p style="font-size: xx-large">野餐</p>
-                </div>
-                <div class="layui-col-md3 layui-col-xs6 more-activity">
-                    <img src="https://s1.ax1x.com/2020/06/07/tRMmvT.png" alt="more" border="0">
-                    <p style="font-size: xx-large">等等</p>
-                </div>
-            </div>
-        </fieldset>
-    </div>
-</div>
-<div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3" style="background-color: #262626;color: white;padding-top: 10px;padding-bottom: 10px">
         <fieldset class="layui-elem-field">
             <legend>常见问题</legend>
@@ -442,19 +442,19 @@
                class="layui-btn layui-btn-warm">参与人</a>
         </div>
         <div class="show-mobile me-bottom-btn">
-            <div class="layui-col-sm4 layui-col-xs4" style="text-align: left;padding-left: 10px">
+            <div class="layui-col-sm5 layui-col-xs5" style="text-align: left;padding-left: 10px">
                 <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-read"></i>
-                    浏览&nbsp;<span th:text="${visitCounts}"></span>&nbsp;次
+                    浏览<span th:text="${visitCounts}"></span>次
                     <span th:if="${session.user}!=null and ${session.user.role}==0" id="visit_count_now"></span>
                 </p>
                 <p style="font-size: small">&nbsp;&nbsp;<i class="layui-icon layui-icon-username"></i>
-                    参加&nbsp;<span th:text="${ridingTaihuNumber}"></span>&nbsp;人
+                    参加<span th:text="${ridingTaihuNumber}"></span>人
                     <a th:if="${session.user}!=null and ${session.user.role}==0 " href="/manage/companion" target="_blank">
                         <i class="layui-icon layui-icon-edit"></i>
                     </a>
                 </p>
             </div>
-            <div class="layui-col-sm8 layui-col-xs8" style="text-align: right;padding-right: 10px">
+            <div class="layui-col-sm7 layui-col-xs7" style="text-align: right;padding-right: 10px">
                 <button type="button" id="btn-advise" class="layui-btn layui-btn-normal" onclick="advise()">
                     提建议
                 </button>
