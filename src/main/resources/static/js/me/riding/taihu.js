@@ -1,9 +1,9 @@
 distinguishClientType();
 
-if (isMobile()){
+if (!isMobile()){
     var obj = $(".more-activity");
     obj.removeClass("more-activity");
-    obj.addClass("more-activity-mobile");
+    obj.addClass("more-activity-pc");
 }
 
 var width = $("#head_pic_div").width();

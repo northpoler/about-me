@@ -99,22 +99,22 @@
             padding: 0 20px 0 30px;
         }
         .more-activity {
-            height: 180px;
-            text-align: center;
-            font-size: xx-large;
-        }
-        .more-activity > img {
-            height: 100px;
-            width: 100px;
-        }
-        .more-activity-mobile {
             height: 120px;
             text-align: center;
             font-size: large;
         }
-        .more-activity-mobile > img {
+        .more-activity > img {
             height: 60px;
             width: 60px;
+        }
+        .more-activity-pc {
+            height: 180px;
+            text-align: center;
+            font-size: xx-large;
+        }
+        .more-activity-pc > img {
+            height: 100px;
+            width: 100px;
         }
         #count_down {
             padding: 10px 0;
@@ -139,7 +139,7 @@
     <div class="layui-col-md6 layui-col-md-offset3">
         <fieldset class="layui-elem-field" style="margin-top: 10px">
             <legend>岂止骑行</legend>
-            <div class="layui-field-box" style="font-size: x-large">
+            <div class="layui-field-box" style="font-size: large">
                 <div class="layui-col-md3 layui-col-xs3 more-activity">
                     <img src="https://s1.ax1x.com/2020/06/07/tRMMb4.png" alt="scenicSpot" border="0">
                     <p>美景</p>
@@ -427,11 +427,11 @@
 </div>
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div style="padding-left: 1em" class="show-pc">
+        <div style="padding-left: 1em" class="layui-hide show-pc">
             <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;|
                 参加<span th:text="${ridingTaihuNumber}"></span>人(含本人)</p>
         </div>
-        <div class="me-text-center show-pc" style="margin: 3em 0">
+        <div class="me-text-center layui-hide show-pc" style="margin: 3em 0">
             <button type="button" class="layui-btn layui-btn-normal" onclick="advise()">
                 提建议
             </button>
@@ -465,7 +465,7 @@
             <div class="layui-row">
             </div>
         </div>
-        <hr class="show-pc">
+        <hr class="layui-hide show-pc">
     </div>
 </div>
 <div class="layui-row" style="background-color: #0C0C0C">

@@ -46,7 +46,7 @@
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
         <input type="hidden" th:value="${visitCounts}" id="visit_count"/>
-        <blockquote class="layui-elem-quote show-pc" style="background-color: lightcyan">
+        <blockquote class="layui-elem-quote layui-hide show-pc" style="background-color: lightcyan">
             <p style="font-size: larger">本页面分两大模块：</p>
             <div class="me-text-center" style="margin: 5px 0px">
                 <a href="#part_one" class="layui-btn layui-btn-normal anchor">继古开今图</a>
@@ -153,10 +153,20 @@
                 <i class="layui-icon layui-icon-carousel"></i>  照片拾忆
             </div>
             <div class="layui-card-body">
-                单人照 <i class="layui-icon layui-icon-friends"></i><br/>
-                <img src="https://s1.ax1x.com/2020/06/07/tgthLV.jpg" alt="lifephoto01" border="0">
-                <br/><br/>合照 <i class="layui-icon layui-icon-group"></i><br/>
-                <img src="https://s1.ax1x.com/2020/06/07/tgt5ZT.jpg" alt="lifephoto02" border="0">
+                <div class="my-gallery" data-pswp-uid="3">
+                    <figure style="margin: 0">
+                        <a href="https://s1.ax1x.com/2020/06/07/tgthLV.jpg" data-size="1920x1440">
+                            <img alt="lifephoto01" src="https://s1.ax1x.com/2020/06/07/tgthLV.jpg" style="width: 100%"/>
+                        </a>
+                    </figure>
+                </div>
+                <div class="my-gallery" data-pswp-uid="3" style="margin-top: 10px">
+                    <figure style="margin: 0">
+                        <a href="https://s1.ax1x.com/2020/06/07/tgt5ZT.jpg" data-size="1920x1294">
+                            <img alt="lifephoto02" src="https://s1.ax1x.com/2020/06/07/tgt5ZT.jpg" style="width: 100%"/>
+                        </a>
+                    </figure>
+                </div>
             </div>
         </div>
         <div class="layui-card">
@@ -185,9 +195,6 @@
             </div>
         </div>
         <div class="layui-card">
-            <div class="layui-card-header">
-                <i class="layui-icon layui-icon-edit"></i>  写在最后
-            </div>
             <div class="layui-card-body me-text-center" id="portrait" style="letter-spacing: 5px">
                 <img src="https://s1.ax1x.com/2020/06/07/tgtHJJ.png" alt="portrait" border="0">
             </div>
@@ -206,7 +213,7 @@
 
 <div class="layui-row">
     <div class="layui-col-md6 layui-col-md-offset3">
-        <div style="padding-left: 1em" class="show-pc">
+        <div style="padding-left: 1em" class="layui-hide show-pc">
             <p class="me-tip">浏览<span th:text="${visitCounts}"></span>次&nbsp;
         </div>
         <div class="show-mobile me-bottom-btn">
@@ -223,7 +230,7 @@
             <div class="layui-row">
             </div>
         </div>
-        <hr class="show-pc">
+        <hr class="layui-hide show-pc">
     </div>
 </div>
 <div class="layui-row" style="background-color: white">
