@@ -2,13 +2,10 @@ package pro.jianbing.aboutme.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import pro.jianbing.aboutme.common.util.NetworkUtil;
 import pro.jianbing.aboutme.entity.Like;
-import pro.jianbing.aboutme.entity.User;
 import pro.jianbing.aboutme.mapper.LikeMapper;
-import pro.jianbing.aboutme.repository.LikeRepositoty;
+import pro.jianbing.aboutme.repository.LikeRepository;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,12 +18,12 @@ public class LikeService{
     private final
     LikeMapper likeMapper;
     private final
-    LikeRepositoty likeRepositoty;
+    LikeRepository likeRepository;
 
     @Autowired
-    public LikeService(LikeMapper likeMapper,LikeRepositoty likeRepositoty) {
+    public LikeService(LikeMapper likeMapper,LikeRepository likeRepository) {
         this.likeMapper = likeMapper;
-        this.likeRepositoty = likeRepositoty;
+        this.likeRepository = likeRepository;
     }
 
     public int getSumLikes() {
@@ -34,15 +31,15 @@ public class LikeService{
     }
 
     public Integer getSumLikesToday(){
-        return likeRepositoty.countLikesToday();
+        return likeRepository.countLikesToday();
     }
 
     public int getSumPersonalLikes(Long userId) {
-        return likeRepositoty.getSumPersonalLikes(userId);
+        return likeRepository.getSumPersonalLikes(userId);
     }
 
     public Integer getSumPersonalLikesToday(Long userId){
-        return likeRepositoty.countPersonalLikesToday(userId);
+        return likeRepository.countPersonalLikesToday(userId);
     }
 
     public void insertLike(Like like) {
@@ -58,7 +55,7 @@ public class LikeService{
     @Transactional
     public Integer updateNullByUserIdAndIp(Long userId, String ip){
         // 更新其他链接的排序
-        Integer result = likeRepositoty.updateNullByUserIdAndIp(userId, ip);
+        Integer result = likeRepository.updateNullByUserIdAndIp(userId, ip);
         if (result > 0){
             return 1;
         }

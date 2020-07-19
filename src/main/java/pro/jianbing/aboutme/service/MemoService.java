@@ -3,7 +3,7 @@ package pro.jianbing.aboutme.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.entity.Memo;
-import pro.jianbing.aboutme.repository.MemoRepositoty;
+import pro.jianbing.aboutme.repository.MemoRepository;
 
 import javax.transaction.Transactional;
 import java.util.List;
@@ -15,34 +15,34 @@ import java.util.List;
 public class MemoService {
 
     private final
-    MemoRepositoty memoRepositoty;
+    MemoRepository memoRepository;
 
     @Autowired
-    public MemoService(MemoRepositoty memoRepositoty) {
-        this.memoRepositoty = memoRepositoty;
+    public MemoService(MemoRepository memoRepository) {
+        this.memoRepository = memoRepository;
     }
 
     public List<Memo> getMemoList(Long userId){
-        return memoRepositoty.findAllByUserIdOrderBySequenceAsc(userId);
+        return memoRepository.findAllByUserIdOrderBySequenceAsc(userId);
     }
 
     public void delete(Long id, Long userId){
         // 更新其他链接的排序
         Memo memo = getById(id);
-        memoRepositoty.decreaseSequence(memo.getSequence(),userId);
-        memoRepositoty.deleteById(id);
+        memoRepository.decreaseSequence(memo.getSequence(),userId);
+        memoRepository.deleteById(id);
     }
 
     public long getMaxSequence(Long userId){
-        return memoRepositoty.countByUserId(userId);
+        return memoRepository.countByUserId(userId);
     }
 
     @Transactional
     public Integer save(Memo memo){
         // 更新其他链接的排序
-        memoRepositoty.increaseSequence(memo.getSequence(), memo.getUserId());
+        memoRepository.increaseSequence(memo.getSequence(), memo.getUserId());
         // 保存
-        Memo save = memoRepositoty.save(memo);
+        Memo save = memoRepository.save(memo);
         if (save!=null){
             return 1;
         }
@@ -54,12 +54,12 @@ public class MemoService {
         // 更新其他链接的排序
         Memo old = getById(memo.getId());
         if (old.getSequence()>memo.getSequence()){
-            memoRepositoty.increaseSequence(memo.getSequence(),old.getSequence(),memo.getUserId());
+            memoRepository.increaseSequence(memo.getSequence(),old.getSequence(),memo.getUserId());
         } else if (old.getSequence()<memo.getSequence()){
-            memoRepositoty.decreaseSequence(old.getSequence(),memo.getSequence(),memo.getUserId());
+            memoRepository.decreaseSequence(old.getSequence(),memo.getSequence(),memo.getUserId());
         }
         // 保存
-        Memo save = memoRepositoty.save(memo);
+        Memo save = memoRepository.save(memo);
         if (save!=null){
             return 1;
         }
@@ -71,6 +71,6 @@ public class MemoService {
     }
 
     private Memo getById(Long id){
-        return memoRepositoty.findById(id).get();
+        return memoRepository.findById(id).get();
     }
 }

@@ -11,7 +11,7 @@ import java.util.List;
  * @author 李建兵
  */
 @Repository("companionRepository")
-public interface CompanionRepositoty extends JpaRepository<Companion, Long> {
+public interface CompanionRepository extends JpaRepository<Companion, Long> {
     @Query("select count(id) from Companion where mark = '0'")
     Integer countCompanions();
 

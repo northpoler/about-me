@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * @author 李建兵
  */
-@Repository("systemConfigurationRepositoty")
-public interface SystemConfigurationRepositoty extends JpaRepository<SystemConfiguration,Long> {
+@Repository("systemConfigurationRepository")
+public interface SystemConfigurationRepository extends JpaRepository<SystemConfiguration,Long> {
     List<SystemConfiguration> getAllByMark(String mark);
 }

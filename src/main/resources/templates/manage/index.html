@@ -2,22 +2,18 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="zh">
 <head>
     <title>后台主页</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <meta name="renderer" content="webkit">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="format-detection" content="telephone=no">
-    <meta name="author" content="787331940@qq.com(李建兵)">
-    <script src="http://libs.baidu.com/jquery/2.1.4/jquery.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="https://www.layuicdn.com/layui/css/layui.css" />
-    <link rel="shortcut icon" th:href="@{../static/image/favicon.ico}"/>
-    <link rel="stylesheet" type="text/css" th:href="@{../static/css/me/common.css}" />
-    <script src="https://www.layuicdn.com/layui/layui.js"></script>
+    <meta th:include="top :: top"/>
 </head>
-<body class="me-body">
-管理端主页
+<body>
+    <div th:include="head :: head"></div>
+    <div class="me-text-center" style="margin-top: 10px">
+        <span class="layui-breadcrumb" lay-separator="|">
+          <a href="">首页</a>
+          <a href="/manage/timeline">时间线</a>
+          <a href="/manage/companion">骑行伙伴</a>
+          <a href="">页面公告</a>
+          <a href="">系统设置</a>
+        </span>
+    </div>
 </body>
 </html>

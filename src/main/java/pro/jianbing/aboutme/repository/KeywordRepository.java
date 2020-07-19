@@ -9,5 +9,5 @@ import pro.jianbing.aboutme.entity.Keyword;
  * @author DefaultAccount
  */
 @Repository("keywordRepository")
-public interface KeywordRepositoty extends JpaRepository<Keyword,Long> {
+public interface KeywordRepository extends JpaRepository<Keyword,Long> {
 }

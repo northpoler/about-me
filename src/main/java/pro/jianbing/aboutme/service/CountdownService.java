@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pro.jianbing.aboutme.entity.Countdown;
 import pro.jianbing.aboutme.pojo.CountdownDto;
-import pro.jianbing.aboutme.repository.CountdownRepositoty;
+import pro.jianbing.aboutme.repository.CountdownRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,16 +16,16 @@ import java.util.List;
 public class CountdownService {
 
     private final
-    CountdownRepositoty countdownRepositoty;
+    CountdownRepository countdownRepository;
 
     @Autowired
-    public CountdownService(CountdownRepositoty countdownRepositoty) {
-        this.countdownRepositoty = countdownRepositoty;
+    public CountdownService(CountdownRepository countdownRepository) {
+        this.countdownRepository = countdownRepository;
     }
 
     public CountdownDto getCountdown(Countdown countdown) {
         countdown.setEndTime(LocalDateTime.now());
-        List<Countdown> countdownList = countdownRepositoty.getByUserId(countdown.getUserId(),countdown.getEndTime());
+        List<Countdown> countdownList = countdownRepository.getByUserId(countdown.getUserId(),countdown.getEndTime());
         CountdownDto countdownDto = new CountdownDto();
         if (null==countdownList||countdownList.size()==0){
             countdownDto.setTitle("元旦");
@@ -47,7 +47,7 @@ public class CountdownService {
 
     @Transactional
     public Integer save(Countdown countdown) {
-        Countdown save = countdownRepositoty.save(countdown);
+        Countdown save = countdownRepository.save(countdown);
         if (save!=null){
             return 1;
         }

@@ -9,7 +9,7 @@ import pro.jianbing.aboutme.entity.Visit;
  * @author 李建兵
  */
 @Repository("visitRepository")
-public interface VisitRepositoty extends JpaRepository<Visit,Long> {
+public interface VisitRepository extends JpaRepository<Visit,Long> {
 
     long countByTarget(String target);
 }

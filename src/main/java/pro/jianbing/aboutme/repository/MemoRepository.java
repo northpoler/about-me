@@ -14,7 +14,7 @@ import java.util.List;
  * @author DefaultAccount
  */
 @Repository("memoRepository")
-public interface MemoRepositoty extends JpaRepository<Memo,Long> {
+public interface MemoRepository extends JpaRepository<Memo,Long> {
     /**
      * @param userId
      * @return

@@ -3,7 +3,7 @@ package pro.jianbing.aboutme.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.entity.User;
-import pro.jianbing.aboutme.repository.UserRepositoty;
+import pro.jianbing.aboutme.repository.UserRepository;
 
 import java.time.LocalDateTime;
 
@@ -14,22 +14,22 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final
-    UserRepositoty userRepositoty;
+    UserRepository userRepository;
 
     @Autowired
-    public UserService(UserRepositoty userRepositoty) {
-        this.userRepositoty = userRepositoty;
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
     }
 
     public User FindUserByUsername(String username){
-        return userRepositoty.findByUsername(username);
+        return userRepository.findByUsername(username);
     }
     public Integer updateLoginInfo(String lastIP, Long id){
-        return userRepositoty.updateLoginInfo(lastIP,LocalDateTime.now(),id);
+        return userRepository.updateLoginInfo(lastIP,LocalDateTime.now(),id);
     }
 
     public int saveUser(User user) {
-        User save = userRepositoty.save(user);
+        User save = userRepository.save(user);
         if (null != save){
             return 1;
         } else {
@@ -38,6 +38,6 @@ public class UserService {
     }
 
     public User FindUserByUsernameAndUserId(String username, Long id) {
-        return userRepositoty.findByUsernameAndId(username,id);
+        return userRepository.findByUsernameAndId(username,id);
     }
 }

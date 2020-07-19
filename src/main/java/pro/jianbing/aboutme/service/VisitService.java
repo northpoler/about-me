@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pro.jianbing.aboutme.entity.Visit;
-import pro.jianbing.aboutme.repository.VisitRepositoty;
+import pro.jianbing.aboutme.repository.VisitRepository;
 
 /**
  * @author 李建兵
@@ -13,16 +13,16 @@ import pro.jianbing.aboutme.repository.VisitRepositoty;
 public class VisitService {
 
     private final
-    VisitRepositoty visitRepositoty;
+    VisitRepository visitRepository;
 
     @Autowired
-    public VisitService(VisitRepositoty visitRepositoty) {
-        this.visitRepositoty = visitRepositoty;
+    public VisitService(VisitRepository visitRepository) {
+        this.visitRepository = visitRepository;
     }
 
     @Transactional
     public Integer saveVisit(Visit visit){
-        visit = visitRepositoty.save(visit);
+        visit = visitRepository.save(visit);
         if (visit!=null){
             return 1;
         }
@@ -30,6 +30,6 @@ public class VisitService {
     }
 
     public Long getCountByTarget(String target) {
-        return visitRepositoty.countByTarget(target);
+        return visitRepository.countByTarget(target);
     }
 }

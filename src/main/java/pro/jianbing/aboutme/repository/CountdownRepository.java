@@ -14,7 +14,7 @@ import java.util.List;
  * @author 李建兵
  */
 @Repository("countdownRepository")
-public interface CountdownRepositoty extends JpaRepository<Countdown,Long> {
+public interface CountdownRepository extends JpaRepository<Countdown,Long> {
     @Query("from Countdown where userId = :userId and endTime > :endTime order by endTime")
     List<Countdown> getByUserId(@Param("userId")Long userId,@Param("endTime") LocalDateTime endTime);
 }

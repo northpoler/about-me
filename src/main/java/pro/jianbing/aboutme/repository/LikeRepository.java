@@ -12,7 +12,7 @@ import javax.transaction.Transactional;
  * @author 李建兵
  */
 @Repository("likeRepository")
-public interface LikeRepositoty extends JpaRepository<Like,String> {
+public interface LikeRepository extends JpaRepository<Like,String> {
 
     @Query("select count(like_time) from Like where like_time > current_date")
     Integer countLikesToday();

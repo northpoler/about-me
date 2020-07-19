@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.common.cache.HotSpotDataCache;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Companion;
-import pro.jianbing.aboutme.repository.CompanionRepositoty;
+import pro.jianbing.aboutme.repository.CompanionRepository;
 
 import javax.transaction.Transactional;
 import java.util.List;
@@ -14,26 +14,26 @@ import java.util.List;
 public class CompanionService {
 
     private final
-    CompanionRepositoty companionRepositoty;
+    CompanionRepository companionRepository;
     @Autowired
     private HotSpotDataCache hotSpotDataCache;
 
     @Autowired
-    public CompanionService(CompanionRepositoty companionRepositoty) {
-        this.companionRepositoty = companionRepositoty;
+    public CompanionService(CompanionRepository companionRepository) {
+        this.companionRepository = companionRepository;
     }
 
     public int countMembers() {
-        return companionRepositoty.countCompanions();
+        return companionRepository.countCompanions();
     }
 
     public List<Companion> getListByMark(String mark) {
-        return companionRepositoty.findAllByMarkOrderBySequenceAsc(mark);
+        return companionRepository.findAllByMarkOrderBySequenceAsc(mark);
     }
 
     @Transactional
     public Integer save(Companion companion){
-        Companion save = companionRepositoty.save(companion);
+        Companion save = companionRepository.save(companion);
         if (save!=null){
             hotSpotDataCache.initCompanionCount();
             return 1;
@@ -42,7 +42,7 @@ public class CompanionService {
     }
 
     public Integer update(Companion companion,String field,String value) {
-        Companion dto = companionRepositoty.findById(companion.getId()).get();
+        Companion dto = companionRepository.findById(companion.getId()).get();
         if ("name".equals(field)){
             dto.setName(value);
         } else if ("note".equals(field)){
@@ -50,7 +50,7 @@ public class CompanionService {
         } else if ("mark".equals(field)){
             dto.setMark(value);
         }
-        Companion save = companionRepositoty.save(dto);
+        Companion save = companionRepository.save(dto);
         if (!GlobalString.MARK_NORMAL.equals(dto.getMark())){
             hotSpotDataCache.initCompanionCount();
         }

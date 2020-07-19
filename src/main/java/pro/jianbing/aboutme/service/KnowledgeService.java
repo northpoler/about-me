@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pro.jianbing.aboutme.entity.Knowledge;
-import pro.jianbing.aboutme.repository.KnowledgeRepositoty;
+import pro.jianbing.aboutme.repository.KnowledgeRepository;
 
 /**
  * @author DefaultAccount
@@ -14,17 +14,17 @@ import pro.jianbing.aboutme.repository.KnowledgeRepositoty;
 public class KnowledgeService {
 
     private final
-    KnowledgeRepositoty knowledgeRepositoty;
+    KnowledgeRepository knowledgeRepository;
 
     @Autowired
-    public KnowledgeService(KnowledgeRepositoty knowledgeRepositoty) {
-        this.knowledgeRepositoty = knowledgeRepositoty;
+    public KnowledgeService(KnowledgeRepository knowledgeRepository) {
+        this.knowledgeRepository = knowledgeRepository;
     }
 
     @Transactional
     public Integer save(Knowledge knowledge){
         try {
-            Knowledge save = knowledgeRepositoty.save(knowledge);
+            Knowledge save = knowledgeRepository.save(knowledge);
             if (save!=null){
                 return 1;
             }
@@ -37,7 +37,7 @@ public class KnowledgeService {
 
     public String getByUserId(Long userId){
         try {
-            String knowledge = knowledgeRepositoty.getByUserId(userId);
+            String knowledge = knowledgeRepository.getByUserId(userId);
             if (StringUtil.isNullOrEmpty(knowledge)){
                 knowledge = "<p>在这里，可以随时记录<b>任何你想记录的信息</b> .......</p>";
             }

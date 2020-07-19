@@ -10,6 +10,6 @@ import java.util.List;
  * @author 李建兵
  */
 @Repository("timelineRepository")
-public interface TimelineRepositoty extends JpaRepository<Timeline,Long> {
+public interface TimelineRepository extends JpaRepository<Timeline,Long> {
     List<Timeline> findAllByMarkOrderByOccurTimeAsc(String s);
 }

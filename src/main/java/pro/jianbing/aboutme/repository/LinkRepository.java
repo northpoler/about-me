@@ -12,7 +12,7 @@ import java.util.List;
  * @author DefaultAccount
  */
 @Repository("linkRepository")
-public interface LinkRepositoty extends JpaRepository<Link,Long> {
+public interface LinkRepository extends JpaRepository<Link,Long> {
     /**
      * 获取所有的常用链接（升序，状态正常的）
      * @param mark

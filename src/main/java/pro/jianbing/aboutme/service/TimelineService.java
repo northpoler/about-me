@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.common.cache.HotSpotDataCache;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Timeline;
-import pro.jianbing.aboutme.repository.TimelineRepositoty;
+import pro.jianbing.aboutme.repository.TimelineRepository;
 
 import javax.transaction.Transactional;
 import java.util.List;
@@ -17,11 +17,11 @@ import java.util.List;
 public class TimelineService {
 
     private final
-    TimelineRepositoty timelineRepositoty;
+    TimelineRepository timelineRepository;
 
     @Autowired
-    public TimelineService(TimelineRepositoty timelineRepositoty) {
-        this.timelineRepositoty = timelineRepositoty;
+    public TimelineService(TimelineRepository timelineRepository) {
+        this.timelineRepository = timelineRepository;
     }
 
     @Autowired
@@ -37,7 +37,7 @@ public class TimelineService {
 
     @Transactional
     public Integer save(Timeline timeline){
-        Timeline save = timelineRepositoty.save(timeline);
+        Timeline save = timelineRepository.save(timeline);
         if (save!=null){
             return 1;
         }
@@ -45,7 +45,7 @@ public class TimelineService {
     }
 
     public List<Timeline> getTimelinesByMark(String mark) {
-        return timelineRepositoty.findAllByMarkOrderByOccurTimeAsc(mark);
+        return timelineRepository.findAllByMarkOrderByOccurTimeAsc(mark);
     }
 
     public List<Timeline> getAllNormalTimelines() {
@@ -55,7 +55,7 @@ public class TimelineService {
     }
 
     public Integer update(Timeline timeline,String field,String value) {
-        Timeline line = timelineRepositoty.findById(timeline.getId()).get();
+        Timeline line = timelineRepository.findById(timeline.getId()).get();
         if ("occurTime".equals(field)){
             line.setOccurTime(value);
         } else if ("content".equals(field)){
@@ -67,7 +67,7 @@ public class TimelineService {
         } else if ("sequence".equals(field)){
             line.setSequence(Integer.parseInt(value));
         }
-        Timeline save = timelineRepositoty.save(line);
+        Timeline save = timelineRepository.save(line);
         if (GlobalString.MARK_NORMAL.equals(line.getMark())){
             new Thread(() -> hotSpotDataCache.initTimelines()).start();
         }

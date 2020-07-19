@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.common.global.GlobalString;
 import pro.jianbing.aboutme.entity.Logo;
-import pro.jianbing.aboutme.repository.LogoRepositoty;
+import pro.jianbing.aboutme.repository.LogoRepository;
 
 import javax.transaction.Transactional;
 
@@ -15,15 +15,15 @@ import javax.transaction.Transactional;
 public class LogoService {
 
     private final
-    LogoRepositoty logoRepositoty;
+    LogoRepository logoRepository;
 
     @Autowired
-    public LogoService(LogoRepositoty logoRepositoty) {
-        this.logoRepositoty = logoRepositoty;
+    public LogoService(LogoRepository logoRepository) {
+        this.logoRepository = logoRepository;
     }
 
     public String getLogoByUserId(Long userId){
-        Logo logo = logoRepositoty.findByUserIdAndMark(userId, GlobalString.MARK_NORMAL);
+        Logo logo = logoRepository.findByUserIdAndMark(userId, GlobalString.MARK_NORMAL);
         if (null==logo || null==logo.getSrc()){
             return "../static/image/logo_cat.png";
         }
@@ -31,11 +31,11 @@ public class LogoService {
     }
 
     public Logo getTempLogoByUserId(Long userId){
-        return logoRepositoty.findByUserIdAndMark(userId,"2");
+        return logoRepository.findByUserIdAndMark(userId,"2");
     }
 
     @Transactional
     public Logo save(Logo logo){
-        return logoRepositoty.save(logo);
+        return logoRepository.save(logo);
     }
 }

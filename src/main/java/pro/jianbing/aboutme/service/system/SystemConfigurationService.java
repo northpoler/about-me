@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import pro.jianbing.aboutme.common.dto.SystemConfiguration;
 import pro.jianbing.aboutme.common.global.GlobalString;
-import pro.jianbing.aboutme.repository.system.SystemConfigurationRepositoty;
+import pro.jianbing.aboutme.repository.system.SystemConfigurationRepository;
 
 import java.util.List;
 
@@ -12,15 +12,15 @@ import java.util.List;
 public class SystemConfigurationService {
 
     private final
-    SystemConfigurationRepositoty repositoty;
+    SystemConfigurationRepository Repository;
 
     @Autowired
-    public SystemConfigurationService(SystemConfigurationRepositoty repositoty) {
-        this.repositoty = repositoty;
+    public SystemConfigurationService(SystemConfigurationRepository Repository) {
+        this.Repository = Repository;
     }
 
     public List<SystemConfiguration> getAll() {
-        return repositoty.getAllByMark(GlobalString.MARK_NORMAL);
+        return Repository.getAllByMark(GlobalString.MARK_NORMAL);
     }
 
 

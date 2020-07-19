@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
  * @author 李建兵
  */
 @Repository("userRepository")
-public interface UserRepositoty extends JpaRepository<User,Long> {
+public interface UserRepository extends JpaRepository<User,Long> {
     /**
      * 用户每次登陆后，更新IP和时间
      * @param lastIP
