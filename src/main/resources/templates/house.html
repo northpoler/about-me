@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh">
+<head>
+    <title>建兵 | 购房计划</title>
+    <meta th:include="top :: top"/>
+    <style>
+        .layui-card-header {
+            font-size: large;
+            text-align: center;
+            color: deeppink;
+            background-color: lightcyan;
+        }
+        .layui-card-body {
+            font-size: large;
+            background-color: lightcyan;
+        }
+    </style>
+</head>
+<body>
+<div class="layui-row">
+    <div class="layui-col-md6 layui-col-md-offset3">
+        <fieldset class="layui-elem-field layui-field-title" id="part_one">
+            <legend>购房筹资计划</legend>
+        </fieldset>
+        <div class="layui-card">
+            <div class="layui-card-header">摇号开始</div>
+            <div class="layui-card-body">
+                <div id="count_down" style="font-size: x-large;text-align: center;padding: 10px 0"></div>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">筹资进度</div>
+            <div class="layui-card-body">
+                <div class="layui-progress layui-progress-big" lay-showpercent="true">
+                    <div class="layui-progress-bar" th:attr="lay-percent=${process}"></div>
+                </div>
+            </div>
+        </div>
+        <div class="layui-card">
+            <div class="layui-card-header">筹资计划</div>
+            <div class="layui-card-body" style="padding: 10px 0">
+                <table class="layui-table">
+                    <colgroup>
+                        <col width="200">
+                        <col width="200">
+                        <col width="200">
+                        <col width="200">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>出资人</th>
+                            <th>计划(万)</th>
+                            <th>已到(万)</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="item : ${list}" >
+                            <td th:text="${item.person}"></td>
+                            <td th:text="${item.plan}"></td>
+                            <td th:text="${item.real}"></td>
+                            <td th:text="${item.note}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+<script th:src="@{../static/js/me/house.js}"></script>
+</html>
