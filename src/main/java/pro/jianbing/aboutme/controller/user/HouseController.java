@@ -31,8 +31,8 @@ public class HouseController extends BaseController {
         BigDecimal plan = new BigDecimal(0);
         BigDecimal real = new BigDecimal(0);
         for (HouseMoney houseMoney : list) {
-            plan = plan.add(new BigDecimal(houseMoney.getPlan()));
-            real = real.add(new BigDecimal(houseMoney.getReal()));
+            plan = plan.add(new BigDecimal(houseMoney.getPlan()+""));
+            real = real.add(new BigDecimal(houseMoney.getReal()+""));
         }
         model.addAttribute("process",real+"/"+plan);
         model.addAttribute("list",list);
