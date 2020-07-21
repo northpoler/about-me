@@ -10,7 +10,7 @@ $(function () {
 
 function countdown() {
     var time_start = new Date();
-    var time_end = new Date("MAY 1 2021 00:00:00");
+    var time_end = new Date($("#beginTime").val());
     var remain = time_end.getTime() - time_start.getTime(),
         days = remain / (60 * 60 * 24 * 1000);
     days = Number(days).toFixed(6);

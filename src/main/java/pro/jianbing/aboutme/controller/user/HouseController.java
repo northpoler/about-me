@@ -6,6 +6,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import pro.jianbing.aboutme.common.controller.BaseController;
+import pro.jianbing.aboutme.common.global.GlobalConfigurationItem;
+import pro.jianbing.aboutme.common.global.GlobalObject;
 import pro.jianbing.aboutme.entity.HouseMoney;
 import pro.jianbing.aboutme.service.HouseMoneyService;
 
@@ -31,11 +33,12 @@ public class HouseController extends BaseController {
         BigDecimal plan = new BigDecimal(0);
         BigDecimal real = new BigDecimal(0);
         for (HouseMoney houseMoney : list) {
-            plan = plan.add(new BigDecimal(houseMoney.getPlan()+""));
-            real = real.add(new BigDecimal(houseMoney.getReal()+""));
+            plan = plan.add(new BigDecimal(houseMoney.getPlanMoney()+""));
+            real = real.add(new BigDecimal(houseMoney.getRealMoney()+""));
         }
         model.addAttribute("process",real+"/"+plan);
         model.addAttribute("list",list);
+        model.addAttribute("beginTime", GlobalObject.CONFIGURATION_MAP.get(GlobalConfigurationItem.HOUSE_PURCHASE_BEGIN_TIME));
         return "house";
     }
 }

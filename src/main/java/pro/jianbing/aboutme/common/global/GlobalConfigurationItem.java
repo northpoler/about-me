@@ -13,4 +13,9 @@ public class GlobalConfigurationItem {
      * 密码的salt
      */
     public final static String PASSWORD_SALT = "passwordSalt";
+
+    /**
+     * 购房开始时间
+     */
+    public final static String HOUSE_PURCHASE_BEGIN_TIME = "housePurchaseBeginTime";
 }

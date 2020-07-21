@@ -10,14 +10,40 @@
             color: deeppink;
             background-color: lightcyan;
         }
+
         .layui-card-body {
             font-size: large;
             background-color: lightcyan;
+        }
+
+        .state-1 {
+            background-color: #67c162;
+        }
+
+        .state-2 {
+            background-color: #fff79c;
+        }
+
+        .money-true {
+            background-color: #67c162 !important;
+        }
+
+        .money-false {
+            background-color: #fff79c !important;
+        }
+
+        .money-none {
+            background-color: white;
+        }
+
+        .state-3 > td {
+            background-color: #ff8c7a !important;
         }
     </style>
 </head>
 <body>
 <div class="layui-row">
+    <input type="hidden" th:value="${beginTime}" id="beginTime"/>
     <div class="layui-col-md6 layui-col-md-offset3">
         <fieldset class="layui-elem-field layui-field-title" id="part_one">
             <legend>购房筹资计划</legend>
@@ -47,20 +73,23 @@
                         <col width="200">
                     </colgroup>
                     <thead>
-                        <tr>
-                            <th>出资人</th>
-                            <th>计划(万)</th>
-                            <th>已到(万)</th>
-                            <th>备注</th>
-                        </tr>
+                    <tr>
+                        <th>出资人</th>
+                        <th>计划(万)</th>
+                        <th>已到(万)</th>
+                        <th>备注</th>
+                    </tr>
                     </thead>
                     <tbody>
-                        <tr th:each="item : ${list}" >
-                            <td th:text="${item.person}"></td>
-                            <td th:text="${item.plan}"></td>
-                            <td th:text="${item.real}"></td>
-                            <td th:text="${item.note}"></td>
-                        </tr>
+                    <tr th:each="item : ${list}" th:classappend="'state-'+${item.state}">
+                        <td th:text="${item.person}"></td>
+                        <td th:text="${item.planMoney}"
+                            th:classappend="${item.realMoney == 0}?'money-none':'money-'+${item.planMoney <= item.realMoney}"></td>
+                        <td th:text="${item.realMoney}"
+                            th:classappend="${item.realMoney == 0}?'money-none':'money-'+${item.planMoney <= item.realMoney}"></td>
+                        <td th:text="${item.note}"
+                            th:classappend="${item.realMoney == 0}?'money-none':'money-'+${item.planMoney <= item.realMoney}"></td>
+                    </tr>
                     </tbody>
                 </table>
             </div>
